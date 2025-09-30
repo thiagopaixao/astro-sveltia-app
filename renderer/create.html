@@ -164,6 +164,11 @@
                 }
             });
 
+            window.electronAPI.onDevServerUrl((url) => {
+                sessionStorage.setItem('devServerUrl', url);
+                console.log('Dev server URL saved to session storage:', url);
+            });
+
             this.startCreationProcess();
         },
         async startCreationProcess() {

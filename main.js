@@ -229,17 +229,26 @@ app.whenReady().then(() => {
         }
       };
 
-      devProcess.stdout.on('data', (data) => {
-        const output = data.toString();
-        sendOutput(output);
-        checkServerReady(output);
-      });
+      let devServerUrl = null;
+      const urlRegex = /http:\/\/localhost:\d+\//;
 
-      devProcess.stderr.on('data', (data) => {
+      const processOutput = (data) => {
         const output = data.toString();
         sendOutput(output);
         checkServerReady(output);
-      });
+
+        if (!devServerUrl) {
+          const match = output.match(urlRegex);
+          if (match) {
+            devServerUrl = match[0];
+            console.log(`Development server URL: ${devServerUrl}`);
+            mainWindow.webContents.send('dev-server-url', devServerUrl);
+          }
+        }
+      };
+
+      devProcess.stdout.on('data', processOutput);
+      devProcess.stderr.on('data', processOutput);
 
       devProcess.on('close', (code) => {
         delete activeProcesses[`dev-${projectId}`];

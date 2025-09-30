@@ -106,6 +106,14 @@
     currentBranch: 'stage',
     branchAction: 'change',
     copySuccess: false,
+    getDevServerUrl() {
+        const url = sessionStorage.getItem('devServerUrl');
+        if (!url) {
+            alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
+            return 'https://documental.xyz/'; // Fallback URL
+        }
+        return url;
+    },
     startResize(event) {
         this.isResizing = true;
         event.target.classList.add('resize-handle-active');
@@ -143,12 +151,12 @@
         this.addressValue = event.target.value;
     },
      handleAddressClick(event) {
-        if (event.target.selectionStart &lt; this.baseURL.length) {
+        if (event.target.selectionStart < this.baseURL.length) {
             event.target.setSelectionRange(this.baseURL.length, this.baseURL.length);
         }
     },
     handleAddressKeyDown(event) {
-        if (event.target.selectionStart &lt; this.baseURL.length &amp;&amp; (event.key === 'Backspace' || event.key === 'Delete')) {
+        if (event.target.selectionStart < this.baseURL.length && (event.key === 'Backspace' || event.key === 'Delete')) {
            event.preventDefault();
         }
     },
@@ -161,9 +169,9 @@
         }
     },
     copyAddress() {
-        navigator.clipboard.writeText(this.addressValue).then(() =&gt; {
+        navigator.clipboard.writeText(this.addressValue).then(() => {
             this.copySuccess = true;
-            setTimeout(() =&gt; { this.copySuccess = false; }, 2000);
+            setTimeout(() => { this.copySuccess = false; }, 2000);
         });
     },
     confirmClearCache() {
@@ -197,10 +205,10 @@
     },
     closeConsoleTab(tabId, event) {
         event.stopPropagation();
-        const index = this.consoleTabs.findIndex(tab =&gt; tab.id === tabId);
-        if (index &gt; -1) {
+        const index = this.consoleTabs.findIndex(tab => tab.id === tabId);
+        if (index > -1) {
             this.consoleTabs.splice(index, 1);
-            if (this.activeConsoleTab === tabId &amp;&amp; this.consoleTabs.length &gt; 0) {
+            if (this.activeConsoleTab === tabId && this.consoleTabs.length > 0) {
                  this.activeConsoleTab = this.consoleTabs[Math.max(0, index - 1)].id;
             } else if (this.consoleTabs.length === 0) {
                 this.consoleOpen = false;
@@ -217,6 +225,21 @@
         return `working_user_${year}${month}${day}-${hours}${minutes}_`;
     },
     init() {
+        const devServerUrl = this.getDevServerUrl();
+        this.addressValue = devServerUrl;
+        this.baseURL = devServerUrl;
+
+        this.$nextTick(() => {
+            this.$refs.viewFrame.src = devServerUrl;
+            this.$refs.editorFrame.src = `${devServerUrl}admin/index.html`;
+            if(this.$refs.splitViewFrame) {
+                this.$refs.splitViewFrame.src = devServerUrl;
+            }
+            if(this.$refs.splitEditorFrame) {
+                this.$refs.splitEditorFrame.src = `${devServerUrl}admin/index.html`;
+            }
+        });
+
         const projectId = sessionStorage.getItem('currentProjectId');
         if (projectId) {
             const savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${projectId}`));
@@ -279,18 +302,18 @@
 <div class="flex flex-col flex-1 overflow-hidden" x-ref="mainContainer">
 <main :style="{ height: consoleOpen ? mainHeight + '%' : '100%' }" class="flex-1 flex overflow-hidden">
 <div class="w-full h-full" x-show="activeTab === 'view'">
-<iframe class="w-full h-full border-0" src="https://documental.xyz/" x-ref="viewFrame"></iframe>
+<iframe class="w-full h-full border-0" :src="getDevServerUrl()" x-ref="viewFrame"></iframe>
 </div>
 <div class="w-full h-full" x-show="activeTab === 'editor'">
-<iframe class="w-full h-full border-0" src="https://documental.xyz/admin/" x-ref="editorFrame"></iframe>
+<iframe class="w-full h-full border-0" :src="getDevServerUrl() + 'admin/index.html'" x-ref="editorFrame"></iframe>
 </div>
 <div class="flex w-full h-full" x-ref="splitContainer" x-show="activeTab === 'split'">
 <div :style="{ width: editorWidth + '%' }" class="h-full overflow-auto" x-ref="splitEditorPane">
-<iframe class="w-full h-full border-0" src="https://documental.xyz/admin/" x-ref="splitEditorFrame"></iframe>
+<iframe class="w-full h-full border-0" :src="getDevServerUrl() + 'admin/index.html'" x-ref="splitEditorFrame"></iframe>
 </div>
 <div @mousedown.prevent="startResize($event)" class="resize-handle" x-ref="resizeHandle"></div>
 <div class="flex-1 h-full overflow-auto">
-<iframe class="w-full h-full border-0" src="https://documental.xyz/" x-ref="splitViewFrame"></iframe>
+<iframe class="w-full h-full border-0" :src="getDevServerUrl()" x-ref="splitViewFrame"></iframe>
 </div>
 </div>
 </main>
