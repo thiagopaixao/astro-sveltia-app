@@ -88,6 +88,8 @@
     consoleTabs: [{id: 1, name: 'Server', type: 'server'}, {id: 2, name: 'Console', type: 'console'}],
     activeConsoleTab: 1,
     nextTerminalId: 1,
+    serverOutput: '',
+    consoleOutput: '',
     addressValue: 'https://documental.xyz/',
     baseURL: 'https://documental.xyz/',
     isResizing: false,
@@ -213,6 +215,23 @@
         const hours = String(date.getHours()).padStart(2, '0');
         const minutes = String(date.getMinutes()).padStart(2, '0');
         return `working_user_${year}${month}${day}-${hours}${minutes}_`;
+    },
+    init() {
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (projectId) {
+            const savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${projectId}`));
+            if (savedState && savedState.steps) {
+                savedState.steps.forEach(step => {
+                    if (step.log) {
+                        if (step.title.includes('Executando servidor do modo dev')) {
+                            this.serverOutput += step.log + '\n';
+                        } else {
+                            this.consoleOutput += step.log + '\n';
+                        }
+                    }
+                });
+            }
+        }
     }
 }">
 <header class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-gray-700 shrink-0">
@@ -300,17 +319,10 @@
 <template :key="tab.id" x-for="tab in consoleTabs">
 <div x-show="activeConsoleTab === tab.id">
 <div x-show="tab.type === 'server'">
-<p>&gt; astro dev</p>
-<p class="text-green-400">✔ Local: http://localhost:4321/</p>
-<p class="text-green-400">✔ Network: use --host to expose</p>
-<p>...</p>
+<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="serverOutput"></pre>
 </div>
 <div x-show="tab.type === 'console'">
-<p>&gt; git status</p>
-<p>On branch main</p>
-<p>Your branch is up to date with 'origin/main'.</p>
-<p>nothing to commit, working tree clean</p>
-<p>...</p>
+<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="consoleOutput"></pre>
 </div>
 <div x-show="tab.type === 'terminal'">
 <p class="text-green-400">user@documental:~$</p>
