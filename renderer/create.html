@@ -76,56 +76,139 @@
 <script src="script.js" defer></script>
 </head>
 <body class="bg-background-dark text-text-dark antialiased">
-<div class="flex flex-col h-screen" x-data="{ 
+<div class="flex flex-col h-screen" x-data="{
+        projectId: null,
+        projectPath: '',
+        githubUrl: '',
+        repoFolderName: '',
         activeStepId: 1,
         processFinished: false,
         processFailed: false,
         steps: [
-            { id: 1, title: 'Clonando repositório git do projeto...', status: 'active', log: 'Clonando em \'Meu Incrível Projeto\'...\nOrigem remota: https://github.com/usuario/repositorio.git...\n' },
-            { id: 2, title: 'Instalando dependências...', status: 'pending', log: '' },
-            { id: 3, title: 'Construindo o projeto...', status: 'pending', log: '' },
-            { id: 4, title: 'Executando servidor do modo dev...', status: 'pending', log: '' }
+            { id: 1, title: 'Clonando repositório git do projeto...', status: 'pending', log: '', expanded: false },
+            { id: 2, title: 'Verificando branch preview...', status: 'pending', log: '', expanded: false },
+            { id: 3, title: 'Instalando dependências...', status: 'pending', log: '', expanded: false },
+            { id: 4, title: 'Construindo o projeto...', status: 'pending', log: '', expanded: false },
+            { id: 5, title: 'Executando servidor do modo dev...', status: 'pending', log: '', expanded: false }
         ],
         get allStepsSuccess() {
-            return this.steps.every(s =&gt; s.status === 'success');
+            return this.steps.every(s => s.status === 'success');
         },
         get anyStepFailed() {
-            return this.steps.some(s =&gt; s.status === 'failure');
-        },
-        advanceStep(currentIndex) {
-            this.steps[currentIndex].log += 'Sucesso: Etapa concluída.\n';
-            this.steps[currentIndex].status = 'success';
-            if (currentIndex + 1 &lt; this.steps.length) {
-                this.steps[currentIndex + 1].status = 'active';
-                this.steps[currentIndex + 1].log = 'Iniciando etapa...\n';
-                this.activeStepId = this.steps[currentIndex + 1].id;
-            } else {
-                 this.processFinished = true;
-            }
-        },
-        failStep(currentIndex) {
-            this.steps[currentIndex].log += '\nFalha: Ocorreu um erro inesperado.';
-            this.steps[currentIndex].status = 'failure';
-            this.processFinished = true;
-            this.processFailed = true;
-        },
-        retryProcess() {
-            this.steps.forEach((step, index) =&gt; {
-                step.status = index === 0 ? 'active' : 'pending';
-                step.log = index === 0 ? 'Tentando novamente...\nClonando em \'Meu Incrível Projeto\'...\nOrigem remota: https://github.com/usuario/repositorio.git...\n' : '';
-            });
-            this.activeStepId = 1;
-            this.processFinished = false;
-            this.processFailed = false;
+            return this.steps.some(s => s.status === 'failure');
         },
         init() {
-            this.$watch('activeStepId', (newValue) =&gt; {
-                 this.steps.forEach(step =&gt; {
-                    if (step.status === 'active' &amp;&amp; step.id !== newValue) {
-                        this.activeStepId = step.id; // Keep it expanded if it's active
-                    }
-                 })
+            this.projectId = sessionStorage.getItem('currentProjectId');
+            if (!this.projectId) {
+                console.error('No project ID found in session storage.');
+                this.processFailed = true;
+                return;
+            }
+
+            const savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${this.projectId}`));
+            if (savedState) {
+                Object.assign(this.$data, savedState);
+            } else {
+                this.steps[0].status = 'active';
+            }
+
+            this.$watch('steps', (newSteps) => {
+                sessionStorage.setItem(`projectCreationState-${this.projectId}`, JSON.stringify({
+                    projectId: this.projectId,
+                    projectPath: this.projectPath,
+                    githubUrl: this.githubUrl,
+                    repoFolderName: this.repoFolderName,
+                    activeStepId: this.activeStepId,
+                    processFinished: this.processFinished,
+                    processFailed: this.processFailed,
+                    steps: newSteps
+                }));
+            }, { deep: true });
+
+            // Removed activeStepId watcher to allow expanding completed steps
+
+            window.electronAPI.onCommandOutput((output) => {
+                const activeStepIndex = this.steps.findIndex(s => s.status === 'active');
+                if (activeStepIndex !== -1) {
+                    this.steps[activeStepIndex].log += output;
+                }
             });
+
+            window.electronAPI.onCommandStatus((status) => {
+                const activeStepIndex = this.steps.findIndex(s => s.status === 'active');
+                if (activeStepIndex !== -1) {
+                    if (status === 'success') {
+                        this.steps[activeStepIndex].status = 'success';
+                        if (activeStepIndex + 1 < this.steps.length) {
+                            this.steps[activeStepIndex + 1].status = 'active';
+                            this.activeStepId = this.steps[activeStepIndex + 1].id;
+                        } else {
+                            // If it's the last step and it succeeded, mark process as finished
+                            this.processFinished = true;
+                        }
+                    } else if (status === 'failure') {
+                        this.steps[activeStepIndex].status = 'failure';
+                        this.processFinished = true;
+                        this.processFailed = true;
+                    } else if (status === 'cancelled') {
+                        this.processFinished = true;
+                        this.processFailed = true; // Mark as failed for UI purposes
+                        this.steps[activeStepIndex].log += '\nProcesso cancelado pelo usuário.';
+                    }
+                }
+                // Special handling for the last step (npm run dev)
+                // If the last step is active, consider the process finished from a UI perspective
+                // to allow the user to proceed, as dev servers typically run indefinitely.
+                if (this.steps[this.steps.length - 1].status === 'active') {
+                    this.processFinished = true;
+                }
+            });
+
+            this.startCreationProcess();
+        },
+        async startCreationProcess() {
+            try {
+                const projectDetails = await window.electronAPI.getProjectDetails(this.projectId);
+                this.projectPath = projectDetails.projectPath;
+                this.githubUrl = projectDetails.githubUrl;
+                this.repoFolderName = projectDetails.repoFolderName; // This might be null initially
+
+                // If process was not finished, restart it
+                if (!this.processFinished) {
+                    await window.electronAPI.startProjectCreation(this.projectId, this.projectPath, this.githubUrl);
+                }
+            } catch (error) {
+                console.error('Error fetching project details or starting creation:', error);
+                this.processFailed = true;
+                this.processFinished = true;
+                const activeStepIndex = this.steps.findIndex(s => s.status === 'active');
+                if (activeStepIndex !== -1) {
+                    this.steps[activeStepIndex].log += `\nErro: ${error.message || error}`;
+                    this.steps[activeStepIndex].status = 'failure';
+                }
+            }
+        },
+        async cancelProcess() {
+            if (this.projectId && this.projectPath) {
+                await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
+            }
+            this.processFinished = true;
+            this.processFailed = true;
+            // Clear session storage for this project
+            sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
+            sessionStorage.removeItem('currentProjectId');
+            window.close();
+        },
+        async retryProcess() {
+            this.processFinished = false;
+            this.processFailed = false;
+            this.activeStepId = 1;
+            this.steps.forEach((step, index) => {
+                step.status = index === 0 ? 'active' : 'pending';
+                step.log = '';
+            });
+            sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
+            await this.startCreationProcess();
         }
     }">
 <div class="flex-1 flex items-center justify-center p-8 overflow-y-auto">
@@ -139,8 +222,8 @@
 </div>
 <div class="bg-surface-dark rounded-lg p-4 space-y-2">
 <template :key="step.id" x-for="(step, index) in steps">
-<div :class="{ 'opacity-60': step.status !== 'active' &amp;&amp; step.status !== 'failure' &amp;&amp; step.status !== 'success'}" class="bg-gray-900/50 rounded-lg text-sm">
-<div :class="{'cursor-pointer': step.status !== 'active'}" @click="activeStepId = (step.status !== 'active' ? (activeStepId === step.id ? null : step.id) : step.id)" class="flex items-center justify-between p-3">
+<div :class="{ 'opacity-60': step.status !== 'active' && step.status !== 'failure' && step.status !== 'success'}" class="bg-gray-900/50 rounded-lg text-sm">
+<div :class="{'cursor-pointer': step.status !== 'active'}" @click="step.expanded = !step.expanded" class="flex items-center justify-between p-3">
 <div class="flex items-center gap-3">
 <div class="flex items-center justify-center w-6 h-6">
 <template x-if="step.status === 'active'">
@@ -158,20 +241,13 @@
 </div>
 <span :class="{ 'text-muted-dark': step.status === 'pending', 'text-text-dark font-semibold': step.status === 'success', 'text-text-dark': step.status === 'active', 'text-red-400': step.status === 'failure' }" class="font-medium" x-text="step.title"></span>
 </div>
-<span :class="{ 'rotate-180': activeStepId === step.id }" class="material-symbols-outlined transition-transform">expand_more</span>
+<span :class="{ 'rotate-180': step.expanded }" class="material-symbols-outlined transition-transform">expand_more</span>
 </div>
-<div x-cloak="" x-show="activeStepId === step.id" x-transition:enter="transition ease-out duration-300" x-transition:enter-end="opacity-100 translate-y-0" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="opacity-0 -translate-y-2" x-transition:leave-start="opacity-100 translate-y-0">
+<div x-cloak="" x-show="step.expanded" x-transition:enter="transition ease-out duration-300" x-transition:enter-end="opacity-100 translate-y-0" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="opacity-0 -translate-y-2" x-transition:leave-start="opacity-100 translate-y-0">
 <div class="px-3 pb-3">
 <div class="bg-gray-900 rounded-md p-3 max-h-40 overflow-y-auto border border-gray-700">
 <pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="step.log"></pre>
 </div>
-<template x-if="step.status === 'active' &amp;&amp; !processFinished">
-<div class="mt-3 flex justify-end gap-2 text-xs text-gray-500">
-<p class="self-center text-[10px]">Botões de simulação:</p>
-<button @click="failStep(index)" class="bg-red-800 hover:bg-red-700 text-white font-semibold py-1 px-2 rounded-md transition-colors duration-300 text-[10px]">Simular Falha</button>
-<button @click="advanceStep(index)" class="bg-green-800 hover:bg-green-700 text-white font-semibold py-1 px-2 rounded-md transition-colors duration-300 text-[10px]">Simular Sucesso</button>
-</div>
-</template>
 </div>
 </div>
 </div>
@@ -181,7 +257,7 @@
 </div>
 <div class="p-4 border-t border-gray-800 bg-surface-dark mt-auto">
 <div class="flex justify-end gap-4 max-w-2xl mx-auto">
-<button @click="window.close()" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-5 rounded-md transition-colors duration-300 text-sm">
+<button @click="cancelProcess()" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-5 rounded-md transition-colors duration-300 text-sm">
                     Cancelar
                 </button>
 <template x-if="!anyStepFailed">

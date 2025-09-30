@@ -51,9 +51,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       try {
         const projectId = await window.electronAPI.saveProject({ projectName, githubUrl, projectPath });
-        alert(`Projeto "${projectName}" criado com sucesso! ID: ${projectId}`);
-        // Optionally navigate to another page or clear the form
-        window.electronAPI.navigateTo('main.html'); // Navigate to main page after creation
+        sessionStorage.setItem('currentProjectId', projectId);
+        window.electronAPI.navigateTo('create.html'); // Navigate to create page after creation
       } catch (error) {
         alert(`Erro ao criar projeto: ${error}`);
         console.error('Error saving project:', error);
