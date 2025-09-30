@@ -13,5 +13,8 @@
   "type": "commonjs",
   "devDependencies": {
     "electron": "^38.2.0"
+  },
+  "dependencies": {
+    "sqlite3": "^5.1.7"
   }
 }

@@ -65,8 +65,8 @@
 <div>
 <label class="block text-sm font-medium text-muted-dark mb-2" for="project-path">Caminho da Pasta</label>
 <div class="flex items-center space-x-2">
-<input class="flex-1 w-full bg-gray-900 border-gray-700 text-text-dark rounded-md focus:ring-primary focus:border-primary" id="project-path" name="project-path" type="text" value="$HOME/.documental/projetos/"/>
-<button class="bg-gray-700 hover:bg-gray-600 text-text-dark font-semibold py-2 px-4 rounded-md flex items-center gap-2 transition-colors duration-300">
+<input class="flex-1 w-full bg-gray-900 border-gray-700 text-text-dark rounded-md focus:ring-primary focus:border-primary" id="project-path" name="project-path" type="text"/>
+<button class="bg-gray-700 hover:bg-gray-600 text-text-dark font-semibold py-2 px-4 rounded-md flex items-center gap-2 transition-colors duration-300" id="select-folder-button">
 <span class="material-symbols-outlined text-xl">folder_open</span>
 <span>Selecionar</span>
 </button>
@@ -74,7 +74,7 @@
 </div>
 </div>
 <div class="mt-8 flex justify-end">
-<button class="bg-primary hover:bg-green-500 text-white font-bold py-3 px-8 rounded-lg flex items-center gap-2 text-lg transition-colors duration-300" data-navigate="create.html">
+<button class="bg-primary hover:bg-green-500 text-white font-bold py-3 px-8 rounded-lg flex items-center gap-2 text-lg transition-colors duration-300" id="create-project-button">
 <span class="material-symbols-outlined">add_circle</span>
 <span>Criar Projeto</span>
 </button>
