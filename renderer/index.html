@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Documental - Selecionar Projeto</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style type="text/tailwindcss">
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+    .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+    }
+</style>
+<script>
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    primary: "#22c55e",
+                    "background-light": "#f3f4f6",
+                    "background-dark": "#111827",
+                    "surface-light": "#ffffff",
+                    "surface-dark": "#1f2937",
+                    "text-light": "#111827",
+                    "text-dark": "#f9fafb",
+                    "muted-light": "#6b7280",
+                    "muted-dark": "#9ca3af",
+                },
+            },
+        },
+    };
+    </script>
+<script src="script.js" defer></script>
+</head>
+<body class="bg-background-dark text-text-dark antialiased">
+<div class="flex flex-col h-screen">
+<div class="flex-1 flex items-center justify-center p-8">
+<div class="w-full max-w-4xl">
+<div class="text-center mb-12">
+<div class="flex items-center justify-center gap-4 mb-4">
+<svg class="h-12 w-12 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<h1 class="text-5xl font-black text-text-dark">Documental</h1>
+</div>
+<p class="text-muted-dark text-lg">Seu ambiente de documentação centralizado.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<div class="bg-surface-dark rounded-lg p-6 flex flex-col items-center text-center hover:ring-2 hover:ring-primary transition-all duration-300 cursor-pointer" data-navigate="new.html">
+<span class="material-symbols-outlined text-5xl text-primary mb-4">create_new_folder</span>
+<h2 class="text-xl font-bold mb-2">Criar Novo Projeto</h2>
+<p class="text-muted-dark text-sm">Comece do zero com um novo projeto de documentação.</p>
+</div>
+<div class="bg-surface-dark rounded-lg p-6 flex flex-col items-center text-center hover:ring-2 hover:ring-primary transition-all duration-300 cursor-pointer">
+<span class="material-symbols-outlined text-5xl text-primary mb-4">folder_open</span>
+<h2 class="text-xl font-bold mb-2">Abrir Pasta</h2>
+<p class="text-muted-dark text-sm">Abra um projeto existente a partir de uma pasta no seu computador.</p>
+</div>
+<div class="bg-surface-dark rounded-lg p-6 flex flex-col items-center text-center hover:ring-2 hover:ring-primary transition-all duration-300 cursor-pointer">
+<span class="material-symbols-outlined text-5xl text-primary mb-4">folder_special</span>
+<h2 class="text-xl font-bold mb-2">Abrir Recente</h2>
+<p class="text-muted-dark text-sm">Acesse rapidamente seus projetos abertos recentemente.</p>
+</div>
+</div>
+<div class="mt-12">
+<h3 class="text-lg font-semibold text-muted-dark mb-4 px-2">Projetos Recentes</h3>
+<div class="space-y-3">
+<div class="flex items-center justify-between bg-surface-dark p-4 rounded-lg hover:bg-gray-800 cursor-pointer">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-muted-dark">description</span>
+<div>
+<p class="font-semibold text-text-dark">NHANDEREKOA</p>
+<p class="text-sm text-muted-dark">/Users/documental/projects/nhanderekoa</p>
+</div>
+</div>
+<button class="p-2 rounded-full hover:bg-gray-700">
+<span class="material-symbols-outlined text-muted-dark text-xl">close</span>
+</button>
+</div>
+<div class="flex items-center justify-between bg-surface-dark p-4 rounded-lg hover:bg-gray-800 cursor-pointer">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-muted-dark">description</span>
+<div>
+<p class="font-semibold text-text-dark">Projeto Interno Alpha</p>
+<p class="text-sm text-muted-dark">/Users/documental/work/alpha-docs</p>
+</div>
+</div>
+<button class="p-2 rounded-full hover:bg-gray-700">
+<span class="material-symbols-outlined text-muted-dark text-xl">close</span>
+</button>
+</div>
+<div class="flex items-center justify-between bg-surface-dark p-4 rounded-lg hover:bg-gray-800 cursor-pointer">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-muted-dark">description</span>
+<div>
+<p class="font-semibold text-text-dark">Meu Blog Pessoal</p>
+<p class="text-sm text-muted-dark">/Users/documental/personal/blog</p>
+</div>
+</div>
+<button class="p-2 rounded-full hover:bg-gray-700">
+<span class="material-symbols-outlined text-muted-dark text-xl">close</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

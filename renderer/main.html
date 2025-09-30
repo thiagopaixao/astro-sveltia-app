@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Documental</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+<script defer="" src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="script.js" defer></script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        .resize-handle {
+            cursor: col-resize;
+            width: 4px;
+            background-color: #4a5568;
+            flex-shrink: 0;
+        }
+        .resize-handle:hover,
+        .resize-handle-active {
+            background-color: #22c55e;
+        }
+        .resize-handle-horizontal {
+            cursor: row-resize;
+            height: 4px;
+            background-color: #4a5568;
+            flex-shrink: 0;
+        }
+        .resize-handle-horizontal:hover,
+        .resize-handle-horizontal-active {
+            background-color: #22c55e;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        iframe {
+            pointer-events: auto;
+        }
+        .resizing iframe {
+            pointer-events: none;
+        }
+    </style>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#22c55e",
+                        "background-light": "#f3f4f6",
+                        "background-dark": "#111827",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1f2937",
+                        "text-light": "#111827",
+                        "text-dark": "#f9fafb",
+                        "muted-light": "#6b7280",
+                        "muted-dark": "#9ca3af",
+                        "accent-orange": "#ff5722",
+                    },
+                },
+            },
+        };
+    </script>
+</head>
+<body :class="{'resizing': isResizing || isResizingVertical}" @mousemove.window="onResize($event)" @mouseup.window="stopResize()" class="bg-background-dark text-text-dark antialiased">
+<div class="flex flex-col h-screen" x-data="{ 
+    menuOpen: false, 
+    activeTab: 'view', 
+    editorWidth: 50,
+    mainHeight: 70,
+    consoleOpen: false,
+    consoleTabs: [{id: 1, name: 'Server', type: 'server'}, {id: 2, name: 'Console', type: 'console'}],
+    activeConsoleTab: 1,
+    nextTerminalId: 1,
+    addressValue: 'https://documental.xyz/',
+    baseURL: 'https://documental.xyz/',
+    isResizing: false,
+    isResizingVertical: false,
+    publishModalOpen: false,
+    branchModalOpen: false,
+    updateModalOpen: false,
+    clearCacheModalOpen: false,
+    helpModalOpen: false,
+    aboutModalOpen: false,
+    exitModalOpen: false,
+    selectedBranch: 'stage',
+    newBranchName: '',
+    currentBranch: 'stage',
+    branchAction: 'change',
+    copySuccess: false,
+    startResize(event) {
+        this.isResizing = true;
+        event.target.classList.add('resize-handle-active');
+    },
+    stopResize() {
+        if (this.isResizing) {
+           this.$refs.resizeHandle.classList.remove('resize-handle-active');
+        }
+        if (this.isResizingVertical) {
+           this.$refs.resizeHandleHorizontal.classList.remove('resize-handle-horizontal-active');
+        }
+        this.isResizing = false;
+        this.isResizingVertical = false;
+    },
+    onResize(event) {
+        if (this.isResizing) {
+            const totalWidth = this.$refs.splitContainer.offsetWidth;
+            const newEditorWidth = event.clientX - this.$refs.splitContainer.offsetLeft;
+            this.editorWidth = (newEditorWidth / totalWidth) * 100;
+        }
+        if (this.isResizingVertical) {
+            const totalHeight = this.$refs.mainContainer.offsetHeight;
+            const newMainHeight = event.clientY - this.$refs.mainContainer.offsetTop;
+            this.mainHeight = (newMainHeight / totalHeight) * 100;
+        }
+    },
+    startVerticalResize(event) {
+        this.isResizingVertical = true;
+        event.target.classList.add('resize-handle-horizontal-active');
+    },
+    handleAddressInput(event) {
+        if (!event.target.value.startsWith(this.baseURL)) {
+             event.target.value = this.baseURL;
+        }
+        this.addressValue = event.target.value;
+    },
+     handleAddressClick(event) {
+        if (event.target.selectionStart &lt; this.baseURL.length) {
+            event.target.setSelectionRange(this.baseURL.length, this.baseURL.length);
+        }
+    },
+    handleAddressKeyDown(event) {
+        if (event.target.selectionStart &lt; this.baseURL.length &amp;&amp; (event.key === 'Backspace' || event.key === 'Delete')) {
+           event.preventDefault();
+        }
+    },
+    handleAddressEnter(event) {
+        if (event.key === 'Enter') {
+            this.$refs.viewFrame.src = this.addressValue;
+            if(this.$refs.splitViewFrame) {
+                 this.$refs.splitViewFrame.src = this.addressValue;
+            }
+        }
+    },
+    copyAddress() {
+        navigator.clipboard.writeText(this.addressValue).then(() =&gt; {
+            this.copySuccess = true;
+            setTimeout(() =&gt; { this.copySuccess = false; }, 2000);
+        });
+    },
+    confirmClearCache() {
+        this.$refs.viewFrame.src += '';
+        this.$refs.editorFrame.src += '';
+        if(this.$refs.splitViewFrame) {
+            this.$refs.splitViewFrame.src += '';
+        }
+        if(this.$refs.splitEditorFrame) {
+            this.$refs.splitEditorFrame.src += '';
+        }
+        this.clearCacheModalOpen = false;
+        this.menuOpen = false;
+    },
+    openNewWindow() {
+        window.open(window.location.href, '_blank');
+        this.menuOpen = false;
+    },
+    exitApp() {
+        window.close();
+    },
+    addTerminalTab() {
+        const newId = Date.now();
+        this.consoleTabs.push({ id: newId, name: `Terminal ${this.nextTerminalId}`, type: 'terminal' });
+        this.activeConsoleTab = newId;
+        this.nextTerminalId++;
+        if(!this.consoleOpen) {
+            this.consoleOpen = true;
+            this.mainHeight = 70;
+        }
+    },
+    closeConsoleTab(tabId, event) {
+        event.stopPropagation();
+        const index = this.consoleTabs.findIndex(tab =&gt; tab.id === tabId);
+        if (index &gt; -1) {
+            this.consoleTabs.splice(index, 1);
+            if (this.activeConsoleTab === tabId &amp;&amp; this.consoleTabs.length &gt; 0) {
+                 this.activeConsoleTab = this.consoleTabs[Math.max(0, index - 1)].id;
+            } else if (this.consoleTabs.length === 0) {
+                this.consoleOpen = false;
+            }
+        }
+    },
+    getWorkingBranchName() {
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `working_user_${year}${month}${day}-${hours}${minutes}_`;
+    }
+}">
+<header class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-gray-700 shrink-0">
+<div class="flex items-center space-x-2">
+<svg class="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<h1 class="text-xl font-bold text-text-dark">Documental</h1>
+</div>
+<div class="flex items-center space-x-2 ml-4">
+<button :class="{ 'bg-gray-700 ring-2 ring-primary': activeTab === 'editor', 'hover:bg-gray-700': activeTab !== 'editor' }" @click="activeTab = 'editor'" class="p-2 rounded-full focus:outline-none">
+<span :class="{'text-primary': activeTab === 'editor', 'text-muted-dark': activeTab !== 'editor'}" class="material-icons">edit</span>
+</button>
+<button :class="{ 'bg-gray-700 ring-2 ring-primary': activeTab === 'view', 'hover:bg-gray-700': activeTab !== 'view' }" @click="activeTab = 'view'" class="p-2 rounded-full focus:outline-none">
+<span :class="{'text-primary': activeTab === 'view', 'text-muted-dark': activeTab !== 'view'}" class="material-icons">visibility</span>
+</button>
+<button :class="{ 'bg-gray-700 ring-2 ring-primary': activeTab === 'split', 'hover:bg-gray-700': activeTab !== 'split' }" @click="activeTab = 'split'" class="p-2 rounded-full focus:outline-none">
+<span :class="{'text-primary': activeTab === 'split', 'text-muted-dark': activeTab !== 'split'}" class="material-icons">vertical_split</span>
+</button>
+</div>
+<div class="flex-1 mx-4">
+<div class="relative flex items-center">
+<span class="material-icons absolute left-3 text-muted-dark pointer-events-none">link</span>
+<input :disabled="activeTab === 'editor'" @click="handleAddressClick($event)" @input="handleAddressInput($event)" @keydown="handleAddressKeyDown($event)" @keydown.enter="handleAddressEnter($event)" class="w-full pl-10 pr-10 py-2 bg-background-dark border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-text-dark placeholder-muted-dark disabled:opacity-50 disabled:cursor-not-allowed" type="text" x-model="addressValue"/>
+<button @click="copyAddress()" class="absolute right-3 text-muted-dark hover:text-text-dark focus:outline-none">
+<span class="material-icons" x-show="!copySuccess">content_copy</span>
+<span class="material-icons text-primary" style="display: none;" x-show="copySuccess">check</span>
+</button>
+</div>
+</div>
+<div class="flex items-center space-x-2">
+<button @click="updateModalOpen = true" class="px-4 py-2 text-sm font-semibold text-white bg-accent-orange rounded-md hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange">
+                Atualizar
+            </button>
+<button @click="publishModalOpen = true" class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-md hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-primary">
+                Publicar
+            </button>
+<div class="relative">
+<button @click="menuOpen = !menuOpen" class="p-2 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary">
+<span class="material-icons text-muted-dark">menu</span>
+</button>
+</div>
+</div>
+</header>
+<div class="flex flex-col flex-1 overflow-hidden" x-ref="mainContainer">
+<main :style="{ height: consoleOpen ? mainHeight + '%' : '100%' }" class="flex-1 flex overflow-hidden">
+<div class="w-full h-full" x-show="activeTab === 'view'">
+<iframe class="w-full h-full border-0" src="https://documental.xyz/" x-ref="viewFrame"></iframe>
+</div>
+<div class="w-full h-full" x-show="activeTab === 'editor'">
+<iframe class="w-full h-full border-0" src="https://documental.xyz/admin/" x-ref="editorFrame"></iframe>
+</div>
+<div class="flex w-full h-full" x-ref="splitContainer" x-show="activeTab === 'split'">
+<div :style="{ width: editorWidth + '%' }" class="h-full overflow-auto" x-ref="splitEditorPane">
+<iframe class="w-full h-full border-0" src="https://documental.xyz/admin/" x-ref="splitEditorFrame"></iframe>
+</div>
+<div @mousedown.prevent="startResize($event)" class="resize-handle" x-ref="resizeHandle"></div>
+<div class="flex-1 h-full overflow-auto">
+<iframe class="w-full h-full border-0" src="https://documental.xyz/" x-ref="splitViewFrame"></iframe>
+</div>
+</div>
+</main>
+<template x-if="consoleOpen">
+<div :style="{ height: `calc(100% - ${mainHeight}%)` }" class="flex flex-col flex-1 bg-surface-dark overflow-hidden shrink-0">
+<div @mousedown.prevent="startVerticalResize($event)" class="resize-handle-horizontal w-full" x-ref="resizeHandleHorizontal"></div>
+<div class="flex items-center justify-between p-2 border-b border-gray-700">
+<div class="flex items-center space-x-1 overflow-x-auto">
+<template :key="tab.id" x-for="tab in consoleTabs">
+<button :class="{'bg-gray-700 text-primary': activeConsoleTab === tab.id, 'hover:bg-gray-800': activeConsoleTab !== tab.id}" @click="activeConsoleTab = tab.id" class="px-3 py-1 text-sm rounded-md flex items-center space-x-2 shrink-0">
+<span x-text="tab.name"></span>
+<span @click="closeConsoleTab(tab.id, $event)" class="material-icons text-muted-dark text-xs hover:text-text-dark" x-show="tab.type === 'terminal'">close</span>
+</button>
+</template>
+</div>
+<div class="flex items-center space-x-2">
+<button @click="addTerminalTab()" class="p-1 rounded-full hover:bg-gray-700">
+<span class="material-icons text-muted-dark text-base">add</span>
+</button>
+<button @click="consoleOpen = false" class="p-1 rounded-full hover:bg-gray-700">
+<span class="material-icons text-muted-dark text-base">close</span>
+</button>
+</div>
+</div>
+<div class="p-4 flex-1 overflow-y-auto font-mono text-sm text-muted-dark">
+<template :key="tab.id" x-for="tab in consoleTabs">
+<div x-show="activeConsoleTab === tab.id">
+<div x-show="tab.type === 'server'">
+<p>&gt; astro dev</p>
+<p class="text-green-400">✔ Local: http://localhost:4321/</p>
+<p class="text-green-400">✔ Network: use --host to expose</p>
+<p>...</p>
+</div>
+<div x-show="tab.type === 'console'">
+<p>&gt; git status</p>
+<p>On branch main</p>
+<p>Your branch is up to date with 'origin/main'.</p>
+<p>nothing to commit, working tree clean</p>
+<p>...</p>
+</div>
+<div x-show="tab.type === 'terminal'">
+<p class="text-green-400">user@documental:~$</p>
+</div>
+</div>
+</template>
+</div>
+</div>
+</template>
+</div>
+<footer class="flex items-center justify-between h-8 px-4 bg-surface-dark border-t border-gray-700 text-xs text-muted-dark shrink-0">
+<div class="flex items-center space-x-4">
+<button @click="branchModalOpen = true" class="flex items-center space-x-1 hover:text-text-dark">
+<span class="material-icons text-sm">source_control</span>
+<span class="font-bold" x-text="currentBranch"></span>
+</button>
+<button class="flex items-center space-x-1 hover:text-text-dark">
+<span class="material-icons text-sm">folder_open</span>
+<span>/Users/thiagopaixao/documental</span>
+</button>
+</div>
+<div class="flex items-center space-x-4">
+<a class="flex items-center space-x-1 hover:text-text-dark underline" href="https://github.com/thiagopaixao/astro_sveltia" target="_blank">
+<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" fill-rule="evenodd"></path></svg>
+<span>thiagopaixao/astro_sveltia</span>
+</a>
+<a class="flex items-center space-x-1 hover:text-text-dark underline" href="https://github.com/thiagopaixao/astro_sveltia/commit/a1b2c3d" target="_blank">
+<span class="material-icons text-sm">commit</span>
+<span>a1b2c3d</span>
+</a>
+<div class="flex items-center space-x-1">
+<span class="material-icons text-sm">chat_bubble_outline</span>
+<span>feat: Implement new feature</span>
+</div>
+</div>
+</footer>
+<div @click.outside="menuOpen = false" class="absolute top-16 right-4 z-10" style="display: none;" x-show="menuOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-end="opacity-100 transform scale-100" x-transition:enter-start="opacity-0 transform scale-95" x-transition:leave="transition ease-in duration-75" x-transition:leave-end="opacity-0 transform scale-95" x-transition:leave-start="opacity-100 transform scale-100">
+<div class="w-56 bg-surface-dark rounded-md shadow-lg border border-gray-700">
+<nav class="p-2">
+<ul>
+<li>
+<a @click.prevent="consoleOpen = !consoleOpen; if(consoleOpen) mainHeight = 70; menuOpen = false" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+<span class="material-icons mr-3">terminal</span>
+<span>Console</span>
+</a>
+</li>
+<li>
+<a @click.prevent="clearCacheModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+<span class="material-icons mr-3">delete_sweep</span>
+<span>Limpar cache</span>
+</a>
+</li>
+<li>
+<a @click.prevent="openNewWindow()" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+<span class="material-icons mr-3">open_in_new</span>
+<span>Nova Janela</span>
+</a>
+</li>
+<li>
+<a class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+<span class="material-icons mr-3">folder_open</span>
+<span>Outro Projeto</span>
+</a>
+</li>
+<li class="border-t border-gray-700 my-2"></li>
+<li>
+<a class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#" data-navigate="config.html">
+<span class="material-icons mr-3">settings</span>
+<span>Configurações</span>
+</a>
+</ul>li>
+<li>
+<a @click.prevent="helpModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+<span class="material-icons mr-3">help_outline</span>
+<span>Ajuda</span>
+</a>
+</li>
+<li>
+<a @click.prevent="aboutModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+<span class="material-icons mr-3">info_outline</span>
+<span>Sobre</span>
+</a>
+</li>
+<li class="border-t border-gray-700 my-2"></li>
+<li>
+<a @click.prevent="exitModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+<span class="material-icons mr-3">exit_to_app</span>
+<span>Sair</span>
+</a>
+</li>
+</ul>
+</nav>
+</div>
+</div>
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="updateModalOpen">
+<div @click.outside="updateModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
+<h3 class="text-lg font-medium text-text-dark">Confirmar Atualização</h3>
+<p class="mt-2 text-sm text-muted-dark">Você tem certeza que deseja atualizar a branch '<span class="font-bold text-primary" x-text="currentBranch"></span>'? Isso executará um `git pull`.</p>
+<div class="mt-4 flex justify-end space-x-2">
+<button @click="updateModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
+<button @click="updateModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-orange-500">Confirmar</button>
+</div>
+</div>
+</div>
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="publishModalOpen">
+<div @click.outside="publishModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
+<h3 class="text-lg font-medium text-text-dark">Publicar Alterações</h3>
+<p class="mt-2 text-sm text-muted-dark">Selecione a branch para publicar.</p>
+<div class="mt-4 space-y-4">
+<div>
+<label class="text-sm font-medium text-text-dark">Selecionar branch existente</label>
+<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch">
+<option value="main">main</option>
+<option value="stage">stage</option>
+</select>
+</div>
+</div>
+<div class="mt-6 flex justify-end space-x-2">
+<button @click="publishModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
+<button @click="publishModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500">Publicar</button>
+</div>
+</div>
+</div>
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="branchModalOpen">
+<div @click.outside="branchModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
+<h3 class="text-lg font-medium text-text-dark">Gerenciar Branches</h3>
+<p class="mt-2 text-sm text-muted-dark">Selecione uma branch existente ou crie uma nova branch local.</p>
+<div class="mt-4 space-y-4">
+<div>
+<label class="text-sm font-medium text-text-dark">Branch Atual</label>
+<p class="mt-1 text-primary font-bold" x-text="currentBranch"></p>
+</div>
+<div>
+<label class="text-sm font-medium text-text-dark">Ação</label>
+<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="branchAction">
+<option value="change">Mudar para branch existente</option>
+<option value="create">Criar nova branch local</option>
+</select>
+</div>
+<div x-show="branchAction === 'change'">
+<label class="text-sm font-medium text-text-dark">Mudar para branch</label>
+<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch">
+<option value="main">main</option>
+<option value="stage">stage</option>
+</select>
+</div>
+<div x-show="branchAction === 'create'">
+<label class="block text-sm font-medium text-text-dark" for="new-branch-name">Nome da nova branch</label>
+<div class="mt-1 flex rounded-md shadow-sm">
+<span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-600 bg-gray-700 text-muted-dark text-sm" x-text="getWorkingBranchName()"></span>
+<input class="flex-1 block w-full rounded-none rounded-r-md bg-background-dark border-gray-600 focus:ring-primary focus:border-primary sm:text-sm text-text-dark" id="new-branch-name" placeholder="adicione-um-sufixo-aqui" type="text" x-model="newBranchName"/>
+</div>
+</div>
+</div>
+<div class="mt-6 flex justify-end space-x-2">
+<button @click="branchModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
+<button @click="branchModalOpen = false; if(branchAction === 'change') currentBranch = selectedBranch;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" x-show="branchAction === 'change'">Mudar Branch</button>
+<button @click="branchModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" x-show="branchAction === 'create'">Criar Branch</button>
+</div>
+</div>
+</div>
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="clearCacheModalOpen">
+<div @click.outside="clearCacheModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
+<h3 class="text-lg font-medium text-text-dark">Limpar Cache</h3>
+<p class="mt-2 text-sm text-muted-dark">Tem certeza de que deseja limpar o cache? Esta ação não pode ser desfeita.</p>
+<div class="mt-4 flex justify-end space-x-2">
+<button @click="clearCacheModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
+<button @click="confirmClearCache()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500">Limpar</button>
+</div>
+</div>
+</div>
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="helpModalOpen">
+<div @click.outside="helpModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
+<h3 class="text-lg font-medium text-text-dark">Ajuda</h3>
+<div class="mt-2 space-y-4 text-sm text-muted-dark">
+<p>Bem-vindo ao Documental Desktop! Aqui estão algumas dicas para começar:</p>
+<ul class="list-disc list-inside space-y-2">
+<li>Use os botões <span class="material-icons text-xs align-middle">edit</span>, <span class="material-icons text-xs align-middle">visibility</span>, e <span class="material-icons text-xs align-middle">vertical_split</span> para alternar entre os modos de visualização.</li>
+<li>A barra de endereço permite que você navegue para diferentes páginas do seu projeto.</li>
+<li>Use o menu <span class="material-icons text-xs align-middle">menu</span> para acessar mais opções como o Console e Configurações.</li>
+<li>A barra inferior mostra informações úteis sobre o seu projeto Git.</li>
+</ul>
+<p>Para mais informações, visite nossa <a class="text-primary hover:underline" href="#">documentação online</a>.</p>
+</div>
+<div class="mt-6 flex justify-end">
+<button @click="helpModalOpen = false" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500">Entendido</button>
+</div>
+</div>
+</div>
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="aboutModalOpen">
+<div @click.outside="aboutModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md text-center">
+<div class="flex justify-center mb-4">
+<svg class="h-12 w-12 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<h3 class="text-lg font-medium text-text-dark">Documental Desktop</h3>
+<p class="mt-1 text-sm text-muted-dark">Versão 1.0.0 (Electron)</p>
+<p class="mt-4 text-xs text-muted-dark">© 2023 Documental. Todos os direitos reservados.</p>
+<div class="mt-6 flex justify-center">
+<button @click="aboutModalOpen = false" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500">Fechar</button>
+</div>
+</div>
+</div>
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="exitModalOpen">
+<div @click.outside="exitModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
+<h3 class="text-lg font-medium text-text-dark">Sair do Documental</h3>
+<p class="mt-2 text-sm text-muted-dark">Tem certeza de que deseja sair do aplicativo?</p>
+<div class="mt-4 flex justify-end space-x-2">
+<button @click="exitModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
+<button @click="exitApp()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500">Sair</button>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

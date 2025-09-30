@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Documental - Novo Projeto</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style type="text/tailwindcss">
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+    .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+    }
+</style>
+<script>
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    primary: "#22c55e",
+                    "background-light": "#f3f4f6",
+                    "background-dark": "#111827",
+                    "surface-light": "#ffffff",
+                    "surface-dark": "#1f2937",
+                    "text-light": "#111827",
+                    "text-dark": "#f9fafb",
+                    "muted-light": "#6b7280",
+                    "muted-dark": "#9ca3af",
+                },
+            },
+        },
+    };
+    </script>
+<script src="script.js" defer></script>
+</head>
+<body class="bg-background-dark text-text-dark antialiased">
+<div class="flex flex-col h-screen">
+<div class="flex-1 flex items-center justify-center p-8">
+<div class="w-full max-w-2xl">
+<div class="text-center mb-10">
+<div class="flex items-center justify-center gap-4 mb-4">
+<svg class="h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<h1 class="text-4xl font-black text-text-dark">Criar Novo Projeto</h1>
+</div>
+<p class="text-muted-dark text-lg">Preencha os detalhes abaixo para criar seu novo projeto.</p>
+</div>
+<div class="bg-surface-dark rounded-lg p-8 space-y-6">
+<div>
+<label class="block text-sm font-medium text-muted-dark mb-2" for="project-name">Nome do Projeto</label>
+<input class="w-full bg-gray-900 border-gray-700 text-text-dark rounded-md focus:ring-primary focus:border-primary" id="project-name" name="project-name" placeholder="Ex: Meu Incrível Projeto" type="text"/>
+</div>
+<div>
+<label class="block text-sm font-medium text-muted-dark mb-2" for="github-url">URL do Repositório Git</label>
+<input class="w-full bg-gray-900 border-gray-700 text-text-dark rounded-md focus:ring-primary focus:border-primary" id="github-url" name="github-url" placeholder="https://github.com/usuario/repositorio.git" type="url"/>
+</div>
+<div>
+<label class="block text-sm font-medium text-muted-dark mb-2" for="project-path">Caminho da Pasta</label>
+<div class="flex items-center space-x-2">
+<input class="flex-1 w-full bg-gray-900 border-gray-700 text-text-dark rounded-md focus:ring-primary focus:border-primary" id="project-path" name="project-path" type="text" value="$HOME/.documental/projetos/"/>
+<button class="bg-gray-700 hover:bg-gray-600 text-text-dark font-semibold py-2 px-4 rounded-md flex items-center gap-2 transition-colors duration-300">
+<span class="material-symbols-outlined text-xl">folder_open</span>
+<span>Selecionar</span>
+</button>
+</div>
+</div>
+</div>
+<div class="mt-8 flex justify-end">
+<button class="bg-primary hover:bg-green-500 text-white font-bold py-3 px-8 rounded-lg flex items-center gap-2 text-lg transition-colors duration-300" data-navigate="create.html">
+<span class="material-symbols-outlined">add_circle</span>
+<span>Criar Projeto</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

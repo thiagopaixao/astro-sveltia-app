@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Documental - Configurações</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+<script defer="" src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="script.js" defer></script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #4b5563;
+            -webkit-transition: .4s;
+            transition: .4s;
+            border-radius: 28px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            -webkit-transition: .4s;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #22c55e;
+        }
+        input:checked + .slider:before {
+            -webkit-transform: translateX(22px);
+            -ms-transform: translateX(22px);
+            transform: translateX(22px);
+        }
+    </style>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#22c55e",
+                        "background-light": "#f3f4f6",
+                        "background-dark": "#111827",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1f2937",
+                        "text-light": "#111827",
+                        "text-dark": "#f9fafb",
+                        "muted-light": "#6b7280",
+                        "muted-dark": "#9ca3af",
+                        "accent-orange": "#ff5722",
+                    },
+                },
+            },
+        };
+    </script>
+</head>
+<body class="bg-background-dark text-text-dark antialiased" x-data="{
+        settings: {
+            theme: 'dark',
+            autoUpdate: true,
+            defaultView: 'split',
+            autoPublish: false,
+            defaultBranch: 'stage',
+            cacheLevel: 'aggressive',
+            terminalShell: 'bash',
+            notifications: {
+                updates: true,
+                publish: true,
+                errors: false
+            }
+        },
+        activeTab: 'geral',
+        saveStatus: '',
+        saveSettings() {
+            this.saveStatus = 'Salvando...';
+            // Simular salvamento
+            setTimeout(() =&gt; {
+                this.saveStatus = 'Salvo com sucesso!';
+                setTimeout(() =&gt; this.saveStatus = '', 2000);
+            }, 1000);
+        }
+    }">
+<div class="flex flex-col h-screen">
+<header class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-gray-700 shrink-0">
+<div class="flex items-center space-x-2">
+<a class="flex items-center space-x-2" href="#">
+<svg class="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<h1 class="text-xl font-bold text-text-dark">Documental</h1>
+</a>
+<span class="text-xl font-light text-muted-dark">/</span>
+<h2 class="text-xl font-semibold text-text-dark">Configurações</h2>
+</div>
+<div class="flex items-center space-x-4">
+<span class="text-sm text-primary transition-opacity duration-300" x-show="saveStatus" x-text="saveStatus"></span>
+<button @click="saveSettings()" class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-md hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-primary">
+<span class="material-icons mr-2 text-sm">save</span>
+                    Salvar Alterações
+                </button>
+<a class="p-2 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary" href="#" data-navigate="main.html">
+<span class="material-icons text-muted-dark">close</span>
+</a>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<aside class="w-64 bg-surface-dark p-4 border-r border-gray-700 overflow-y-auto">
+<nav class="space-y-2">
+<h3 class="px-3 text-xs font-semibold text-muted-dark uppercase tracking-wider">Interface</h3>
+<a :class="{'bg-gray-700 text-primary': activeTab === 'geral', 'hover:bg-gray-700 text-text-dark': activeTab !== 'geral'}" @click.prevent="activeTab = 'geral'" class="flex items-center px-3 py-2 rounded-md text-sm font-medium cursor-pointer" href="#">
+<span class="material-icons mr-3">tune</span>
+<span>Geral</span>
+</a>
+<a :class="{'bg-gray-700 text-primary': activeTab === 'aparencia', 'hover:bg-gray-700 text-text-dark': activeTab !== 'aparencia'}" @click.prevent="activeTab = 'aparencia'" class="flex items-center px-3 py-2 rounded-md text-sm font-medium cursor-pointer" href="#">
+<span class="material-icons mr-3">palette</span>
+<span>Aparência</span>
+</a>
+<h3 class="px-3 pt-4 text-xs font-semibold text-muted-dark uppercase tracking-wider">Desenvolvimento</h3>
+<a :class="{'bg-gray-700 text-primary': activeTab === 'git', 'hover:bg-gray-700 text-text-dark': activeTab !== 'git'}" @click.prevent="activeTab = 'git'" class="flex items-center px-3 py-2 rounded-md text-sm font-medium cursor-pointer" href="#">
+<span class="material-icons mr-3">source_control</span>
+<span>Git &amp; Deploy</span>
+</a>
+<a :class="{'bg-gray-700 text-primary': activeTab === 'avancado', 'hover:bg-gray-700 text-text-dark': activeTab !== 'avancado'}" @click.prevent="activeTab = 'avancado'" class="flex items-center px-3 py-2 rounded-md text-sm font-medium cursor-pointer" href="#">
+<span class="material-icons mr-3">build_circle</span>
+<span>Avançado</span>
+</a>
+<h3 class="px-3 pt-4 text-xs font-semibold text-muted-dark uppercase tracking-wider">Sistema</h3>
+<a :class="{'bg-gray-700 text-primary': activeTab === 'notificacoes', 'hover:bg-gray-700 text-text-dark': activeTab !== 'notificacoes'}" @click.prevent="activeTab = 'notificacoes'" class="flex items-center px-3 py-2 rounded-md text-sm font-medium cursor-pointer" href="#">
+<span class="material-icons mr-3">notifications</span>
+<span>Notificações</span>
+</a>
+<a :class="{'bg-gray-700 text-primary': activeTab === 'dados', 'hover:bg-gray-700 text-text-dark': activeTab !== 'dados'}" @click.prevent="activeTab = 'dados'" class="flex items-center px-3 py-2 rounded-md text-sm font-medium cursor-pointer" href="#">
+<span class="material-icons mr-3">storage</span>
+<span>Dados e Cache</span>
+</a>
+</nav>
+</aside>
+<main class="flex-1 p-8 overflow-y-auto">
+<div class="max-w-3xl mx-auto">
+<div x-show="activeTab === 'geral'">
+<h2 class="text-2xl font-bold text-text-dark mb-1">Configurações Gerais</h2>
+<p class="text-muted-dark mb-6">Ajustes básicos de comportamento do aplicativo.</p>
+<div class="space-y-6">
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700">
+<label class="block text-sm font-medium text-text-dark" for="default-view">Visualização Padrão ao Iniciar</label>
+<p class="text-xs text-muted-dark mt-1">Escolha qual modo de visualização será aberto ao iniciar um projeto.</p>
+<select class="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" id="default-view" x-model="settings.defaultView">
+<option value="editor">Editor</option>
+<option value="view">Visualização</option>
+<option value="split">Dividida (Editor e Visualização)</option>
+</select>
+</div>
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700 flex items-center justify-between">
+<div>
+<label class="block text-sm font-medium text-text-dark" for="auto-update">Atualização Automática</label>
+<p class="text-xs text-muted-dark mt-1">Verificar e instalar atualizações do Documental Desktop automaticamente.</p>
+</div>
+<label class="toggle-switch">
+<input id="auto-update" type="checkbox" x-model="settings.autoUpdate"/>
+<span class="slider"></span>
+</label>
+</div>
+</div>
+</div>
+<div x-show="activeTab === 'aparencia'">
+<h2 class="text-2xl font-bold text-text-dark mb-1">Aparência</h2>
+<p class="text-muted-dark mb-6">Personalize a aparência do aplicativo.</p>
+<div class="space-y-6">
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700">
+<label class="block text-sm font-medium text-text-dark" for="theme-selector">Tema da Interface</label>
+<p class="text-xs text-muted-dark mt-1">Altere o tema para se adequar à sua preferência de iluminação.</p>
+<select class="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" id="theme-selector" x-model="settings.theme">
+<option value="dark">Escuro (Padrão)</option>
+<option value="light">Claro</option>
+<option value="system">Sincronizar com Sistema</option>
+</select>
+</div>
+</div>
+</div>
+<div x-show="activeTab === 'git'">
+<h2 class="text-2xl font-bold text-text-dark mb-1">Git &amp; Deploy</h2>
+<p class="text-muted-dark mb-6">Configurações relacionadas ao controle de versão e publicação.</p>
+<div class="space-y-6">
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700">
+<label class="block text-sm font-medium text-text-dark" for="default-branch">Branch de Publicação Padrão</label>
+<p class="text-xs text-muted-dark mt-1">A branch que será sugerida por padrão ao publicar alterações.</p>
+<input class="mt-2 block w-full bg-background-dark border-gray-600 rounded-md focus:ring-primary focus:border-primary sm:text-sm text-text-dark" id="default-branch" type="text" x-model="settings.defaultBranch"/>
+</div>
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700 flex items-center justify-between">
+<div>
+<label class="block text-sm font-medium text-text-dark" for="auto-publish">Commit e Push Automático ao Publicar</label>
+<p class="text-xs text-muted-dark mt-1">Se ativado, `git add .`, `git commit` e `git push` serão executados automaticamente.</p>
+</div>
+<label class="toggle-switch">
+<input id="auto-publish" type="checkbox" x-model="settings.autoPublish"/>
+<span class="slider"></span>
+</label>
+</div>
+</div>
+</div>
+<div x-show="activeTab === 'avancado'">
+<h2 class="text-2xl font-bold text-text-dark mb-1">Avançado</h2>
+<p class="text-muted-dark mb-6">Opções para usuários experientes. Tenha cuidado ao alterar.</p>
+<div class="space-y-6">
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700">
+<label class="block text-sm font-medium text-text-dark" for="terminal-shell">Shell do Terminal Integrado</label>
+<p class="text-xs text-muted-dark mt-1">Selecione o shell padrão para novas abas do terminal.</p>
+<select class="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" id="terminal-shell" x-model="settings.terminalShell">
+<option value="bash">Bash</option>
+<option value="zsh">Zsh</option>
+<option value="powershell">PowerShell (Windows)</option>
+<option value="cmd">CMD (Windows)</option>
+</select>
+</div>
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700">
+<label class="block text-sm font-medium text-text-dark">Redefinir Configurações</label>
+<p class="text-xs text-muted-dark mt-1">Restaura todas as configurações para seus valores padrão. Esta ação não pode ser desfeita.</p>
+<button class="mt-3 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-red-600">
+                            Redefinir para o Padrão
+                        </button>
+</div>
+</div>
+</div>
+<div x-show="activeTab === 'notificacoes'">
+<h2 class="text-2xl font-bold text-text-dark mb-1">Notificações</h2>
+<p class="text-muted-dark mb-6">Gerencie quais notificações do sistema você deseja receber.</p>
+<div class="space-y-6">
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700">
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<div>
+<label class="block text-sm font-medium text-text-dark">Notificações de Atualização</label>
+<p class="text-xs text-muted-dark mt-1">Receber um alerta quando uma nova versão do Documental Desktop estiver disponível.</p>
+</div>
+<label class="toggle-switch">
+<input type="checkbox" x-model="settings.notifications.updates"/>
+<span class="slider"></span>
+</label>
+</div>
+<hr class="border-gray-700"/>
+<div class="flex items-center justify-between">
+<div>
+<label class="block text-sm font-medium text-text-dark">Notificações de Publicação</label>
+<p class="text-xs text-muted-dark mt-1">Receber um alerta de sucesso ou falha após uma tentativa de publicação.</p>
+</div>
+<label class="toggle-switch">
+<input type="checkbox" x-model="settings.notifications.publish"/>
+<span class="slider"></span>
+</label>
+</div>
+<hr class="border-gray-700"/>
+<div class="flex items-center justify-between">
+<div>
+<label class="block text-sm font-medium text-text-dark">Notificações de Erro</label>
+<p class="text-xs text-muted-dark mt-1">Receber alertas sobre erros críticos do servidor ou do processo de build.</p>
+</div>
+<label class="toggle-switch">
+<input type="checkbox" x-model="settings.notifications.errors"/>
+<span class="slider"></span>
+</label>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div x-show="activeTab === 'dados'">
+<h2 class="text-2xl font-bold text-text-dark mb-1">Dados e Cache</h2>
+<p class="text-muted-dark mb-6">Gerencie como o aplicativo armazena dados em cache.</p>
+<div class="space-y-6">
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700">
+<label class="block text-sm font-medium text-text-dark" for="cache-level">Nível de Cache da Aplicação</label>
+<p class="text-xs text-muted-dark mt-1">Controla a agressividade com que o conteúdo das iframes é armazenado em cache.</p>
+<select class="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" id="cache-level" x-model="settings.cacheLevel">
+<option value="aggressive">Agressivo (Mais rápido, pode exibir conteúdo desatualizado)</option>
+<option value="normal">Normal (Balanceado)</option>
+<option value="disabled">Desativado (Sempre busca o conteúdo mais recente)</option>
+</select>
+</div>
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700">
+<label class="block text-sm font-medium text-text-dark">Limpar Cache Manualmente</label>
+<p class="text-xs text-muted-dark mt-1">Força a limpeza de todo o cache de visualização e edição. Pode ser útil para resolver problemas de exibição.</p>
+<button class="mt-3 px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange">
+                            Limpar Cache Agora
+                        </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>

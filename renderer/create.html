@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Documental - Criando Espaço de Trabalho</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style type="text/tailwindcss">
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24
+        }
+        .creative-loader {
+            width: 50px;
+            height: 50px;
+            position: relative;
+        }
+        .creative-loader::before, .creative-loader::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 6px solid transparent;
+            border-top-color: #22c55e;
+            animation: spin-creative 1.5s ease-in-out infinite;
+        }
+        .creative-loader::after {
+            border-top-color: #3b82f6;
+            animation-delay: 0.3s;
+            animation-direction: reverse;
+        }
+        @keyframes spin-creative {
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(180deg) scale(0.8); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+        .step-icon-active {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#22c55e",
+                        "background-light": "#f3f4f6",
+                        "background-dark": "#111827",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1f2937",
+                        "text-light": "#111827",
+                        "text-dark": "#f9fafb",
+                        "muted-light": "#6b7280",
+                        "muted-dark": "#9ca3af",
+                    },
+                },
+            },
+        };
+    </script>
+<script defer="" src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="script.js" defer></script>
+</head>
+<body class="bg-background-dark text-text-dark antialiased">
+<div class="flex flex-col h-screen" x-data="{ 
+        activeStepId: 1,
+        processFinished: false,
+        processFailed: false,
+        steps: [
+            { id: 1, title: 'Clonando repositório git do projeto...', status: 'active', log: 'Clonando em \'Meu Incrível Projeto\'...\nOrigem remota: https://github.com/usuario/repositorio.git...\n' },
+            { id: 2, title: 'Instalando dependências...', status: 'pending', log: '' },
+            { id: 3, title: 'Construindo o projeto...', status: 'pending', log: '' },
+            { id: 4, title: 'Executando servidor do modo dev...', status: 'pending', log: '' }
+        ],
+        get allStepsSuccess() {
+            return this.steps.every(s =&gt; s.status === 'success');
+        },
+        get anyStepFailed() {
+            return this.steps.some(s =&gt; s.status === 'failure');
+        },
+        advanceStep(currentIndex) {
+            this.steps[currentIndex].log += 'Sucesso: Etapa concluída.\n';
+            this.steps[currentIndex].status = 'success';
+            if (currentIndex + 1 &lt; this.steps.length) {
+                this.steps[currentIndex + 1].status = 'active';
+                this.steps[currentIndex + 1].log = 'Iniciando etapa...\n';
+                this.activeStepId = this.steps[currentIndex + 1].id;
+            } else {
+                 this.processFinished = true;
+            }
+        },
+        failStep(currentIndex) {
+            this.steps[currentIndex].log += '\nFalha: Ocorreu um erro inesperado.';
+            this.steps[currentIndex].status = 'failure';
+            this.processFinished = true;
+            this.processFailed = true;
+        },
+        retryProcess() {
+            this.steps.forEach((step, index) =&gt; {
+                step.status = index === 0 ? 'active' : 'pending';
+                step.log = index === 0 ? 'Tentando novamente...\nClonando em \'Meu Incrível Projeto\'...\nOrigem remota: https://github.com/usuario/repositorio.git...\n' : '';
+            });
+            this.activeStepId = 1;
+            this.processFinished = false;
+            this.processFailed = false;
+        },
+        init() {
+            this.$watch('activeStepId', (newValue) =&gt; {
+                 this.steps.forEach(step =&gt; {
+                    if (step.status === 'active' &amp;&amp; step.id !== newValue) {
+                        this.activeStepId = step.id; // Keep it expanded if it's active
+                    }
+                 })
+            });
+        }
+    }">
+<div class="flex-1 flex items-center justify-center p-8 overflow-y-auto">
+<div class="w-full max-w-2xl">
+<div class="text-center mb-8">
+<div class="flex items-center justify-center gap-4 mb-3">
+<div class="creative-loader"></div>
+</div>
+<h1 class="text-3xl font-bold text-text-dark">Criando Espaço de Trabalho</h1>
+<p class="text-muted-dark text-base mt-1">Aguarde enquanto preparamos tudo para você.</p>
+</div>
+<div class="bg-surface-dark rounded-lg p-4 space-y-2">
+<template :key="step.id" x-for="(step, index) in steps">
+<div :class="{ 'opacity-60': step.status !== 'active' &amp;&amp; step.status !== 'failure' &amp;&amp; step.status !== 'success'}" class="bg-gray-900/50 rounded-lg text-sm">
+<div :class="{'cursor-pointer': step.status !== 'active'}" @click="activeStepId = (step.status !== 'active' ? (activeStepId === step.id ? null : step.id) : step.id)" class="flex items-center justify-between p-3">
+<div class="flex items-center gap-3">
+<div class="flex items-center justify-center w-6 h-6">
+<template x-if="step.status === 'active'">
+<span class="material-symbols-outlined text-primary text-xl step-icon-active">autorenew</span>
+</template>
+<template x-if="step.status === 'success'">
+<span class="material-symbols-outlined text-green-500 text-xl">check_circle</span>
+</template>
+<template x-if="step.status === 'failure'">
+<span class="material-symbols-outlined text-red-500 text-xl">error</span>
+</template>
+<template x-if="step.status === 'pending'">
+<div class="w-4 h-4 border-2 border-gray-600 rounded-full"></div>
+</template>
+</div>
+<span :class="{ 'text-muted-dark': step.status === 'pending', 'text-text-dark font-semibold': step.status === 'success', 'text-text-dark': step.status === 'active', 'text-red-400': step.status === 'failure' }" class="font-medium" x-text="step.title"></span>
+</div>
+<span :class="{ 'rotate-180': activeStepId === step.id }" class="material-symbols-outlined transition-transform">expand_more</span>
+</div>
+<div x-cloak="" x-show="activeStepId === step.id" x-transition:enter="transition ease-out duration-300" x-transition:enter-end="opacity-100 translate-y-0" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="opacity-0 -translate-y-2" x-transition:leave-start="opacity-100 translate-y-0">
+<div class="px-3 pb-3">
+<div class="bg-gray-900 rounded-md p-3 max-h-40 overflow-y-auto border border-gray-700">
+<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="step.log"></pre>
+</div>
+<template x-if="step.status === 'active' &amp;&amp; !processFinished">
+<div class="mt-3 flex justify-end gap-2 text-xs text-gray-500">
+<p class="self-center text-[10px]">Botões de simulação:</p>
+<button @click="failStep(index)" class="bg-red-800 hover:bg-red-700 text-white font-semibold py-1 px-2 rounded-md transition-colors duration-300 text-[10px]">Simular Falha</button>
+<button @click="advanceStep(index)" class="bg-green-800 hover:bg-green-700 text-white font-semibold py-1 px-2 rounded-md transition-colors duration-300 text-[10px]">Simular Sucesso</button>
+</div>
+</template>
+</div>
+</div>
+</div>
+</template>
+</div>
+</div>
+</div>
+<div class="p-4 border-t border-gray-800 bg-surface-dark mt-auto">
+<div class="flex justify-end gap-4 max-w-2xl mx-auto">
+<button @click="window.close()" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-5 rounded-md transition-colors duration-300 text-sm">
+                    Cancelar
+                </button>
+<template x-if="!anyStepFailed">
+<button :class="{'!bg-primary !hover:bg-green-500': allStepsSuccess}" :disabled="!allStepsSuccess" @click="allStepsSuccess ? window.electronAPI.navigateTo('main.html') : $event.target.innerText = 'Finalizado!';" class="bg-gray-600 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm">
+<span x-text="allStepsSuccess ? 'Finalizar' : 'Avançar'"></span>
+</button>
+</template>
+<template x-if="anyStepFailed">
+<button :disabled="!processFinished" @click="retryProcess()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                        Tentar novamente
+                    </button>
+</template>
+</div>
+</div>
+</div>
+</body></html>
