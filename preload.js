@@ -15,5 +15,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadBrowserViewUrl: (viewName, url) => ipcRenderer.invoke('load-browser-view-url', viewName, url),
   setBrowserViewVisibility: (viewName, visible) => ipcRenderer.invoke('set-browser-view-visibility', viewName, visible),
   setAllBrowserViewVisibility: (visible) => ipcRenderer.invoke('set-all-browser-view-visibility', visible),
-  getDevServerUrlFromMain: () => ipcRenderer.invoke('get-dev-server-url-from-main')
+  getDevServerUrlFromMain: () => ipcRenderer.invoke('get-dev-server-url-from-main'),
+  captureBrowserViewPage: (viewName) => ipcRenderer.invoke('capture-browser-view-page', viewName)
 });

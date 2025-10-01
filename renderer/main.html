@@ -86,6 +86,8 @@
     consoleOutput: '',
     addressValue: 'https://documental.xyz/',
     baseURL: 'https://documental.xyz/',
+    viewerUrl: null,
+    editorUrl: null,
     isResizing: false,
     isResizingVertical: false,
     publishModalOpen: false,
@@ -101,8 +103,11 @@
     branchAction: 'change',
     copySuccess: false,
     devServerUrl: 'https://documental.xyz/', // Default fallback
+    viewerScreenshot: null,
+    editorScreenshot: null,
+    overlaySequence: 0,
     getDevServerUrl() {
-        return this.devServerUrl;
+        return this.devServerUrl || sessionStorage.getItem('devServerUrl') || this.baseURL;
     },
     get isAnyOverlayOpen() {
         return this.menuOpen || this.publishModalOpen || this.branchModalOpen || this.updateModalOpen || this.clearCacheModalOpen || this.helpModalOpen || this.aboutModalOpen || this.exitModalOpen;
@@ -155,8 +160,14 @@
     },
     handleAddressEnter(event) {
         if (event.key === 'Enter') {
-            window.electronAPI.loadBrowserViewUrl('view', this.addressValue);
-            window.electronAPI.loadBrowserViewUrl('editor', `${this.baseURL}admin/index.html`); // Editor always loads admin
+            event.preventDefault();
+            const normalized = event.target.value.trim();
+            if (normalized !== this.addressValue) {
+                this.addressValue = normalized;
+            }
+            if (this.addressValue !== this.viewerUrl) {
+                this.loadViewer(this.addressValue);
+            }
         }
     },
     copyAddress() {
@@ -167,8 +178,10 @@
     },
     confirmClearCache() {
         const devServerUrl = this.getDevServerUrl();
-        window.electronAPI.loadBrowserViewUrl('view', devServerUrl);
-        window.electronAPI.loadBrowserViewUrl('editor', `${devServerUrl}admin/index.html`);
+        this.addressValue = devServerUrl;
+        this.baseURL = devServerUrl;
+        this.loadViewer(devServerUrl, true);
+        this.loadEditor(`${devServerUrl}admin/index.html`, true);
         this.clearCacheModalOpen = false;
         this.menuOpen = false;
     },
@@ -215,16 +228,24 @@
         const devServerUrl = await window.electronAPI.getDevServerUrlFromMain();
         if (devServerUrl) {
             this.devServerUrl = devServerUrl;
+            sessionStorage.setItem('devServerUrl', devServerUrl);
         } else {
-            alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
+            const storedUrl = sessionStorage.getItem('devServerUrl');
+            if (storedUrl) {
+                this.devServerUrl = storedUrl;
+            } else {
+                alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
+            }
         }
 
         this.addressValue = this.devServerUrl;
         this.baseURL = this.devServerUrl;
+        this.viewerUrl = this.devServerUrl;
+        this.editorUrl = `${this.devServerUrl}admin/index.html`;
 
         // Initial load of BrowserViews
-        window.electronAPI.loadBrowserViewUrl('view', this.devServerUrl);
-        window.electronAPI.loadBrowserViewUrl('editor', `${this.devServerUrl}admin/index.html`);
+        this.loadViewer(this.viewerUrl, true);
+        this.loadEditor(this.editorUrl, true);
 
         // Set initial visibility and bounds
         this.$nextTick(() => {
@@ -235,17 +256,29 @@
         // Watch for changes in activeTab to update BrowserView visibility and bounds
         this.$watch('activeTab', () => {
             this.updateBrowserViewVisibility();
-            this.updateBrowserViewBounds();
+            this.$nextTick(() => {
+                this.updateBrowserViewBounds();
+            });
         });
 
-        // Watch for changes in consoleOpen or mainHeight to update BrowserView bounds
-        this.$watch('consoleOpen', () => this.updateBrowserViewBounds());
-        this.$watch('mainHeight', () => this.updateBrowserViewBounds());
-        this.$watch('editorWidth', () => this.updateBrowserViewBounds());
+        // Watch for changes in consoleOpen or layout-driven values to update bounds once DOM is ready
+        this.$watch('consoleOpen', () => {
+            this.$nextTick(() => this.updateBrowserViewBounds());
+        });
+        this.$watch('mainHeight', () => {
+            this.$nextTick(() => this.updateBrowserViewBounds());
+        });
+        this.$watch('editorWidth', () => {
+            this.$nextTick(() => this.updateBrowserViewBounds());
+        });
 
-        // Watch for changes in overlay state to hide/show BrowserViews
+        // Watch for overlay toggles to manage BrowserView visibility with previews
         this.$watch('isAnyOverlayOpen', (isOpen) => {
-            window.electronAPI.setAllBrowserViewVisibility(!isOpen);
+            this.handleOverlayChange(isOpen);
+        });
+
+        window.addEventListener('resize', () => {
+            this.updateBrowserViewBounds();
         });
 
 
@@ -265,58 +298,130 @@
             }
         }
     },
+    loadViewer(url, force = false) {
+        if (!url) {
+            return;
+        }
+        if (!force && url === this.viewerUrl) {
+            return;
+        }
+        this.viewerUrl = url;
+        window.electronAPI.loadBrowserViewUrl('view', url);
+    },
+    loadEditor(url, force = false) {
+        if (!url) {
+            return;
+        }
+        if (!force && url === this.editorUrl) {
+            return;
+        }
+        this.editorUrl = url;
+        window.electronAPI.loadBrowserViewUrl('editor', url);
+    },
     updateBrowserViewBounds() {
-        const headerHeight = 64; // h-16 = 4rem = 64px
-        const footerHeight = 32; // h-8 = 2rem = 32px
-        const consoleHeaderHeight = 48; // p-2 border-b = 16px padding + 1px border + 16px padding + 15px (approx line height) = 48px
-
+        const headerHeight = 64; // matches h-16 header
+        const footerHeight = 32; // matches h-8 footer
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
 
-        let mainContentHeight = windowHeight - headerHeight - footerHeight;
-        if (this.consoleOpen) {
-            mainContentHeight = (mainContentHeight * this.mainHeight) / 100;
+        let mainContentTop = headerHeight;
+        let mainContentBottom = windowHeight - footerHeight;
+
+        if (this.consoleOpen && this.$refs.consoleContainer) {
+            const consoleRect = this.$refs.consoleContainer.getBoundingClientRect();
+            mainContentBottom = Math.max(mainContentTop, Math.round(consoleRect.top));
         }
 
-        const mainContentTop = headerHeight;
+        const availableHeight = Math.max(0, Math.round(mainContentBottom - mainContentTop));
+        const contentY = Math.round(mainContentTop);
+        const fullWidth = Math.max(0, Math.round(windowWidth));
+        const handleWidth = 4;
 
         if (this.activeTab === 'view') {
             window.electronAPI.setBrowserViewBounds('view', {
                 x: 0,
-                y: mainContentTop,
-                width: windowWidth,
-                height: mainContentHeight
+                y: contentY,
+                width: fullWidth,
+                height: availableHeight
             });
             window.electronAPI.setBrowserViewBounds('editor', { x: 0, y: 0, width: 0, height: 0 });
         } else if (this.activeTab === 'editor') {
             window.electronAPI.setBrowserViewBounds('editor', {
                 x: 0,
-                y: mainContentTop,
-                width: windowWidth,
-                height: mainContentHeight
+                y: contentY,
+                width: fullWidth,
+                height: availableHeight
             });
             window.electronAPI.setBrowserViewBounds('view', { x: 0, y: 0, width: 0, height: 0 });
         } else if (this.activeTab === 'split') {
-            const editorPaneWidth = (windowWidth * this.editorWidth) / 100;
-            const viewerPaneWidth = windowWidth - editorPaneWidth - 4; // 4px for resize handle
+            const editorPaneWidth = Math.max(0, Math.round((windowWidth * this.editorWidth) / 100));
+            const viewerPaneX = editorPaneWidth + handleWidth;
+            const viewerPaneWidth = Math.max(0, fullWidth - viewerPaneX);
 
             window.electronAPI.setBrowserViewBounds('editor', {
                 x: 0,
-                y: mainContentTop,
+                y: contentY,
                 width: editorPaneWidth,
-                height: mainContentHeight
+                height: availableHeight
             });
             window.electronAPI.setBrowserViewBounds('view', {
-                x: editorPaneWidth + 4,
-                y: mainContentTop,
+                x: viewerPaneX,
+                y: contentY,
                 width: viewerPaneWidth,
-                height: mainContentHeight
+                height: availableHeight
             });
         }
     },
     updateBrowserViewVisibility() {
         window.electronAPI.setBrowserViewVisibility('view', this.activeTab === 'view' || this.activeTab === 'split');
         window.electronAPI.setBrowserViewVisibility('editor', this.activeTab === 'editor' || this.activeTab === 'split');
+    },
+    async prepareOverlaySnapshots() {
+        const capture = async (viewName) => {
+            try {
+                return await window.electronAPI.captureBrowserViewPage(viewName);
+            } catch (error) {
+                console.error(`Falha ao capturar ${viewName}:`, error);
+                return null;
+            }
+        };
+
+        if (this.activeTab === 'split') {
+            const [editorShot, viewerShot] = await Promise.all([
+                capture('editor'),
+                capture('view')
+            ]);
+            this.editorScreenshot = editorShot;
+            this.viewerScreenshot = viewerShot;
+        } else if (this.activeTab === 'editor') {
+            this.editorScreenshot = await capture('editor');
+            this.viewerScreenshot = null;
+        } else {
+            this.viewerScreenshot = await capture('view');
+            this.editorScreenshot = null;
+        }
+    },
+    clearOverlaySnapshots() {
+        this.viewerScreenshot = null;
+        this.editorScreenshot = null;
+    },
+    async handleOverlayChange(isOpen) {
+        const currentSeq = ++this.overlaySequence;
+
+        if (isOpen) {
+            await this.prepareOverlaySnapshots();
+            if (this.overlaySequence !== currentSeq) {
+                return;
+            }
+            await window.electronAPI.setAllBrowserViewVisibility(false);
+        } else {
+            await window.electronAPI.setAllBrowserViewVisibility(true);
+            if (this.overlaySequence !== currentSeq) {
+                return;
+            }
+            this.clearOverlaySnapshots();
+            this.$nextTick(() => this.updateBrowserViewBounds());
+        }
     }
 }">
 <header class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-gray-700 shrink-0">
@@ -363,8 +468,39 @@
 </header>
 <div class="flex flex-col flex-1 overflow-hidden" x-ref="mainContainer">
 <main :style="{ height: consoleOpen ? mainHeight + '%' : '100%' }" class="flex-1 flex overflow-hidden relative">
-    <!-- BrowserViews are managed by the main process, this div is just a placeholder for layout -->
+    <!-- Placeholder for BrowserViews, which are managed by the main process -->
     <div class="w-full h-full absolute inset-0 pointer-events-none"></div>
+
+    <!-- Screenshot overlays for modals/menus -->
+    <template x-if="isAnyOverlayOpen">
+        <div class="absolute inset-0 pointer-events-none">
+            <template x-if="activeTab === 'split'">
+                <div class="absolute inset-0 flex">
+                    <div class="relative" :style="{ width: editorWidth + '%' }">
+                        <template x-if="editorScreenshot">
+                            <img :src="editorScreenshot" class="w-full h-full object-cover" alt="Editor preview"/>
+                        </template>
+                        <div class="absolute inset-0 bg-black bg-opacity-60"></div>
+                    </div>
+                    <div class="relative flex-1">
+                        <template x-if="viewerScreenshot">
+                            <img :src="viewerScreenshot" class="w-full h-full object-cover" alt="Viewer preview"/>
+                        </template>
+                        <div class="absolute inset-0 bg-black bg-opacity-60"></div>
+                    </div>
+                </div>
+            </template>
+            <template x-if="activeTab !== 'split'">
+                <div class="absolute inset-0 relative">
+                    <template x-if="(activeTab === 'view' ? viewerScreenshot : editorScreenshot)">
+                        <img :src="activeTab === 'view' ? viewerScreenshot : editorScreenshot" class="w-full h-full object-cover" alt="Browser preview"/>
+                    </template>
+                    <div class="absolute inset-0 bg-black bg-opacity-60"></div>
+                </div>
+            </template>
+        </div>
+    </template>
+
     <div class="flex w-full h-full absolute inset-0" x-ref="splitContainer" x-show="activeTab === 'split'">
         <div :style="{ width: editorWidth + '%' }" class="h-full overflow-auto pointer-events-none" x-ref="splitEditorPane"></div>
         <div @mousedown.prevent="startResize($event)" class="resize-handle" x-ref="resizeHandle"></div>
@@ -372,7 +508,7 @@
     </div>
 </main>
 <template x-if="consoleOpen">
-<div :style="{ height: `calc(100% - ${mainHeight}%)` }" class="flex flex-col flex-1 bg-surface-dark overflow-hidden shrink-0">
+<div :style="{ height: `calc(100% - ${mainHeight}%)` }" class="flex flex-col flex-1 bg-surface-dark overflow-hidden shrink-0" x-ref="consoleContainer">
 <div @mousedown.prevent="startVerticalResize($event)" class="resize-handle-horizontal w-full" x-ref="resizeHandleHorizontal"></div>
 <div class="flex items-center justify-between p-2 border-b border-gray-700">
 <div class="flex items-center space-x-1 overflow-x-auto">

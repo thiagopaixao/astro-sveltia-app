@@ -429,6 +429,20 @@ ipcMain.on('navigate', (event, page) => {
         return globalDevServerUrl;
       });
 
+      ipcMain.handle('capture-browser-view-page', async (event, viewName) => {
+        const view = viewName === 'editor' ? editorView : viewerView;
+        if (view) {
+          try {
+            const image = await view.webContents.capturePage();
+            return image.toDataURL(); // Convert NativeImage to base64 data URL
+          } catch (error) {
+            console.error(`Error capturing page for ${viewName} view:`, error);
+            return null;
+          }
+        }
+        return null;
+      });
+
     } else {
       // For other pages (like create.html), destroy BrowserViews
       destroyBrowserViews();
