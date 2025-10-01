@@ -382,6 +382,18 @@ ipcMain.on('navigate', (event, page) => {
         viewerView.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // Initially hidden
       }
 
+      const trackBrowserViewLoad = (view, viewName) => {
+        if (!view || !view.webContents || view.webContents.isDestroyed()) {
+          return;
+        }
+        view.webContents.once('did-finish-load', () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            const currentUrl = view.webContents.getURL();
+            mainWindow.webContents.send('browser-view-loaded', { viewName, url: currentUrl });
+          }
+        });
+      };
+
       // IPC handlers for BrowserView control
       ipcMain.handle('set-browser-view-bounds', (event, viewName, bounds) => {
         const view = viewName === 'editor' ? editorView : viewerView;
@@ -393,6 +405,7 @@ ipcMain.on('navigate', (event, page) => {
       ipcMain.handle('load-browser-view-url', (event, viewName, url) => {
         const view = viewName === 'editor' ? editorView : viewerView;
         if (view) {
+          trackBrowserViewLoad(view, viewName);
           view.webContents.loadURL(url);
         }
       });
@@ -439,6 +452,34 @@ ipcMain.on('navigate', (event, page) => {
             console.error(`Error capturing page for ${viewName} view:`, error);
             return null;
           }
+        }
+        return null;
+      });
+
+      ipcMain.handle('browser-view-go-back', (event, viewName) => {
+        const view = viewName === 'editor' ? editorView : viewerView;
+        if (view && !view.webContents.isDestroyed() && view.webContents.canGoBack()) {
+          trackBrowserViewLoad(view, viewName);
+          view.webContents.goBack();
+          return true;
+        }
+        return false;
+      });
+
+      ipcMain.handle('browser-view-reload', (event, viewName) => {
+        const view = viewName === 'editor' ? editorView : viewerView;
+        if (view && !view.webContents.isDestroyed()) {
+          trackBrowserViewLoad(view, viewName);
+          view.webContents.reload();
+          return true;
+        }
+        return false;
+      });
+
+      ipcMain.handle('get-browser-view-url', (event, viewName) => {
+        const view = viewName === 'editor' ? editorView : viewerView;
+        if (view && !view.webContents.isDestroyed()) {
+          return view.webContents.getURL();
         }
         return null;
       });

@@ -254,11 +254,16 @@
         });
 
         // Watch for changes in activeTab to update BrowserView visibility and bounds
-        this.$watch('activeTab', () => {
+        this.$watch('activeTab', (tab) => {
             this.updateBrowserViewVisibility();
             this.$nextTick(() => {
                 this.updateBrowserViewBounds();
             });
+            if (tab === 'editor') {
+                this.updateAddressFromBrowser('editor');
+            } else {
+                this.updateAddressFromBrowser('view');
+            }
         });
 
         // Watch for changes in consoleOpen or layout-driven values to update bounds once DOM is ready
@@ -280,6 +285,15 @@
         window.addEventListener('resize', () => {
             this.updateBrowserViewBounds();
         });
+
+        if (window.electronAPI && window.electronAPI.onBrowserViewLoaded) {
+            window.electronAPI.onBrowserViewLoaded(({ viewName, url }) => {
+                const target = viewName === 'editor' ? 'editor' : 'view';
+                this.updateAddressFromBrowser(target, url);
+            });
+        }
+
+        this.updateAddressFromBrowser('view');
 
 
         const projectId = sessionStorage.getItem('currentProjectId');
@@ -307,6 +321,9 @@
         }
         this.viewerUrl = url;
         window.electronAPI.loadBrowserViewUrl('view', url);
+        if (this.activeTab !== 'editor') {
+            this.addressValue = url;
+        }
     },
     loadEditor(url, force = false) {
         if (!url) {
@@ -317,6 +334,81 @@
         }
         this.editorUrl = url;
         window.electronAPI.loadBrowserViewUrl('editor', url);
+        if (this.activeTab === 'editor') {
+            this.addressValue = url;
+        }
+    },
+    getActiveBrowserViewName() {
+        return this.activeTab === 'editor' ? 'editor' : 'view';
+    },
+    async browserGoBack() {
+        if (!window.electronAPI || !window.electronAPI.browserViewGoBack) {
+            return;
+        }
+        const target = this.getActiveBrowserViewName();
+        try {
+            const moved = await window.electronAPI.browserViewGoBack(target);
+            if (moved) {
+                await this.updateAddressFromBrowser(target);
+            }
+        } catch (error) {
+            console.error('Erro ao acionar voltar:', error);
+        }
+    },
+    async browserReload() {
+        if (!window.electronAPI || !window.electronAPI.browserViewReload) {
+            return;
+        }
+        const target = this.getActiveBrowserViewName();
+        try {
+            const reloaded = await window.electronAPI.browserViewReload(target);
+            if (reloaded) {
+                await this.updateAddressFromBrowser(target);
+            }
+        } catch (error) {
+            console.error('Erro ao recarregar BrowserView:', error);
+        }
+    },
+    browserGoHome() {
+        if (!window.electronAPI) {
+            return;
+        }
+        const target = this.getActiveBrowserViewName();
+        if (target === 'editor') {
+            const editorHome = `${this.baseURL}admin/index.html`;
+            this.addressValue = editorHome;
+            this.loadEditor(editorHome, true);
+        } else {
+            this.addressValue = this.baseURL;
+            this.loadViewer(this.baseURL, true);
+        }
+    },
+    async updateAddressFromBrowser(target, urlHint = null) {
+        if (!window.electronAPI || !window.electronAPI.getBrowserViewUrl) {
+            return;
+        }
+        try {
+            let currentUrl = urlHint;
+            if (!currentUrl) {
+                currentUrl = await window.electronAPI.getBrowserViewUrl(target);
+            }
+            if (!currentUrl || currentUrl === 'about:blank') {
+                return;
+            }
+            if (target === 'editor') {
+                this.editorUrl = currentUrl;
+                if (this.activeTab === 'editor') {
+                    this.addressValue = currentUrl;
+                }
+            } else {
+                this.viewerUrl = currentUrl;
+                if (this.activeTab !== 'editor') {
+                    this.addressValue = currentUrl;
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao sincronizar endereço do BrowserView:', error);
+        }
     },
     updateBrowserViewBounds() {
         const headerHeight = 64; // matches h-16 header
@@ -444,12 +536,27 @@
 </div>
 <div class="flex-1 mx-4">
 <div class="relative flex items-center">
-<span class="material-icons absolute left-3 text-muted-dark pointer-events-none">link</span>
-<input :disabled="activeTab === 'editor'" @click="handleAddressClick($event)" @input="handleAddressInput($event)" @keydown="handleAddressKeyDown($event)" @keydown.enter="handleAddressEnter($event)" class="w-full pl-10 pr-10 py-2 bg-background-dark border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-text-dark placeholder-muted-dark disabled:opacity-50 disabled:cursor-not-allowed" type="text" x-model="addressValue"/>
-<button @click="copyAddress()" class="absolute right-3 text-muted-dark hover:text-text-dark focus:outline-none">
+<div class="flex w-full items-center bg-background-dark border border-gray-600 rounded-md transition-colors">
+<div class="flex items-center pl-2 pr-1 space-x-1">
+<button @click.prevent="browserGoBack()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="Voltar">
+<span class="material-icons text-muted-dark text-sm">arrow_back</span>
+</button>
+<button @click.prevent="browserReload()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="Recarregar">
+<span class="material-icons text-muted-dark text-sm">refresh</span>
+</button>
+<button @click.prevent="browserGoHome()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="Página inicial">
+<span class="material-icons text-muted-dark text-sm">home</span>
+</button>
+</div>
+<div class="flex items-center flex-1 px-2 space-x-2">
+<span class="material-icons text-muted-dark text-base">link</span>
+<input :disabled="activeTab === 'editor'" @click="handleAddressClick($event)" @input="handleAddressInput($event)" @keydown="handleAddressKeyDown($event)" @keydown.enter="handleAddressEnter($event)" class="flex-1 bg-transparent py-2 text-sm text-text-dark placeholder-muted-dark focus:outline-none focus:ring-0 border-0 disabled:opacity-50 disabled:cursor-not-allowed" type="text" x-model="addressValue"/>
+</div>
+<button @click.prevent="copyAddress()" class="px-2 h-10 flex items-center text-muted-dark hover:text-text-dark focus:outline-none" aria-label="Copiar endereço">
 <span class="material-icons" x-show="!copySuccess">content_copy</span>
 <span class="material-icons text-primary" style="display: none;" x-show="copySuccess">check</span>
 </button>
+</div>
 </div>
 </div>
 <div class="flex items-center space-x-2">
