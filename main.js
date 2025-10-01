@@ -8,6 +8,7 @@ const { rimraf } = require('rimraf');
 let mainWindow;
 let editorView;
 let viewerView;
+let globalDevServerUrl = null; // Global variable to store dev server URL
 let activeProcesses = {}; // To keep track of running child processes
 
 function createWindow() {
@@ -243,6 +244,7 @@ app.whenReady().then(() => {
           const match = output.match(urlRegex);
           if (match) {
             devServerUrl = match[0];
+            globalDevServerUrl = devServerUrl; // Store globally
             console.log(`Development server URL: ${devServerUrl}`);
             mainWindow.webContents.send('dev-server-url', devServerUrl);
           }
@@ -363,7 +365,6 @@ ipcMain.on('navigate', (event, page) => {
         mainWindow.addBrowserView(editorView);
         editorView.webContents.loadURL('about:blank'); // Initial blank page
         editorView.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // Initially hidden
-        editorView.webContents.openDevTools(); // For debugging
       }
 
       if (!viewerView) {
@@ -379,7 +380,6 @@ ipcMain.on('navigate', (event, page) => {
         mainWindow.addBrowserView(viewerView);
         viewerView.webContents.loadURL('about:blank'); // Initial blank page
         viewerView.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // Initially hidden
-        viewerView.webContents.openDevTools(); // For debugging
       }
 
       // IPC handlers for BrowserView control
@@ -406,6 +406,27 @@ ipcMain.on('navigate', (event, page) => {
             mainWindow.removeBrowserView(view);
           }
         }
+      });
+
+      ipcMain.handle('set-all-browser-view-visibility', (event, visible) => {
+        if (editorView) {
+          if (visible) {
+            mainWindow.addBrowserView(editorView);
+          } else {
+            mainWindow.removeBrowserView(editorView);
+          }
+        }
+        if (viewerView) {
+          if (visible) {
+            mainWindow.addBrowserView(viewerView);
+          } else {
+            mainWindow.removeBrowserView(viewerView);
+          }
+        }
+      });
+
+      ipcMain.handle('get-dev-server-url-from-main', () => {
+        return globalDevServerUrl;
       });
 
     } else {

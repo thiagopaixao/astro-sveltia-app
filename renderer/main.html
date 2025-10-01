@@ -100,13 +100,12 @@
     currentBranch: 'stage',
     branchAction: 'change',
     copySuccess: false,
+    devServerUrl: 'https://documental.xyz/', // Default fallback
     getDevServerUrl() {
-        const url = sessionStorage.getItem('devServerUrl');
-        if (!url) {
-            alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
-            return 'https://documental.xyz/'; // Fallback URL
-        }
-        return url;
+        return this.devServerUrl;
+    },
+    get isAnyOverlayOpen() {
+        return this.menuOpen || this.publishModalOpen || this.branchModalOpen || this.updateModalOpen || this.clearCacheModalOpen || this.helpModalOpen || this.aboutModalOpen || this.exitModalOpen;
     },
     startResize(event) {
         this.isResizing = true;
@@ -211,14 +210,21 @@
         const minutes = String(date.getMinutes()).padStart(2, '0');
         return `working_user_${year}${month}${day}-${hours}${minutes}_`;
     },
-    init() {
-        const devServerUrl = this.getDevServerUrl();
-        this.addressValue = devServerUrl;
-        this.baseURL = devServerUrl;
+    async init() { // Make init an async function
+        // Retrieve devServerUrl from main process via IPC
+        const devServerUrl = await window.electronAPI.getDevServerUrlFromMain();
+        if (devServerUrl) {
+            this.devServerUrl = devServerUrl;
+        } else {
+            alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
+        }
+
+        this.addressValue = this.devServerUrl;
+        this.baseURL = this.devServerUrl;
 
         // Initial load of BrowserViews
-        window.electronAPI.loadBrowserViewUrl('view', devServerUrl);
-        window.electronAPI.loadBrowserViewUrl('editor', `${devServerUrl}admin/index.html`);
+        window.electronAPI.loadBrowserViewUrl('view', this.devServerUrl);
+        window.electronAPI.loadBrowserViewUrl('editor', `${this.devServerUrl}admin/index.html`);
 
         // Set initial visibility and bounds
         this.$nextTick(() => {
@@ -236,6 +242,11 @@
         this.$watch('consoleOpen', () => this.updateBrowserViewBounds());
         this.$watch('mainHeight', () => this.updateBrowserViewBounds());
         this.$watch('editorWidth', () => this.updateBrowserViewBounds());
+
+        // Watch for changes in overlay state to hide/show BrowserViews
+        this.$watch('isAnyOverlayOpen', (isOpen) => {
+            window.electronAPI.setAllBrowserViewVisibility(!isOpen);
+        });
 
 
         const projectId = sessionStorage.getItem('currentProjectId');

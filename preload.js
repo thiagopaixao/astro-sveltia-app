@@ -13,5 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onDevServerUrl: (callback) => ipcRenderer.on('dev-server-url', (event, ...args) => callback(...args)),
   setBrowserViewBounds: (viewName, bounds) => ipcRenderer.invoke('set-browser-view-bounds', viewName, bounds),
   loadBrowserViewUrl: (viewName, url) => ipcRenderer.invoke('load-browser-view-url', viewName, url),
-  setBrowserViewVisibility: (viewName, visible) => ipcRenderer.invoke('set-browser-view-visibility', viewName, visible)
+  setBrowserViewVisibility: (viewName, visible) => ipcRenderer.invoke('set-browser-view-visibility', viewName, visible),
+  setAllBrowserViewVisibility: (visible) => ipcRenderer.invoke('set-all-browser-view-visibility', visible),
+  getDevServerUrlFromMain: () => ipcRenderer.invoke('get-dev-server-url-from-main')
 });
