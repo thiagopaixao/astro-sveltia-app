@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, BrowserView } = require('electron');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
@@ -6,6 +6,8 @@ const { spawn } = require('child_process');
 const { rimraf } = require('rimraf');
 
 let mainWindow;
+let editorView;
+let viewerView;
 let activeProcesses = {}; // To keep track of running child processes
 
 function createWindow() {
@@ -327,8 +329,89 @@ app.on('window-all-closed', () => {
   }
 });
 
+function destroyBrowserViews() {
+  if (editorView) {
+    mainWindow.removeBrowserView(editorView);
+    editorView.destroy();
+    editorView = null;
+  }
+  if (viewerView) {
+    mainWindow.removeBrowserView(viewerView);
+    viewerView.destroy();
+    viewerView = null;
+  }
+}
+
 ipcMain.on('navigate', (event, page) => {
   if (mainWindow) {
-    mainWindow.loadFile(path.join(__dirname, 'renderer', page));
+    if (page === 'main.html') {
+      // Load main.html into the main window's webContents
+      mainWindow.loadFile(path.join(__dirname, 'renderer', page));
+
+      // Create and manage BrowserViews for editor and viewer
+      // These will be positioned on top of the main.html content
+      if (!editorView) {
+        editorView = new BrowserView({
+          webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            webviewTag: false, // Ensure webviewTag is not used
+            enableRemoteModule: false, // Recommended for security
+          }
+        });
+        mainWindow.addBrowserView(editorView);
+        editorView.webContents.loadURL('about:blank'); // Initial blank page
+        editorView.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // Initially hidden
+        editorView.webContents.openDevTools(); // For debugging
+      }
+
+      if (!viewerView) {
+        viewerView = new BrowserView({
+          webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            webviewTag: false,
+            enableRemoteModule: false,
+          }
+        });
+        mainWindow.addBrowserView(viewerView);
+        viewerView.webContents.loadURL('about:blank'); // Initial blank page
+        viewerView.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // Initially hidden
+        viewerView.webContents.openDevTools(); // For debugging
+      }
+
+      // IPC handlers for BrowserView control
+      ipcMain.handle('set-browser-view-bounds', (event, viewName, bounds) => {
+        const view = viewName === 'editor' ? editorView : viewerView;
+        if (view) {
+          view.setBounds(bounds);
+        }
+      });
+
+      ipcMain.handle('load-browser-view-url', (event, viewName, url) => {
+        const view = viewName === 'editor' ? editorView : viewerView;
+        if (view) {
+          view.webContents.loadURL(url);
+        }
+      });
+
+      ipcMain.handle('set-browser-view-visibility', (event, viewName, visible) => {
+        const view = viewName === 'editor' ? editorView : viewerView;
+        if (view) {
+          if (visible) {
+            mainWindow.addBrowserView(view);
+          } else {
+            mainWindow.removeBrowserView(view);
+          }
+        }
+      });
+
+    } else {
+      // For other pages (like create.html), destroy BrowserViews
+      destroyBrowserViews();
+      mainWindow.loadFile(path.join(__dirname, 'renderer', page));
+    }
   }
 });

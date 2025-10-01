@@ -10,5 +10,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelProjectCreation: (projectId, projectPath, repoFolderName) => ipcRenderer.invoke('cancel-project-creation', projectId, projectPath, repoFolderName),
   onCommandOutput: (callback) => ipcRenderer.on('command-output', (event, ...args) => callback(...args)),
   onCommandStatus: (callback) => ipcRenderer.on('command-status', (event, ...args) => callback(...args)),
-  onDevServerUrl: (callback) => ipcRenderer.on('dev-server-url', (event, ...args) => callback(...args))
+  onDevServerUrl: (callback) => ipcRenderer.on('dev-server-url', (event, ...args) => callback(...args)),
+  setBrowserViewBounds: (viewName, bounds) => ipcRenderer.invoke('set-browser-view-bounds', viewName, bounds),
+  loadBrowserViewUrl: (viewName, url) => ipcRenderer.invoke('load-browser-view-url', viewName, url),
+  setBrowserViewVisibility: (viewName, visible) => ipcRenderer.invoke('set-browser-view-visibility', viewName, visible)
 });

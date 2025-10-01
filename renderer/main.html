@@ -49,12 +49,6 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #6b7280;
         }
-        iframe {
-            pointer-events: auto;
-        }
-        .resizing iframe {
-            pointer-events: none;
-        }
     </style>
 <script>
         tailwind.config = {
@@ -162,10 +156,8 @@
     },
     handleAddressEnter(event) {
         if (event.key === 'Enter') {
-            this.$refs.viewFrame.src = this.addressValue;
-            if(this.$refs.splitViewFrame) {
-                 this.$refs.splitViewFrame.src = this.addressValue;
-            }
+            window.electronAPI.loadBrowserViewUrl('view', this.addressValue);
+            window.electronAPI.loadBrowserViewUrl('editor', `${this.baseURL}admin/index.html`); // Editor always loads admin
         }
     },
     copyAddress() {
@@ -175,14 +167,9 @@
         });
     },
     confirmClearCache() {
-        this.$refs.viewFrame.src += '';
-        this.$refs.editorFrame.src += '';
-        if(this.$refs.splitViewFrame) {
-            this.$refs.splitViewFrame.src += '';
-        }
-        if(this.$refs.splitEditorFrame) {
-            this.$refs.splitEditorFrame.src += '';
-        }
+        const devServerUrl = this.getDevServerUrl();
+        window.electronAPI.loadBrowserViewUrl('view', devServerUrl);
+        window.electronAPI.loadBrowserViewUrl('editor', `${devServerUrl}admin/index.html`);
         this.clearCacheModalOpen = false;
         this.menuOpen = false;
     },
@@ -229,16 +216,27 @@
         this.addressValue = devServerUrl;
         this.baseURL = devServerUrl;
 
+        // Initial load of BrowserViews
+        window.electronAPI.loadBrowserViewUrl('view', devServerUrl);
+        window.electronAPI.loadBrowserViewUrl('editor', `${devServerUrl}admin/index.html`);
+
+        // Set initial visibility and bounds
         this.$nextTick(() => {
-            this.$refs.viewFrame.src = devServerUrl;
-            this.$refs.editorFrame.src = `${devServerUrl}admin/index.html`;
-            if(this.$refs.splitViewFrame) {
-                this.$refs.splitViewFrame.src = devServerUrl;
-            }
-            if(this.$refs.splitEditorFrame) {
-                this.$refs.splitEditorFrame.src = `${devServerUrl}admin/index.html`;
-            }
+            this.updateBrowserViewBounds();
+            this.updateBrowserViewVisibility();
         });
+
+        // Watch for changes in activeTab to update BrowserView visibility and bounds
+        this.$watch('activeTab', () => {
+            this.updateBrowserViewVisibility();
+            this.updateBrowserViewBounds();
+        });
+
+        // Watch for changes in consoleOpen or mainHeight to update BrowserView bounds
+        this.$watch('consoleOpen', () => this.updateBrowserViewBounds());
+        this.$watch('mainHeight', () => this.updateBrowserViewBounds());
+        this.$watch('editorWidth', () => this.updateBrowserViewBounds());
+
 
         const projectId = sessionStorage.getItem('currentProjectId');
         if (projectId) {
@@ -255,6 +253,59 @@
                 });
             }
         }
+    },
+    updateBrowserViewBounds() {
+        const headerHeight = 64; // h-16 = 4rem = 64px
+        const footerHeight = 32; // h-8 = 2rem = 32px
+        const consoleHeaderHeight = 48; // p-2 border-b = 16px padding + 1px border + 16px padding + 15px (approx line height) = 48px
+
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+
+        let mainContentHeight = windowHeight - headerHeight - footerHeight;
+        if (this.consoleOpen) {
+            mainContentHeight = (mainContentHeight * this.mainHeight) / 100;
+        }
+
+        const mainContentTop = headerHeight;
+
+        if (this.activeTab === 'view') {
+            window.electronAPI.setBrowserViewBounds('view', {
+                x: 0,
+                y: mainContentTop,
+                width: windowWidth,
+                height: mainContentHeight
+            });
+            window.electronAPI.setBrowserViewBounds('editor', { x: 0, y: 0, width: 0, height: 0 });
+        } else if (this.activeTab === 'editor') {
+            window.electronAPI.setBrowserViewBounds('editor', {
+                x: 0,
+                y: mainContentTop,
+                width: windowWidth,
+                height: mainContentHeight
+            });
+            window.electronAPI.setBrowserViewBounds('view', { x: 0, y: 0, width: 0, height: 0 });
+        } else if (this.activeTab === 'split') {
+            const editorPaneWidth = (windowWidth * this.editorWidth) / 100;
+            const viewerPaneWidth = windowWidth - editorPaneWidth - 4; // 4px for resize handle
+
+            window.electronAPI.setBrowserViewBounds('editor', {
+                x: 0,
+                y: mainContentTop,
+                width: editorPaneWidth,
+                height: mainContentHeight
+            });
+            window.electronAPI.setBrowserViewBounds('view', {
+                x: editorPaneWidth + 4,
+                y: mainContentTop,
+                width: viewerPaneWidth,
+                height: mainContentHeight
+            });
+        }
+    },
+    updateBrowserViewVisibility() {
+        window.electronAPI.setBrowserViewVisibility('view', this.activeTab === 'view' || this.activeTab === 'split');
+        window.electronAPI.setBrowserViewVisibility('editor', this.activeTab === 'editor' || this.activeTab === 'split');
     }
 }">
 <header class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-gray-700 shrink-0">
@@ -300,22 +351,14 @@
 </div>
 </header>
 <div class="flex flex-col flex-1 overflow-hidden" x-ref="mainContainer">
-<main :style="{ height: consoleOpen ? mainHeight + '%' : '100%' }" class="flex-1 flex overflow-hidden">
-<div class="w-full h-full" x-show="activeTab === 'view'">
-<iframe class="w-full h-full border-0" :src="getDevServerUrl()" x-ref="viewFrame"></iframe>
-</div>
-<div class="w-full h-full" x-show="activeTab === 'editor'">
-<iframe class="w-full h-full border-0" :src="getDevServerUrl() + 'admin/index.html'" x-ref="editorFrame"></iframe>
-</div>
-<div class="flex w-full h-full" x-ref="splitContainer" x-show="activeTab === 'split'">
-<div :style="{ width: editorWidth + '%' }" class="h-full overflow-auto" x-ref="splitEditorPane">
-<iframe class="w-full h-full border-0" :src="getDevServerUrl() + 'admin/index.html'" x-ref="splitEditorFrame"></iframe>
-</div>
-<div @mousedown.prevent="startResize($event)" class="resize-handle" x-ref="resizeHandle"></div>
-<div class="flex-1 h-full overflow-auto">
-<iframe class="w-full h-full border-0" :src="getDevServerUrl()" x-ref="splitViewFrame"></iframe>
-</div>
-</div>
+<main :style="{ height: consoleOpen ? mainHeight + '%' : '100%' }" class="flex-1 flex overflow-hidden relative">
+    <!-- BrowserViews are managed by the main process, this div is just a placeholder for layout -->
+    <div class="w-full h-full absolute inset-0 pointer-events-none"></div>
+    <div class="flex w-full h-full absolute inset-0" x-ref="splitContainer" x-show="activeTab === 'split'">
+        <div :style="{ width: editorWidth + '%' }" class="h-full overflow-auto pointer-events-none" x-ref="splitEditorPane"></div>
+        <div @mousedown.prevent="startResize($event)" class="resize-handle" x-ref="resizeHandle"></div>
+        <div class="flex-1 h-full overflow-auto pointer-events-none"></div>
+    </div>
 </main>
 <template x-if="consoleOpen">
 <div :style="{ height: `calc(100% - ${mainHeight}%)` }" class="flex flex-col flex-1 bg-surface-dark overflow-hidden shrink-0">
