@@ -737,6 +737,9 @@
 <span class="material-icons text-sm">chat_bubble_outline</span>
 <span>feat: Implement new feature</span>
 </div>
+<button @click="consoleOpen = !consoleOpen; if(consoleOpen) mainHeight = 70;" class="flex items-center space-x-1 hover:text-text-dark" :class="{'text-primary': consoleOpen}" title="Toggle Terminal">
+<span class="material-icons text-sm">terminal</span>
+</button>
 </div>
 </footer>
 <div @click.outside="menuOpen = false" class="absolute top-16 right-4 z-10" style="display: none;" x-show="menuOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-end="opacity-100 transform scale-100" x-transition:enter-start="opacity-0 transform scale-95" x-transition:leave="transition ease-in duration-75" x-transition:leave-end="opacity-0 transform scale-95" x-transition:leave-start="opacity-100 transform scale-100">
