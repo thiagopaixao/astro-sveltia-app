@@ -242,8 +242,91 @@ clearingCache: false,
             this.clearingCache = false;
         }
     },
-    openNewWindow() {
-        window.open(window.location.href, '_blank');
+    async getCurrentWindowState() {
+        try {
+            const editorUrl = await window.electronAPI.getBrowserViewUrl('editor');
+            const viewerUrl = await window.electronAPI.getBrowserViewUrl('view');
+            
+            // Simplify consoleTabs to only serializable data
+            const simplifiedConsoleTabs = this.consoleTabs.map(tab => ({
+                id: tab.id,
+                name: tab.name,
+                type: tab.type
+            }));
+            
+            // Limit output size to prevent IPC issues (last 5000 characters each)
+            const maxOutputLength = 5000;
+            const truncatedServerOutput = this.serverOutput.length > maxOutputLength 
+                ? this.serverOutput.slice(-maxOutputLength) 
+                : this.serverOutput;
+            const truncatedConsoleOutput = this.consoleOutput.length > maxOutputLength 
+                ? this.consoleOutput.slice(-maxOutputLength) 
+                : this.consoleOutput;
+            
+            const windowState = {
+                editorUrl: editorUrl || `${this.getDevServerUrl()}admin/index.html`,
+                viewerUrl: viewerUrl || this.getDevServerUrl(),
+                addressValue: this.addressValue,
+                baseURL: this.baseURL,
+                devServerUrl: this.getDevServerUrl(),
+                activeTab: this.activeTab,
+                editorWidth: this.editorWidth,
+                mainHeight: this.mainHeight,
+                consoleOpen: this.consoleOpen,
+                currentBranch: this.currentBranch,
+                serverOutput: truncatedServerOutput,
+                consoleOutput: truncatedConsoleOutput,
+                consoleTabs: simplifiedConsoleTabs,
+                activeConsoleTab: this.activeConsoleTab,
+                nextTerminalId: this.nextTerminalId
+            };
+            
+            // Test if the object is serializable before sending
+            try {
+                JSON.stringify(windowState);
+                return windowState;
+            } catch (serializationError) {
+                console.error('Window state serialization failed:', serializationError);
+                // Return minimal state if serialization fails
+                return {
+                    editorUrl: editorUrl || `${this.getDevServerUrl()}admin/index.html`,
+                    viewerUrl: viewerUrl || this.getDevServerUrl(),
+                    addressValue: this.addressValue,
+                    baseURL: this.baseURL,
+                    devServerUrl: this.getDevServerUrl(),
+                    activeTab: this.activeTab,
+                    editorWidth: this.editorWidth,
+                    mainHeight: this.mainHeight,
+                    consoleOpen: this.consoleOpen,
+                    currentBranch: this.currentBranch,
+                    serverOutput: '',
+                    consoleOutput: '',
+                    consoleTabs: [{id: 1, name: 'Server', type: 'server'}, {id: 2, name: 'Console', type: 'console'}],
+                    activeConsoleTab: 1,
+                    nextTerminalId: 1
+                };
+            }
+        } catch (error) {
+            console.error('Error getting window state:', error);
+            return null;
+        }
+    },
+    async openNewWindow() {
+        try {
+            const windowState = await this.getCurrentWindowState();
+            if (windowState) {
+                console.log('Opening new window with state:', windowState);
+                const result = await window.electronAPI.createNewWindowWithState(windowState);
+                if (!result.success) {
+                    throw new Error(result.error || 'Unknown error occurred');
+                }
+            } else {
+                throw new Error('Failed to capture window state');
+            }
+        } catch (error) {
+            console.error('Error opening new window:', error);
+            alert('Erro ao abrir nova janela: ' + error.message);
+        }
         this.menuOpen = false;
     },
     exitApp() {
@@ -281,24 +364,61 @@ clearingCache: false,
         return `working_user_${year}${month}${day}-${hours}${minutes}_`;
     },
     async init() { // Make init an async function
-        // Retrieve devServerUrl from main process via IPC
-        const devServerUrl = await window.electronAPI.getDevServerUrlFromMain();
-        if (devServerUrl) {
-            this.devServerUrl = devServerUrl;
-            sessionStorage.setItem('devServerUrl', devServerUrl);
-        } else {
-            const storedUrl = sessionStorage.getItem('devServerUrl');
-            if (storedUrl) {
-                this.devServerUrl = storedUrl;
-            } else {
-                alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
+        // Check if this window was opened with state parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const stateParam = urlParams.get('state');
+        
+        if (stateParam) {
+            try {
+                // Decode and apply the window state
+                const windowState = JSON.parse(atob(stateParam));
+                console.log('Applying window state from URL:', windowState);
+                this.applyWindowState(windowState);
+            } catch (error) {
+                console.error('Error parsing window state:', error);
+                // Fall back to normal initialization
             }
         }
 
-        this.addressValue = this.devServerUrl;
-        this.baseURL = this.devServerUrl;
-        this.viewerUrl = this.devServerUrl;
-        this.editorUrl = `${this.devServerUrl}admin/index.html`;
+        // Only try to get devServerUrl from main process if not already set by window state
+        if (!this.devServerUrl) {
+            const devServerUrl = await window.electronAPI.getDevServerUrlFromMain();
+            if (devServerUrl) {
+                this.devServerUrl = devServerUrl;
+                sessionStorage.setItem('devServerUrl', devServerUrl);
+            } else {
+                const storedUrl = sessionStorage.getItem('devServerUrl');
+                if (storedUrl) {
+                    this.devServerUrl = storedUrl;
+                } else {
+                    alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
+                    return;
+                }
+            }
+        }
+
+        // Set default values ONLY if not already set by window state
+        // This prevents overwriting the captured state
+        if (!this.addressValue || this.addressValue === 'https://documental.xyz/') {
+            this.addressValue = this.devServerUrl;
+        }
+        if (!this.baseURL || this.baseURL === 'https://documental.xyz/') {
+            this.baseURL = this.devServerUrl;
+        }
+        if (!this.viewerUrl) {
+            this.viewerUrl = this.devServerUrl;
+        }
+        if (!this.editorUrl) {
+            this.editorUrl = `${this.devServerUrl}admin/index.html`;
+        }
+        
+        console.log('Final initialization values:', {
+            addressValue: this.addressValue,
+            baseURL: this.baseURL,
+            viewerUrl: this.viewerUrl,
+            editorUrl: this.editorUrl,
+            devServerUrl: this.devServerUrl
+        });
 
         // Initial load of BrowserViews
         this.loadViewer(this.viewerUrl, true);
@@ -354,21 +474,68 @@ clearingCache: false,
         this.updateAddressFromBrowser('view');
 
 
-        const projectId = sessionStorage.getItem('currentProjectId');
-        if (projectId) {
-            const savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${projectId}`));
-            if (savedState && savedState.steps) {
-                savedState.steps.forEach(step => {
-                    if (step.log) {
-                        if (step.title.includes('Executando servidor do modo dev')) {
-                            this.serverOutput += step.log + '\n';
-                        } else {
-                            this.consoleOutput += step.log + '\n';
+        // Only load project state if not already loaded from window state
+        if (!this.serverOutput && !this.consoleOutput) {
+            const projectId = sessionStorage.getItem('currentProjectId');
+            if (projectId) {
+                const savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${projectId}`));
+                if (savedState && savedState.steps) {
+                    savedState.steps.forEach(step => {
+                        if (step.log) {
+                            if (step.title.includes('Executando servidor do modo dev')) {
+                                this.serverOutput += step.log + '\n';
+                            } else {
+                                this.consoleOutput += step.log + '\n';
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
         }
+    },
+    applyWindowState(windowState) {
+        console.log('Applying window state:', windowState);
+        
+        // Apply the captured window state to this window
+        // Only apply if the value exists and is not the default
+        if (windowState.editorUrl && windowState.editorUrl !== `${this.getDevServerUrl()}admin/index.html`) {
+            this.editorUrl = windowState.editorUrl;
+        }
+        if (windowState.viewerUrl && windowState.viewerUrl !== this.getDevServerUrl()) {
+            this.viewerUrl = windowState.viewerUrl;
+        }
+        if (windowState.addressValue && windowState.addressValue !== 'https://documental.xyz/') {
+            this.addressValue = windowState.addressValue;
+        }
+        if (windowState.baseURL && windowState.baseURL !== 'https://documental.xyz/') {
+            this.baseURL = windowState.baseURL;
+        }
+        if (windowState.devServerUrl && windowState.devServerUrl !== 'https://documental.xyz/') {
+            this.devServerUrl = windowState.devServerUrl;
+        }
+        if (windowState.activeTab) this.activeTab = windowState.activeTab;
+        if (windowState.editorWidth) this.editorWidth = windowState.editorWidth;
+        if (windowState.mainHeight) this.mainHeight = windowState.mainHeight;
+        if (windowState.consoleOpen !== undefined) this.consoleOpen = windowState.consoleOpen;
+        if (windowState.currentBranch) this.currentBranch = windowState.currentBranch;
+        if (windowState.serverOutput) this.serverOutput = windowState.serverOutput;
+        if (windowState.consoleOutput) this.consoleOutput = windowState.consoleOutput;
+        if (windowState.consoleTabs) this.consoleTabs = windowState.consoleTabs;
+        if (windowState.activeConsoleTab) this.activeConsoleTab = windowState.activeConsoleTab;
+        if (windowState.nextTerminalId) this.nextTerminalId = windowState.nextTerminalId;
+        
+        // Store devServerUrl in sessionStorage for persistence
+        if (windowState.devServerUrl) {
+            sessionStorage.setItem('devServerUrl', windowState.devServerUrl);
+        }
+        
+        console.log('State applied. Current values:', {
+            addressValue: this.addressValue,
+            baseURL: this.baseURL,
+            viewerUrl: this.viewerUrl,
+            editorUrl: this.editorUrl,
+            devServerUrl: this.devServerUrl
+        });
     },
     loadViewer(url, force = false) {
         if (!url) {

@@ -12,6 +12,9 @@ let viewerView;
 let globalDevServerUrl = null; // Global variable to store dev server URL
 let activeProcesses = {}; // To keep track of running child processes
 
+// Store BrowserViews per window for independent control
+const windowBrowserViews = new Map(); // windowId -> { editorView, viewerView }
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
@@ -239,11 +242,21 @@ app.whenReady().then(() => {
 
   ipcMain.handle('reopen-project', async (event, projectId, projectPath, githubUrl, repoFolderName) => {
     const sendOutput = (output) => {
-      mainWindow.webContents.send('command-output', output);
+      // Send to all windows for synchronization
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('command-output', output);
+        }
+      });
     };
 
     const sendStatus = (status) => {
-      mainWindow.webContents.send('command-status', status);
+      // Send to all windows for synchronization
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('command-status', status);
+        }
+      });
     };
 
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -342,7 +355,12 @@ app.whenReady().then(() => {
             devServerUrl = match[0];
             globalDevServerUrl = devServerUrl;
             console.log(`URL do servidor de desenvolvimento: ${devServerUrl}`);
-            mainWindow.webContents.send('dev-server-url', devServerUrl);
+            // Send to all windows for synchronization
+            BrowserWindow.getAllWindows().forEach(window => {
+              if (!window.isDestroyed()) {
+                window.webContents.send('dev-server-url', devServerUrl);
+              }
+            });
           }
         }
       };
@@ -376,11 +394,21 @@ app.whenReady().then(() => {
 
   ipcMain.handle('start-project-creation', async (event, projectId, projectPath, githubUrl, isExistingGitRepo = false, isEmptyFolder = false) => {
     const sendOutput = (output) => {
-      mainWindow.webContents.send('command-output', output);
+      // Send to all windows for synchronization
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('command-output', output);
+        }
+      });
     };
 
     const sendStatus = (status) => {
-      mainWindow.webContents.send('command-status', status);
+      // Send to all windows for synchronization
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('command-status', status);
+        }
+      });
     };
 
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -563,7 +591,12 @@ app.whenReady().then(() => {
             devServerUrl = match[0];
             globalDevServerUrl = devServerUrl; // Store globally
             console.log(`Development server URL: ${devServerUrl}`);
-            mainWindow.webContents.send('dev-server-url', devServerUrl);
+            // Send to all windows for synchronization
+            BrowserWindow.getAllWindows().forEach(window => {
+              if (!window.isDestroyed()) {
+                window.webContents.send('dev-server-url', devServerUrl);
+              }
+            });
           }
         }
       };
@@ -607,7 +640,7 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('cancel-project-creation', async (event, projectId, projectPath, repoFolderName) => {
+ipcMain.handle('cancel-project-creation', async (event, projectId, projectPath, repoFolderName) => {
     // Terminate active processes for this project
     if (activeProcesses[projectId]) {
       activeProcesses[projectId].kill();
@@ -625,14 +658,29 @@ app.whenReady().then(() => {
         try {
           await rimraf(repoDirPath);
           console.log(`Repository folder ${repoDirPath} deleted.`);
-          mainWindow.webContents.send('command-output', `Repository folder ${repoDirPath} deleted.\n`);
+          // Send to all windows for synchronization
+          BrowserWindow.getAllWindows().forEach(window => {
+            if (!window.isDestroyed()) {
+              window.webContents.send('command-output', `Repository folder ${repoDirPath} deleted.\n`);
+            }
+          });
         } catch (err) {
-          console.error(`Error deleting repository folder ${repoDirPath}: ${err.message}`);
-          mainWindow.webContents.send('command-output', `Error deleting repository folder ${repoDirPath}: ${err.message}\n`);
+          // Send to all windows for synchronization
+          BrowserWindow.getAllWindows().forEach(window => {
+            if (!window.isDestroyed()) {
+              window.webContents.send('command-output', `Error deleting repository folder ${repoDirPath}: ${err.message}\n`);
+            }
+          });
         }
       }
     }
-    mainWindow.webContents.send('command-status', 'cancelled');
+    
+    // Send to all windows for synchronization
+    BrowserWindow.getAllWindows().forEach(window => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('command-status', 'cancelled');
+      }
+    });
   });
 
 
@@ -692,8 +740,27 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  // Clean up BrowserViews when all windows are closed
+  windowBrowserViews.clear();
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+// Clean up BrowserViews when individual windows are closed
+app.on('window-closed', (event, window) => {
+  const windowId = window.id;
+  if (windowBrowserViews.has(windowId)) {
+    const views = windowBrowserViews.get(windowId);
+    // Clean up BrowserViews
+    if (views.editorView && !views.editorView.webContents.isDestroyed()) {
+      views.editorView.webContents.close();
+    }
+    if (views.viewerView && !views.viewerView.webContents.isDestroyed()) {
+      views.viewerView.webContents.close();
+    }
+    windowBrowserViews.delete(windowId);
+    console.log(`Cleaned up BrowserViews for window ${windowId}`);
   }
 });
 
@@ -748,68 +815,144 @@ ipcMain.on('navigate', (event, page) => {
         viewerView.setBounds({ x: 0, y: 0, width: 0, height: 0 }); // Initially hidden
       }
 
-      const trackBrowserViewLoad = (view, viewName) => {
+      const trackBrowserViewLoad = (view, viewName, targetWindow = null) => {
         if (!view || !view.webContents || view.webContents.isDestroyed()) {
           return;
         }
         view.webContents.once('did-finish-load', () => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
+          const window = targetWindow || mainWindow;
+          if (window && !window.isDestroyed()) {
             const currentUrl = view.webContents.getURL();
-            mainWindow.webContents.send('browser-view-loaded', { viewName, url: currentUrl });
+            // Send to all windows for synchronization
+            broadcastToAllWindows('browser-view-loaded', { viewName, url: currentUrl });
           }
         });
       };
 
       // IPC handlers for BrowserView control
       ipcMain.handle('set-browser-view-bounds', (event, viewName, bounds) => {
-        const view = viewName === 'editor' ? editorView : viewerView;
-        if (view) {
+        const { editorView: ev, viewerView: vv } = getBrowserViewsForEvent(event);
+        const view = viewName === 'editor' ? ev : vv;
+        const window = BrowserWindow.fromWebContents(event.sender);
+        if (view && window) {
           view.setBounds(bounds);
         }
       });
 
       ipcMain.handle('load-browser-view-url', (event, viewName, url) => {
-        const view = viewName === 'editor' ? editorView : viewerView;
+        const { editorView: ev, viewerView: vv } = getBrowserViewsForEvent(event);
+        const window = BrowserWindow.fromWebContents(event.sender);
+        const view = viewName === 'editor' ? ev : vv;
         if (view) {
-          trackBrowserViewLoad(view, viewName);
+          trackBrowserViewLoad(view, viewName, window);
           view.webContents.loadURL(url);
         }
       });
 
       ipcMain.handle('set-browser-view-visibility', (event, viewName, visible) => {
-        const view = viewName === 'editor' ? editorView : viewerView;
-        if (view) {
+        const { editorView: ev, viewerView: vv } = getBrowserViewsForEvent(event);
+        const view = viewName === 'editor' ? ev : vv;
+        const window = BrowserWindow.fromWebContents(event.sender);
+        if (view && window) {
           if (visible) {
-            mainWindow.addBrowserView(view);
+            window.addBrowserView(view);
           } else {
-            mainWindow.removeBrowserView(view);
+            window.removeBrowserView(view);
           }
         }
       });
 
       ipcMain.handle('set-all-browser-view-visibility', (event, visible) => {
-        if (editorView) {
+        const { editorView: ev, viewerView: vv } = getBrowserViewsForEvent(event);
+        const window = BrowserWindow.fromWebContents(event.sender);
+        if (ev && window) {
           if (visible) {
-            mainWindow.addBrowserView(editorView);
+            window.addBrowserView(ev);
           } else {
-            mainWindow.removeBrowserView(editorView);
+            window.removeBrowserView(ev);
           }
         }
-        if (viewerView) {
+        if (vv && window) {
           if (visible) {
-            mainWindow.addBrowserView(viewerView);
+            window.addBrowserView(vv);
           } else {
-            mainWindow.removeBrowserView(viewerView);
+            window.removeBrowserView(vv);
           }
         }
       });
 
-      ipcMain.handle('get-dev-server-url-from-main', () => {
-        return globalDevServerUrl;
+ipcMain.handle('get-dev-server-url-from-main', () => {
+    return globalDevServerUrl;
+  });
+
+  // Function to broadcast events to all windows
+  function broadcastToAllWindows(channel, ...args) {
+    BrowserWindow.getAllWindows().forEach(window => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(channel, ...args);
+      }
+    });
+  }
+
+  // Function to get or create BrowserViews for a specific window
+  function getOrCreateBrowserViews(window) {
+    const windowId = window.id;
+    
+    if (!windowBrowserViews.has(windowId)) {
+      // Create new BrowserViews for this window
+      const newEditorView = new BrowserView({
+        webPreferences: {
+          preload: path.join(__dirname, 'preload.js'),
+          contextIsolation: true,
+          nodeIntegration: false,
+          webviewTag: false,
+          enableRemoteModule: false,
+        }
       });
+      
+      const newViewerView = new BrowserView({
+        webPreferences: {
+          preload: path.join(__dirname, 'preload.js'),
+          contextIsolation: true,
+          nodeIntegration: false,
+          webviewTag: false,
+          enableRemoteModule: false,
+        }
+      });
+      
+      // Initialize with blank pages and hide
+      newEditorView.webContents.loadURL('about:blank');
+      newEditorView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+      window.addBrowserView(newEditorView);
+      
+      newViewerView.webContents.loadURL('about:blank');
+      newViewerView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+      window.addBrowserView(newViewerView);
+      
+      windowBrowserViews.set(windowId, {
+        editorView: newEditorView,
+        viewerView: newViewerView
+      });
+      
+      console.log(`Created new BrowserViews for window ${windowId}`);
+    }
+    
+    return windowBrowserViews.get(windowId);
+  }
+
+  // Function to get BrowserViews for the window that sent the IPC event
+  function getBrowserViewsForEvent(event) {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) {
+      // Fallback to main window for backward compatibility
+      return { editorView, viewerView };
+    }
+    return getOrCreateBrowserViews(window);
+  }
 
       ipcMain.handle('capture-browser-view-page', async (event, viewName) => {
-        const view = viewName === 'editor' ? editorView : viewerView;
+        const { editorView: ev, viewerView: vv } = getBrowserViewsForEvent(event);
+        const view = viewName === 'editor' ? ev : vv;
         if (view) {
           try {
             const image = await view.webContents.capturePage();
@@ -823,9 +966,11 @@ ipcMain.on('navigate', (event, page) => {
       });
 
       ipcMain.handle('browser-view-go-back', (event, viewName) => {
-        const view = viewName === 'editor' ? editorView : viewerView;
+        const { editorView: ev, viewerView: vv } = getBrowserViewsForEvent(event);
+        const window = BrowserWindow.fromWebContents(event.sender);
+        const view = viewName === 'editor' ? ev : vv;
         if (view && !view.webContents.isDestroyed() && view.webContents.canGoBack()) {
-          trackBrowserViewLoad(view, viewName);
+          trackBrowserViewLoad(view, viewName, window);
           view.webContents.goBack();
           return true;
         }
@@ -833,9 +978,11 @@ ipcMain.on('navigate', (event, page) => {
       });
 
       ipcMain.handle('browser-view-reload', (event, viewName) => {
-        const view = viewName === 'editor' ? editorView : viewerView;
+        const { editorView: ev, viewerView: vv } = getBrowserViewsForEvent(event);
+        const window = BrowserWindow.fromWebContents(event.sender);
+        const view = viewName === 'editor' ? ev : vv;
         if (view && !view.webContents.isDestroyed()) {
-          trackBrowserViewLoad(view, viewName);
+          trackBrowserViewLoad(view, viewName, window);
           view.webContents.reload();
           return true;
         }
@@ -843,15 +990,18 @@ ipcMain.on('navigate', (event, page) => {
       });
 
       ipcMain.handle('get-browser-view-url', (event, viewName) => {
-        const view = viewName === 'editor' ? editorView : viewerView;
+        const { editorView: ev, viewerView: vv } = getBrowserViewsForEvent(event);
+        const view = viewName === 'editor' ? ev : vv;
         if (view && !view.webContents.isDestroyed()) {
           return view.webContents.getURL();
         }
         return null;
       });
 
-      ipcMain.handle('clear-browser-cache', async () => {
+      ipcMain.handle('clear-browser-cache', async (event) => {
         try {
+          const { editorView: ev, viewerView: vv } = getBrowserViewsForEvent(event);
+          
           const clearViewCache = async (view) => {
             if (view && !view.webContents.isDestroyed()) {
               // Clear cache
@@ -865,15 +1015,62 @@ ipcMain.on('navigate', (event, page) => {
             }
           };
 
-          // Clear cache for both BrowserViews
+          // Clear cache for both BrowserViews of the calling window
           await Promise.all([
-            clearViewCache(editorView),
-            clearViewCache(viewerView)
+            clearViewCache(ev),
+            clearViewCache(vv)
           ]);
 
           return { success: true };
         } catch (error) {
           console.error('Error clearing browser cache:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      ipcMain.handle('create-new-window-with-state', async (event, windowState) => {
+        try {
+          console.log('Creating new window with state:', windowState);
+          
+          // Validate window state before proceeding
+          if (!windowState || typeof windowState !== 'object') {
+            throw new Error('Invalid window state provided');
+          }
+          
+          // Create new window with same configuration as main window
+          const newWindow = new BrowserWindow({
+            width: 900,
+            height: 600,
+            show: false,
+            webPreferences: {
+              preload: path.join(__dirname, 'preload.js'),
+              contextIsolation: true,
+              nodeIntegration: false
+            }
+          });
+
+          // Maximize and show the new window
+          newWindow.maximize();
+          newWindow.show();
+
+          // Encode window state as base64 for URL parameter
+          const encodedState = Buffer.from(JSON.stringify(windowState)).toString('base64');
+          const mainHtmlPath = path.join(__dirname, 'renderer', 'main.html');
+          
+          console.log('Loading new window with encoded state length:', encodedState.length);
+          
+          // Load main.html with state parameters
+          newWindow.loadFile(mainHtmlPath, {
+            query: { state: encodedState }
+          });
+
+          // Hide the menu bar for new window
+          Menu.setApplicationMenu(null);
+
+          console.log('New window created successfully');
+          return { success: true };
+        } catch (error) {
+          console.error('Error creating new window:', error);
           return { success: false, error: error.message };
         }
       });
