@@ -26,5 +26,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   browserViewGoBack: (viewName) => ipcRenderer.invoke('browser-view-go-back', viewName),
   browserViewReload: (viewName) => ipcRenderer.invoke('browser-view-reload', viewName),
   getBrowserViewUrl: (viewName) => ipcRenderer.invoke('get-browser-view-url', viewName),
+  clearBrowserCache: () => ipcRenderer.invoke('clear-browser-cache'),
   onBrowserViewLoaded: (callback) => ipcRenderer.on('browser-view-loaded', (event, payload) => callback(payload))
 });

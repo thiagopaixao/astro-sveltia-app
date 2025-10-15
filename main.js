@@ -850,6 +850,34 @@ ipcMain.on('navigate', (event, page) => {
         return null;
       });
 
+      ipcMain.handle('clear-browser-cache', async () => {
+        try {
+          const clearViewCache = async (view) => {
+            if (view && !view.webContents.isDestroyed()) {
+              // Clear cache
+              await view.webContents.session.clearCache();
+              // Clear storage data (cookies, localStorage, sessionStorage, etc.)
+              await view.webContents.session.clearStorageData({
+                storages: ['appcache', 'cookies', 'filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage']
+              });
+              // Clear navigation history
+              view.webContents.clearHistory();
+            }
+          };
+
+          // Clear cache for both BrowserViews
+          await Promise.all([
+            clearViewCache(editorView),
+            clearViewCache(viewerView)
+          ]);
+
+          return { success: true };
+        } catch (error) {
+          console.error('Error clearing browser cache:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
     } else {
       // For other pages (like create.html), destroy BrowserViews
       destroyBrowserViews();

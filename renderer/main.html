@@ -124,6 +124,7 @@
     branchModalOpen: false,
     updateModalOpen: false,
     clearCacheModalOpen: false,
+clearingCache: false,
     helpModalOpen: false,
     aboutModalOpen: false,
     exitModalOpen: false,
@@ -209,14 +210,37 @@
             setTimeout(() => { this.copySuccess = false; }, 2000);
         });
     },
-    confirmClearCache() {
-        const devServerUrl = this.getDevServerUrl();
-        this.addressValue = devServerUrl;
-        this.baseURL = devServerUrl;
-        this.loadViewer(devServerUrl, true);
-        this.loadEditor(`${devServerUrl}admin/index.html`, true);
+    async confirmClearCache() {
+        this.clearingCache = true;
         this.clearCacheModalOpen = false;
         this.menuOpen = false;
+        
+        try {
+            // Clear cache using the new API
+            const result = await window.electronAPI.clearBrowserCache();
+            
+            if (result && result.success) {
+                // Reload both BrowserViews with fresh content
+                const devServerUrl = this.getDevServerUrl();
+                this.addressValue = devServerUrl;
+                this.baseURL = devServerUrl;
+                
+                // Show loading state during reload
+                this.initialLoading = true;
+                this.viewerLoaded = false;
+                this.editorLoaded = false;
+                
+                this.loadViewer(devServerUrl, true);
+                this.loadEditor(`${devServerUrl}admin/index.html`, true);
+            } else {
+                alert('Erro ao limpar cache: ' + (result?.error || 'Erro desconhecido'));
+            }
+        } catch (error) {
+            console.error('Error clearing cache:', error);
+            alert('Erro ao limpar cache: ' + error.message);
+        } finally {
+            this.clearingCache = false;
+        }
     },
     openNewWindow() {
         window.open(window.location.href, '_blank');
@@ -629,13 +653,13 @@
     <!-- Placeholder for BrowserViews, which are managed by the main process -->
     <div class="w-full h-full absolute inset-0 pointer-events-none"></div>
 
-    <div x-cloak x-show="initialLoading" class="absolute inset-0 z-30 flex flex-col items-center justify-center space-y-4 bg-background-dark">
+    <div x-cloak x-show="initialLoading || clearingCache" class="absolute inset-0 z-30 flex flex-col items-center justify-center space-y-4 bg-background-dark">
         <div class="initial-loader">
             <span class="initial-loader__dot"></span>
             <span class="initial-loader__dot"></span>
             <span class="initial-loader__dot"></span>
         </div>
-        <p class="text-xs uppercase tracking-[0.3em] text-muted-dark">carregando ambiente</p>
+        <p class="text-xs uppercase tracking-[0.3em] text-muted-dark" x-text="clearingCache ? 'limpando cache...' : 'carregando ambiente'"></p>
     </div>
 
     <!-- Screenshot overlays for modals/menus -->
@@ -870,7 +894,7 @@
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="clearCacheModalOpen">
 <div @click.outside="clearCacheModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
 <h3 class="text-lg font-medium text-text-dark">Limpar Cache</h3>
-<p class="mt-2 text-sm text-muted-dark">Tem certeza de que deseja limpar o cache? Esta ação não pode ser desfeita.</p>
+<p class="mt-2 text-sm text-muted-dark">Tem certeza de que deseja limpar o cache? Todos os dados de histórico, cache e cookies serão perdidos definitivamente. Esta ação não pode ser desfeita.</p>
 <div class="mt-4 flex justify-end space-x-2">
 <button @click="clearCacheModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
 <button @click="confirmClearCache()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500">Limpar</button>
