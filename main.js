@@ -15,6 +15,212 @@ let activeProcesses = {}; // To keep track of running child processes
 // Store BrowserViews per window for independent control
 const windowBrowserViews = new Map(); // windowId -> { editorView, viewerView }
 
+// Flag to prevent multiple cleanup attempts
+let isCleaningUp = false;
+
+// Reset cleanup flag when app starts
+app.on('ready', async () => {
+  isCleaningUp = false;
+  console.log('🚀 App ready - cleanup flag reset');
+  
+  // Clean up any orphaned processes from previous runs
+  await cleanupOrphanedProcesses();
+});
+
+// Function to clean up orphaned processes from previous runs
+async function cleanupOrphanedProcesses() {
+  console.log('🧹 Checking for orphaned processes from previous runs...');
+  
+  // If we have a global dev server URL stored, try to kill any process on that port
+  if (globalDevServerUrl) {
+    const port = extractPortFromUrl(globalDevServerUrl);
+    if (port) {
+      console.log(`🔍 Checking for orphaned process on port ${port}...`);
+      await killProcessByPort(port);
+    }
+  }
+  
+  // Also check common development ports (3000-3010, 4320-4330)
+  const commonPorts = [];
+  for (let i = 3000; i <= 3010; i++) commonPorts.push(i);
+  for (let i = 4320; i <= 4330; i++) commonPorts.push(i);
+  
+  console.log('🔍 Checking common development ports for orphaned processes...');
+  for (const port of commonPorts) {
+    await killProcessByPort(port);
+  }
+  
+  console.log('✅ Orphaned process cleanup completed');
+}
+
+// Function to check if a process is still alive
+function isProcessAlive(process) {
+  try {
+    // Signal 0 doesn't kill the process, just checks if it exists
+    process.kill(0);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Function to kill a single process with verification
+async function killProcess(processId, process) {
+  if (!process) {
+    console.log(`✅ Process ${processId} not found, skipping`);
+    return true;
+  }
+
+  const pid = process.pid || 'unknown';
+  console.log(`🔪 Attempting to kill process: ${processId} (PID: ${pid})`);
+  
+  try {
+    // First attempt: SIGTERM (graceful shutdown)
+    process.kill('SIGTERM');
+    console.log(`📤 Sent SIGTERM to process ${processId} (PID: ${pid})`);
+    
+    // Wait 2 seconds and check if it's still alive
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    if (isProcessAlive(process)) {
+      console.log(`⚠️  Process ${processId} (PID: ${pid}) still alive after SIGTERM, trying SIGKILL`);
+      
+      // Second attempt: SIGKILL (force kill)
+      process.kill('SIGKILL');
+      console.log(`📤 Sent SIGKILL to process ${processId} (PID: ${pid})`);
+      
+      // Wait another 1 second
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      if (isProcessAlive(process)) {
+        console.log(`❌ Process ${processId} (PID: ${pid}) still alive after SIGKILL!`);
+        return false;
+      } else {
+        console.log(`✅ Process ${processId} (PID: ${pid}) killed with SIGKILL`);
+        return true;
+      }
+    } else {
+      console.log(`✅ Process ${processId} (PID: ${pid}) killed with SIGTERM`);
+      return true;
+    }
+  } catch (error) {
+    console.log(`❌ Error killing process ${processId} (PID: ${pid}):`, error.message);
+    return false;
+  }
+}
+
+// Function to kill process by port (fallback method)
+async function killProcessByPort(port) {
+  console.log(`🔍 Attempting to kill process using port ${port}`);
+  
+  return new Promise((resolve) => {
+    const { spawn } = require('child_process');
+    
+    if (process.platform === 'win32') {
+      // Windows: use netstat + taskkill
+      const netstat = spawn('netstat', ['-ano']);
+      let output = '';
+      
+      netstat.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      netstat.on('close', () => {
+        const lines = output.split('\n');
+        for (const line of lines) {
+          if (line.includes(`:${port}`) && line.includes('LISTENING')) {
+            const parts = line.trim().split(/\s+/);
+            const pid = parts[parts.length - 1];
+            if (pid && pid !== '0') {
+              console.log(`🔪 Found process ${pid} using port ${port}, killing...`);
+              spawn('taskkill', ['/F', '/PID', pid]);
+            }
+          }
+        }
+        resolve();
+      });
+    } else {
+      // Unix-like: use lsof
+      const lsof = spawn('lsof', ['-ti', `:${port}`]);
+      let output = '';
+      
+      lsof.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      lsof.on('close', () => {
+        const pids = output.trim().split('\n').filter(pid => pid);
+        for (const pid of pids) {
+          console.log(`🔪 Found process ${pid} using port ${port}, killing...`);
+          spawn('kill', ['-9', pid]);
+        }
+        resolve();
+      });
+    }
+  });
+}
+
+// Function to extract port from URL
+function extractPortFromUrl(url) {
+  const match = url.match(/http:\/\/localhost:(\d+)\//);
+  return match ? parseInt(match[1]) : null;
+}
+
+// Function to kill all active processes
+async function killAllActiveProcesses() {
+  if (isCleaningUp) {
+    console.log('⚠️  Cleanup already in progress, skipping...');
+    return;
+  }
+  
+  isCleaningUp = true;
+  const processIds = Object.keys(activeProcesses);
+  console.log(`🔄 Killing all active processes... Found ${processIds.length} processes:`, processIds);
+  
+  if (processIds.length === 0) {
+    console.log('✅ No active processes to kill');
+    return;
+  }
+  
+  // Store URLs for fallback port killing
+  const urlsToKill = [];
+  
+  // Kill all registered processes
+  const killPromises = processIds.map(async (processId) => {
+    const process = activeProcesses[processId];
+    
+    // Store URL for fallback if it's a dev server
+    if (processId.includes('dev-') && globalDevServerUrl) {
+      urlsToKill.push(globalDevServerUrl);
+    }
+    
+    const success = await killProcess(processId, process);
+    delete activeProcesses[processId];
+    return success;
+  });
+  
+  // Wait for all kills to complete
+  const results = await Promise.all(killPromises);
+  const successCount = results.filter(r => r).length;
+  const failCount = results.length - successCount;
+  
+  console.log(`📊 Kill results: ${successCount} successful, ${failCount} failed`);
+  
+  // Fallback: kill by port if any processes failed
+  if (failCount > 0 || urlsToKill.length > 0) {
+    console.log('🔄 Using fallback method: killing by port...');
+    
+    for (const url of urlsToKill) {
+      const port = extractPortFromUrl(url);
+      if (port) {
+        await killProcessByPort(port);
+      }
+    }
+  }
+  
+  console.log('✅ All active processes killed (or attempted)');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
@@ -714,6 +920,17 @@ ipcMain.handle('cancel-project-creation', async (event, projectId, projectPath, 
   });
 });
 
+// Handle app quit event - kill all processes before quitting
+app.on('before-quit', async (event) => {
+  console.log('🚪 App is quitting - killing all processes...');
+  try {
+    await killAllActiveProcesses();
+    console.log('✅ All processes killed successfully');
+  } catch (error) {
+    console.error('❌ Error killing processes:', error);
+  }
+});
+
 app.on('window-all-closed', () => {
   // Clean up BrowserViews when all windows are closed
   windowBrowserViews.clear();
@@ -863,6 +1080,63 @@ ipcMain.handle('get-dev-server-url-from-main', () => {
     console.log('📡 get-dev-server-url-from-main called, returning:', globalDevServerUrl);
     return globalDevServerUrl;
   });
+
+  // Handle exit confirmation from renderer
+  ipcMain.handle('confirm-exit-app', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    console.log('🚪 Exit confirmation requested from window:', window?.id);
+    
+    return new Promise((resolve) => {
+      if (window && !window.isDestroyed()) {
+        // Send request to renderer to show confirmation dialog
+        console.log('📤 Sending show-exit-confirmation to renderer');
+        window.webContents.send('show-exit-confirmation');
+        
+        // Listen for response
+        const handleResponse = (event, confirmed) => {
+          ipcMain.removeListener('exit-confirmation-response', handleResponse);
+          console.log('🚪 Exit confirmation response received:', confirmed);
+          
+          if (confirmed) {
+            console.log('🚪 User confirmed exit - killing processes and quitting');
+            
+            // Kill processes first (async)
+            killAllActiveProcesses().then(() => {
+              console.log('🚪 Processes killed, now quitting app');
+              app.quit();
+            }).catch((error) => {
+              console.error('❌ Error killing processes:', error);
+              app.quit(); // Quit anyway even if kill fails
+            });
+            
+            // Fallback: force exit if app.quit() doesn't work within 5 seconds
+            setTimeout(() => {
+              console.log('🚪 Forcing exit after timeout...');
+              process.exit(0);
+            }, 5000);
+          } else {
+            console.log('🚪 User cancelled exit');
+          }
+          
+          resolve(confirmed);
+        };
+        
+        ipcMain.once('exit-confirmation-response', handleResponse);
+        
+        // Timeout after 30 seconds (user didn't respond)
+        setTimeout(() => {
+          ipcMain.removeListener('exit-confirmation-response', handleResponse);
+          console.log('🚪 Exit confirmation timeout - cancelling exit');
+          resolve(false);
+        }, 30000);
+      } else {
+        console.log('❌ Window not found or destroyed');
+        resolve(false);
+      }
+    });
+  });
+
+
 
   // Function to broadcast events to all windows
   function broadcastToAllWindows(channel, ...args) {

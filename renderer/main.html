@@ -128,6 +128,7 @@ clearingCache: false,
     helpModalOpen: false,
     aboutModalOpen: false,
     exitModalOpen: false,
+    isExitingProgrammatically: false,
     selectedBranch: 'stage',
     newBranchName: '',
     currentBranch: 'stage',
@@ -330,7 +331,34 @@ clearingCache: false,
         this.menuOpen = false;
     },
     exitApp() {
-        window.close();
+        console.log('exitApp() called - requesting exit confirmation from main process');
+        if (window.electronAPI && window.electronAPI.confirmExitApp) {
+            window.electronAPI.confirmExitApp();
+        } else {
+            console.error('electronAPI.confirmExitApp not available');
+            window.close();
+        }
+    },
+    confirmExit() {
+        console.log('confirmExit() called - setting programmatic exit flag and sending confirmation to main process');
+        this.exitModalOpen = false;
+        this.isExitingProgrammatically = true; // Set flag to prevent beforeunload from showing dialog again
+        
+        if (window.electronAPI && window.electronAPI.sendExitConfirmationResponse) {
+            window.electronAPI.sendExitConfirmationResponse(true);
+        } else {
+            console.error('electronAPI.sendExitConfirmationResponse not available');
+            window.close();
+        }
+    },
+    cancelExit() {
+        console.log('cancelExit() called - resetting programmatic exit flag and sending cancellation to main process');
+        this.exitModalOpen = false;
+        this.isExitingProgrammatically = false; // Reset flag since user cancelled
+        
+        if (window.electronAPI && window.electronAPI.sendExitConfirmationResponse) {
+            window.electronAPI.sendExitConfirmationResponse(false);
+        }
     },
     addTerminalTab() {
         const newId = Date.now();
@@ -525,6 +553,40 @@ clearingCache: false,
 
         this.updateAddressFromBrowser('view');
 
+        // Set up exit confirmation handlers
+        if (window.electronAPI && window.electronAPI.onShowExitConfirmation) {
+            window.electronAPI.onShowExitConfirmation(() => {
+                console.log('Received show exit confirmation event');
+                this.exitModalOpen = true;
+            });
+        }
+
+        // Handle beforeunload event to catch window close attempts
+        window.addEventListener('beforeunload', (e) => {
+            console.log('beforeunload event triggered, isExitingProgrammatically:', this.isExitingProgrammatically);
+            
+            // If we're exiting programmatically (after user confirmation), allow it
+            if (this.isExitingProgrammatically) {
+                console.log('Programmatic exit detected - allowing window to close');
+                return true;
+            }
+            
+            // Otherwise, prevent default and show confirmation dialog
+            console.log('Manual close attempt detected - showing confirmation');
+            e.preventDefault();
+            if (window.electronAPI && window.electronAPI.confirmExitApp) {
+                window.electronAPI.confirmExitApp();
+            }
+            return false;
+        });
+
+        // Reset flag when window gains focus again (in case user cancelled)
+        window.addEventListener('focus', () => {
+            if (this.isExitingProgrammatically && this.exitModalOpen === false) {
+                console.log('Window regained focus - resetting programmatic exit flag');
+                this.isExitingProgrammatically = false;
+            }
+        });
 
         // Only load project state if not already loaded from window state
         if (!this.serverOutput && !this.consoleOutput) {
@@ -1034,7 +1096,7 @@ clearingCache: false,
   </li>
   <li class="border-t border-gray-700 my-2"></li>
   <li>
-    <a @click.prevent="exitModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="exitApp()" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
       <span class="material-icons mr-3">exit_to_app</span>
       <span>Sair</span>
     </a>
@@ -1158,8 +1220,8 @@ clearingCache: false,
 <h3 class="text-lg font-medium text-text-dark">Sair do Documental</h3>
 <p class="mt-2 text-sm text-muted-dark">Tem certeza de que deseja sair do aplicativo?</p>
 <div class="mt-4 flex justify-end space-x-2">
-<button @click="exitModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
-<button @click="exitApp()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500">Sair</button>
+    <button @click="cancelExit()" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
+    <button @click="confirmExit()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500">Sair</button>
 </div>
 </div>
 </div>

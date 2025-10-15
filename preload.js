@@ -28,5 +28,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getBrowserViewUrl: (viewName) => ipcRenderer.invoke('get-browser-view-url', viewName),
   clearBrowserCache: () => ipcRenderer.invoke('clear-browser-cache'),
   createNewWindowWithState: (windowState) => ipcRenderer.invoke('create-new-window-with-state', windowState),
-  onBrowserViewLoaded: (callback) => ipcRenderer.on('browser-view-loaded', (event, payload) => callback(payload))
+  onBrowserViewLoaded: (callback) => ipcRenderer.on('browser-view-loaded', (event, payload) => callback(payload)),
+  confirmExitApp: () => ipcRenderer.invoke('confirm-exit-app'),
+  onShowExitConfirmation: (callback) => ipcRenderer.on('show-exit-confirmation', callback),
+  sendExitConfirmationResponse: (confirmed) => ipcRenderer.send('exit-confirmation-response', confirmed)
 });
