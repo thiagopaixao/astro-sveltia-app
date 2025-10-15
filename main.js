@@ -313,24 +313,6 @@ app.whenReady().then(() => {
 
       // Step 5: npm run dev (keep in background)
       sendOutput('Iniciando servidor de desenvolvimento...\n');
-      const devProcess = spawn('npm', ['run', 'dev'], { cwd: repoDirPath });
-      activeProcesses[`dev-reopen-${projectId}`] = devProcess;
-
-      devProcess.stdout.on('data', (data) => {
-        sendOutput(data.toString());
-      });
-
-      devProcess.stderr.on('data', (data) => {
-        sendOutput(data.toString());
-      });
-
-      devProcess.on('close', (code) => {
-        delete activeProcesses[`dev-reopen-${projectId}`];
-        if (code !== 0) {
-          sendOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
-          sendStatus('failure');
-        }
-      });
 
       let serverReady = false;
       const checkServerReady = (data) => {
@@ -356,14 +338,20 @@ app.whenReady().then(() => {
             globalDevServerUrl = devServerUrl;
             console.log(`URL do servidor de desenvolvimento: ${devServerUrl}`);
             // Send to all windows for synchronization
+            const allWindows = BrowserWindow.getAllWindows();
+            console.log(`📡 Sending dev-server-url to ${allWindows.length} windows`);
             BrowserWindow.getAllWindows().forEach(window => {
               if (!window.isDestroyed()) {
+                console.log(`📡 Sending to window: ${window.id}`);
                 window.webContents.send('dev-server-url', devServerUrl);
               }
             });
           }
         }
       };
+
+      const devProcess = spawn('npm', ['run', 'dev'], { cwd: repoDirPath });
+      activeProcesses[`dev-reopen-${projectId}`] = devProcess;
 
       devProcess.stdout.on('data', processOutput);
       devProcess.stderr.on('data', processOutput);
@@ -373,10 +361,13 @@ app.whenReady().then(() => {
         if (code !== 0) {
           sendOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
           sendStatus('failure');
-        } else if (!serverReady) {
-          sendOutput('Servidor de desenvolvimento encerrado sem sinalizar prontidão.\n');
-          sendStatus('failure');
         }
+      });
+
+      devProcess.on('error', (err) => {
+        delete activeProcesses[`dev-reopen-${projectId}`];
+        sendOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
+        sendStatus('failure');
       });
 
       devProcess.on('error', (err) => {
@@ -549,24 +540,6 @@ app.whenReady().then(() => {
 
       // Step 5: npm run dev (keep in background)
       sendOutput('Starting development server...\n');
-      const devProcess = spawn('npm', ['run', 'dev'], { cwd: repoDirPath });
-      activeProcesses[`dev-${projectId}`] = devProcess;
-
-      devProcess.stdout.on('data', (data) => {
-        sendOutput(data.toString());
-      });
-
-      devProcess.stderr.on('data', (data) => {
-        sendOutput(data.toString());
-      });
-
-      devProcess.on('close', (code) => {
-        delete activeProcesses[`dev-${projectId}`];
-        if (code !== 0) {
-          sendOutput(`Development server exited with code ${code}\n`);
-          sendStatus('failure');
-        }
-      });
 
       let serverReady = false;
       const checkServerReady = (data) => {
@@ -592,14 +565,20 @@ app.whenReady().then(() => {
             globalDevServerUrl = devServerUrl; // Store globally
             console.log(`Development server URL: ${devServerUrl}`);
             // Send to all windows for synchronization
+            const allWindows = BrowserWindow.getAllWindows();
+            console.log(`📡 Sending dev-server-url to ${allWindows.length} windows`);
             BrowserWindow.getAllWindows().forEach(window => {
               if (!window.isDestroyed()) {
+                console.log(`📡 Sending to window: ${window.id}`);
                 window.webContents.send('dev-server-url', devServerUrl);
               }
             });
           }
         }
       };
+
+      const devProcess = spawn('npm', ['run', 'dev'], { cwd: repoDirPath });
+      activeProcesses[`dev-${projectId}`] = devProcess;
 
       devProcess.stdout.on('data', processOutput);
       devProcess.stderr.on('data', processOutput);
@@ -608,10 +587,6 @@ app.whenReady().then(() => {
         delete activeProcesses[`dev-${projectId}`];
         if (code !== 0) {
           sendOutput(`Development server exited with code ${code}\n`);
-          sendStatus('failure');
-        } else if (!serverReady) {
-          // If process closed with code 0 but never reported ready, it might be an issue
-          sendOutput('Development server closed without reporting readiness.\n');
           sendStatus('failure');
         }
       });
@@ -844,8 +819,11 @@ ipcMain.on('navigate', (event, page) => {
         const window = BrowserWindow.fromWebContents(event.sender);
         const view = viewName === 'editor' ? ev : vv;
         if (view) {
+          console.log(`🔗 Loading ${viewName} BrowserView with URL: ${url}`);
           trackBrowserViewLoad(view, viewName, window);
           view.webContents.loadURL(url);
+        } else {
+          console.log(`❌ BrowserView not found for ${viewName}`);
         }
       });
 
@@ -882,6 +860,7 @@ ipcMain.on('navigate', (event, page) => {
       });
 
 ipcMain.handle('get-dev-server-url-from-main', () => {
+    console.log('📡 get-dev-server-url-from-main called, returning:', globalDevServerUrl);
     return globalDevServerUrl;
   });
 

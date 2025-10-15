@@ -364,9 +364,12 @@ clearingCache: false,
         return `working_user_${year}${month}${day}-${hours}${minutes}_`;
     },
     async init() { // Make init an async function
+        console.log('🚀 INIT STARTED - Renderer initialization beginning');
+        
         // Check if this window was opened with state parameters
         const urlParams = new URLSearchParams(window.location.search);
         const stateParam = urlParams.get('state');
+        console.log('🔍 URL params check - stateParam:', stateParam);
         
         if (stateParam) {
             try {
@@ -380,37 +383,84 @@ clearingCache: false,
             }
         }
 
-        // Only try to get devServerUrl from main process if not already set by window state
-        if (!this.devServerUrl) {
-            const devServerUrl = await window.electronAPI.getDevServerUrlFromMain();
-            if (devServerUrl) {
+        // Listen for dev-server-url events from main process FIRST
+        console.log('Setting up dev-server-url listener...');
+        window.electronAPI.onDevServerUrl((devServerUrl) => {
+            console.log('🎯 EVENT RECEIVED - dev server URL:', devServerUrl);
+            console.log('Current devServerUrl before update:', this.devServerUrl);
+            if (devServerUrl && devServerUrl !== this.devServerUrl) {
+                console.log('🔄 UPDATING URLs with dev server URL');
                 this.devServerUrl = devServerUrl;
                 sessionStorage.setItem('devServerUrl', devServerUrl);
+                
+                // Update URL variables
+                this.baseURL = devServerUrl;
+                this.addressValue = devServerUrl;
+                this.viewerUrl = devServerUrl;
+                this.editorUrl = `${devServerUrl}admin/index.html`;
+                
+                // Reload BrowserViews with the correct URLs
+                this.loadViewer(devServerUrl, true);
+                this.loadEditor(`${devServerUrl}admin/index.html`, true);
+                
+                console.log('✅ Updated all URLs to dev server:', {
+                    devServerUrl: this.devServerUrl,
+                    baseURL: this.baseURL,
+                    addressValue: this.addressValue,
+                    viewerUrl: this.viewerUrl,
+                    editorUrl: this.editorUrl
+                });
             } else {
-                const storedUrl = sessionStorage.getItem('devServerUrl');
-                if (storedUrl) {
-                    this.devServerUrl = storedUrl;
-                } else {
-                    alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
-                    return;
-                }
+                console.log('⚠️ URL not updated - devServerUrl:', devServerUrl, 'current:', this.devServerUrl);
+            }
+        });
+
+        // Always try to get devServerUrl from main process first
+        console.log('🔍 Checking devServerUrl - current value:', this.devServerUrl);
+        console.log('📡 Calling getDevServerUrlFromMain...');
+        const devServerUrl = await window.electronAPI.getDevServerUrlFromMain();
+        console.log('📡 getDevServerUrlFromMain returned:', devServerUrl);
+        
+        if (devServerUrl) {
+            this.devServerUrl = devServerUrl;
+            sessionStorage.setItem('devServerUrl', devServerUrl);
+            console.log('✅ Set devServerUrl from main process:', devServerUrl);
+        } else {
+            const storedUrl = sessionStorage.getItem('devServerUrl');
+            console.log('💾 Checking sessionStorage - storedUrl:', storedUrl);
+            if (storedUrl) {
+                this.devServerUrl = storedUrl;
+                console.log('✅ Set devServerUrl from sessionStorage:', storedUrl);
+            } else {
+                console.log('❌ No devServerUrl found anywhere!');
+                alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
+                return;
             }
         }
 
         // Set default values ONLY if not already set by window state
         // This prevents overwriting the captured state
+        console.log('🔧 Setting default URL values - devServerUrl:', this.devServerUrl);
+        console.log('Before update - addressValue:', this.addressValue, 'baseURL:', this.baseURL, 'viewerUrl:', this.viewerUrl, 'editorUrl:', this.editorUrl);
+        
         if (!this.addressValue || this.addressValue === 'https://documental.xyz/') {
             this.addressValue = this.devServerUrl;
+            console.log('✅ Updated addressValue to:', this.addressValue);
         }
         if (!this.baseURL || this.baseURL === 'https://documental.xyz/') {
             this.baseURL = this.devServerUrl;
+            console.log('✅ Updated baseURL to:', this.baseURL);
         }
         if (!this.viewerUrl) {
             this.viewerUrl = this.devServerUrl;
+            console.log('✅ Updated viewerUrl to:', this.viewerUrl);
         }
         if (!this.editorUrl) {
             this.editorUrl = `${this.devServerUrl}admin/index.html`;
+            console.log('✅ Updated editorUrl to:', this.editorUrl);
         }
+        
+        console.log('After update - addressValue:', this.addressValue, 'baseURL:', this.baseURL, 'viewerUrl:', this.viewerUrl, 'editorUrl:', this.editorUrl);
         
         console.log('Final initialization values:', {
             addressValue: this.addressValue,
@@ -421,8 +471,10 @@ clearingCache: false,
         });
 
         // Initial load of BrowserViews
+        console.log('🚀 Initial BrowserView load - viewerUrl:', this.viewerUrl, 'editorUrl:', this.editorUrl);
         this.loadViewer(this.viewerUrl, true);
         this.loadEditor(this.editorUrl, true);
+        console.log('✅ Initial BrowserView load completed');
 
         // Set initial visibility and bounds
         this.$nextTick(() => {
@@ -498,10 +550,10 @@ clearingCache: false,
         
         // Apply the captured window state to this window
         // Only apply if the value exists and is not the default
-        if (windowState.editorUrl && windowState.editorUrl !== `${this.getDevServerUrl()}admin/index.html`) {
+        if (windowState.editorUrl && windowState.editorUrl !== 'https://documental.xyz/admin/index.html') {
             this.editorUrl = windowState.editorUrl;
         }
-        if (windowState.viewerUrl && windowState.viewerUrl !== this.getDevServerUrl()) {
+        if (windowState.viewerUrl && windowState.viewerUrl !== 'https://documental.xyz/') {
             this.viewerUrl = windowState.viewerUrl;
         }
         if (windowState.addressValue && windowState.addressValue !== 'https://documental.xyz/') {
