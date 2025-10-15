@@ -79,6 +79,9 @@
                 transform: scale(1.1);
             }
         }
+        [x-cloak] {
+            display: none !important;
+        }
     </style>
 <script>
         tailwind.config = {
@@ -393,6 +396,11 @@ clearingCache: false,
     },
     async init() { // Make init an async function
         console.log('🚀 INIT STARTED - Renderer initialization beginning');
+        console.log('📊 Initial Alpine.js state:', {
+            initialLoading: this.initialLoading,
+            viewerLoaded: this.viewerLoaded,
+            editorLoaded: this.editorLoaded
+        });
         
         // Check if this window was opened with state parameters
         const urlParams = new URLSearchParams(window.location.search);
@@ -498,11 +506,33 @@ clearingCache: false,
             devServerUrl: this.devServerUrl
         });
 
+        // Wait a moment for DOM to be fully ready before loading BrowserViews
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         // Initial load of BrowserViews
         console.log('🚀 Initial BrowserView load - viewerUrl:', this.viewerUrl, 'editorUrl:', this.editorUrl);
+        console.log('📊 Initial loading state:', {
+            initialLoading: this.initialLoading,
+            viewerLoaded: this.viewerLoaded,
+            editorLoaded: this.editorLoaded
+        });
+        
+        // Ensure loading state is properly set before starting
+        if (!this.initialLoading) {
+            console.log('⚠️ initialLoading was false, setting it back to true');
+            this.initialLoading = true;
+            this.viewerLoaded = false;
+            this.editorLoaded = false;
+        }
+        
         this.loadViewer(this.viewerUrl, true);
         this.loadEditor(this.editorUrl, true);
         console.log('✅ Initial BrowserView load completed');
+        console.log('📊 Loading state after load:', {
+            initialLoading: this.initialLoading,
+            viewerLoaded: this.viewerLoaded,
+            editorLoaded: this.editorLoaded
+        });
 
         // Set initial visibility and bounds
         this.$nextTick(() => {
@@ -545,6 +575,7 @@ clearingCache: false,
 
         if (window.electronAPI && window.electronAPI.onBrowserViewLoaded) {
             window.electronAPI.onBrowserViewLoaded(({ viewName, url }) => {
+                console.log(`🎯 BrowserView loaded event received: ${viewName} at ${url}`);
                 const target = viewName === 'editor' ? 'editor' : 'view';
                 this.updateAddressFromBrowser(target, url);
                 this.markViewLoaded(target);
@@ -552,6 +583,16 @@ clearingCache: false,
         }
 
         this.updateAddressFromBrowser('view');
+
+        // Fallback timeout to ensure loading animation doesn't get stuck
+        setTimeout(() => {
+            if (this.initialLoading) {
+                console.log('⏰ Loading timeout - forcing loading to complete');
+                this.initialLoading = false;
+                this.viewerLoaded = true;
+                this.editorLoaded = true;
+            }
+        }, 10000); // 10 seconds fallback
 
         // Set up exit confirmation handlers
         if (window.electronAPI && window.electronAPI.onShowExitConfirmation) {
@@ -658,6 +699,7 @@ clearingCache: false,
         if (!force && url === this.viewerUrl) {
             return;
         }
+        console.log(`🔗 loadViewer called with URL: ${url}, force: ${force}`);
         this.viewerUrl = url;
         window.electronAPI.loadBrowserViewUrl('view', url);
         if (this.activeTab !== 'editor') {
@@ -665,6 +707,7 @@ clearingCache: false,
         }
         if (this.initialLoading) {
             this.viewerLoaded = false;
+            console.log('🔄 Viewer loading reset - viewerLoaded set to false');
         }
     },
     loadEditor(url, force = false) {
@@ -674,6 +717,7 @@ clearingCache: false,
         if (!force && url === this.editorUrl) {
             return;
         }
+        console.log(`🔗 loadEditor called with URL: ${url}, force: ${force}`);
         this.editorUrl = url;
         window.electronAPI.loadBrowserViewUrl('editor', url);
         if (this.activeTab === 'editor') {
@@ -681,6 +725,7 @@ clearingCache: false,
         }
         if (this.initialLoading) {
             this.editorLoaded = false;
+            console.log('🔄 Editor loading reset - editorLoaded set to false');
         }
     },
     getActiveBrowserViewName() {
@@ -757,12 +802,22 @@ clearingCache: false,
         }
     },
     markViewLoaded(target) {
+        console.log(`📝 markViewLoaded called for ${target}. Current state:`, {
+            initialLoading: this.initialLoading,
+            editorLoaded: this.editorLoaded,
+            viewerLoaded: this.viewerLoaded
+        });
+        
         if (target === 'editor') {
             this.editorLoaded = true;
+            console.log('✅ Editor marked as loaded');
         } else {
             this.viewerLoaded = true;
+            console.log('✅ Viewer marked as loaded');
         }
+        
         if (this.initialLoading && this.editorLoaded && this.viewerLoaded) {
+            console.log('🎉 Both BrowserViews loaded - hiding loading animation');
             this.initialLoading = false;
         }
     },

@@ -1011,14 +1011,42 @@ ipcMain.on('navigate', (event, page) => {
         if (!view || !view.webContents || view.webContents.isDestroyed()) {
           return;
         }
-        view.webContents.once('did-finish-load', () => {
+        
+        console.log(`🎯 Setting up load tracking for ${viewName} BrowserView`);
+        
+        let hasFired = false;
+        const fireLoadedEvent = () => {
+          if (hasFired) return;
+          hasFired = true;
+          
           const window = targetWindow || mainWindow;
           if (window && !window.isDestroyed()) {
             const currentUrl = view.webContents.getURL();
+            console.log(`✅ ${viewName} BrowserView loaded successfully: ${currentUrl}`);
             // Send to all windows for synchronization
             broadcastToAllWindows('browser-view-loaded', { viewName, url: currentUrl });
           }
+        };
+
+        // Try multiple events to ensure loading is detected
+        view.webContents.once('did-finish-load', () => {
+          console.log(`📄 ${viewName} did-finish-load fired`);
+          // Add a small delay to ensure content is ready
+          setTimeout(fireLoadedEvent, 100);
         });
+        
+        view.webContents.once('dom-content-loaded', () => {
+          console.log(`🌳 ${viewName} dom-content-loaded fired`);
+          setTimeout(fireLoadedEvent, 200);
+        });
+        
+        // Fallback timeout to prevent loading from getting stuck
+        setTimeout(() => {
+          if (!hasFired) {
+            console.log(`⏰ ${viewName} loading timeout - firing anyway`);
+            fireLoadedEvent();
+          }
+        }, 5000);
       };
 
       // IPC handlers for BrowserView control
