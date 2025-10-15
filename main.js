@@ -4,6 +4,7 @@ const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { rimraf } = require('rimraf');
+const { execSync } = require('child_process');
 
 let mainWindow;
 let editorView;
@@ -15,12 +16,17 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
     height: 600,
+    show: false, // Don't show until maximized
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     }
   });
+
+  // Maximize the window before showing
+  mainWindow.maximize();
+  mainWindow.show();
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
@@ -107,6 +113,112 @@ app.whenReady().then(() => {
     });
   });
 
+  ipcMain.handle('getAllProjects', async () => {
+    return new Promise((resolve, reject) => {
+      console.log('Getting all projects from database...');
+      db.all(`SELECT id, projectName, projectPath, repoFolderName, createdAt FROM projects ORDER BY createdAt DESC`, (err, rows) => {
+        if (err) {
+          console.error('Error getting all projects:', err.message);
+          reject(err.message);
+        } else {
+          console.log(`Found ${rows.length} projects`);
+          resolve(rows);
+        }
+      });
+    });
+  });
+
+  ipcMain.handle('checkProjectExists', async (event, folderPath) => {
+    return new Promise((resolve, reject) => {
+      // Check if folder exists
+      if (!fs.existsSync(folderPath)) {
+        reject('Pasta não encontrada');
+        return;
+      }
+
+      // Check if this path matches any existing project
+      db.all(`SELECT id, projectName, projectPath, repoFolderName FROM projects`, (err, rows) => {
+        if (err) {
+          reject(err.message);
+          return;
+        }
+
+        let matchingProject = null;
+        for (const project of rows) {
+          const fullProjectPath = path.join(project.projectPath, project.repoFolderName || '');
+          if (fullProjectPath === folderPath) {
+            matchingProject = project;
+            break;
+          }
+        }
+
+        if (matchingProject) {
+          resolve({ exists: true, projectId: matchingProject.id });
+        } else {
+          // Get folder info
+          const folderInfo = getFolderInfo(folderPath);
+          resolve({ exists: false, folderInfo });
+        }
+      });
+    });
+  });
+
+  ipcMain.handle('getFolderInfo', async (event, folderPath) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const folderInfo = getFolderInfo(folderPath);
+        resolve(folderInfo);
+      } catch (error) {
+        reject(error.message);
+      }
+    });
+  });
+
+  // Helper function to get folder information
+  function getFolderInfo(folderPath) {
+    try {
+      if (!fs.existsSync(folderPath)) {
+        throw new Error('Pasta não encontrada');
+      }
+
+      const stats = fs.statSync(folderPath);
+      if (!stats.isDirectory()) {
+        throw new Error('Caminho não é uma pasta');
+      }
+
+      const files = fs.readdirSync(folderPath);
+      const isEmpty = files.length === 0;
+
+      let isGitRepo = false;
+      let remoteUrl = null;
+
+      // Check if it's a git repository
+      const gitPath = path.join(folderPath, '.git');
+      if (fs.existsSync(gitPath)) {
+        isGitRepo = true;
+        try {
+          // Get remote URL
+          const gitRemote = execSync('git remote get-url origin', { 
+            cwd: folderPath, 
+            encoding: 'utf8' 
+          }).trim();
+          remoteUrl = gitRemote;
+        } catch (error) {
+          console.log('Could not get git remote URL:', error.message);
+        }
+      }
+
+      return {
+        isEmpty,
+        isGitRepo,
+        remoteUrl,
+        fileCount: files.length
+      };
+    } catch (error) {
+      throw new Error(`Erro ao analisar pasta: ${error.message}`);
+    }
+  }
+
   ipcMain.handle('save-project', async (event, projectData) => {
     return new Promise((resolve, reject) => {
       const { projectName, githubUrl, projectPath } = projectData;
@@ -166,7 +278,18 @@ app.whenReady().then(() => {
     };
 
     try {
-      const repoDirPath = path.join(projectPath, repoFolderName);
+      // For empty folders that were cloned directly, repoFolderName might be the folder name itself
+      let repoDirPath;
+      if (repoFolderName && fs.existsSync(path.join(projectPath, repoFolderName))) {
+        repoDirPath = path.join(projectPath, repoFolderName);
+      } else {
+        // Check if projectPath itself is the repo (for empty folder case)
+        if (fs.existsSync(path.join(projectPath, '.git'))) {
+          repoDirPath = projectPath;
+        } else {
+          throw new Error('Repository folder not found');
+        }
+      }
 
       // Step 4: npm run build
       sendOutput('Construindo projeto...\n');
@@ -251,7 +374,7 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('start-project-creation', async (event, projectId, projectPath, githubUrl) => {
+  ipcMain.handle('start-project-creation', async (event, projectId, projectPath, githubUrl, isExistingGitRepo = false, isEmptyFolder = false) => {
     const sendOutput = (output) => {
       mainWindow.webContents.send('command-output', output);
     };
@@ -292,41 +415,95 @@ app.whenReady().then(() => {
     };
 
     try {
-      // Step 1: git clone
-      sendOutput('Cloning repository...\n');
-      const repoName = githubUrl.split('/').pop().replace('.git', '');
-      let finalRepoFolderName = repoName;
-      let counter = 0;
-      while (fs.existsSync(path.join(projectPath, finalRepoFolderName))) {
-        counter++;
-        finalRepoFolderName = `${repoName}-${counter}`;
-      }
-      const repoDirPath = path.join(projectPath, finalRepoFolderName);
-
-      await executeCommand('git', ['clone', githubUrl, finalRepoFolderName], projectPath, projectId);
-      sendOutput(`Repository cloned into ${repoDirPath}\n`);
-      sendStatus('success');
-      await delay(3000);
-
-      // Update repoFolderName in DB
-      await new Promise((resolve, reject) => {
-        db.run(`UPDATE projects SET repoFolderName = ? WHERE id = ?`, [finalRepoFolderName, projectId], (err) => {
-          if (err) {
-            console.error('Error updating repoFolderName:', err.message);
-            reject(err.message);
-          } else {
-            console.log(`repoFolderName updated for project ${projectId}`);
-            resolve();
-          }
+      let repoDirPath;
+      
+      if (isExistingGitRepo) {
+        // Use existing folder
+        repoDirPath = projectPath;
+        const folderName = path.basename(projectPath);
+        
+        // Update repoFolderName in DB
+        await new Promise((resolve, reject) => {
+          db.run(`UPDATE projects SET repoFolderName = ? WHERE id = ?`, [folderName, projectId], (err) => {
+            if (err) {
+              console.error('Error updating repoFolderName:', err.message);
+              reject(err.message);
+            } else {
+              console.log(`repoFolderName updated for project ${projectId}`);
+              resolve();
+            }
+          });
         });
-      });
+        
+        sendOutput(`Using existing repository at ${repoDirPath}\n`);
+        sendStatus('success');
+        await delay(3000);
+      } else if (isEmptyFolder) {
+        // Clone directly into the empty folder
+        repoDirPath = projectPath;
+        const folderName = path.basename(projectPath);
+        
+        sendOutput('Cloning repository directly into selected folder...\n');
+        await executeCommand('git', ['clone', githubUrl, '.'], repoDirPath, projectId);
+        sendOutput(`Repository cloned into ${repoDirPath}\n`);
+        sendStatus('success');
+        await delay(3000);
 
-      // Step 2: git checkout preview
-      sendOutput('Checking out preview branch...\n');
-      await executeCommand('git', ['checkout', 'preview'], repoDirPath, projectId);
-      sendOutput('Checked out preview branch.\n');
-      sendStatus('success');
-      await delay(3000);
+        // Update repoFolderName in DB
+        await new Promise((resolve, reject) => {
+          db.run(`UPDATE projects SET repoFolderName = ? WHERE id = ?`, [folderName, projectId], (err) => {
+            if (err) {
+              console.error('Error updating repoFolderName:', err.message);
+              reject(err.message);
+            } else {
+              console.log(`repoFolderName updated for project ${projectId}`);
+              resolve();
+            }
+          });
+        });
+      } else {
+        // Step 1: git clone (create subfolder)
+        sendOutput('Cloning repository...\n');
+        const repoName = githubUrl.split('/').pop().replace('.git', '');
+        let finalRepoFolderName = repoName;
+        let counter = 0;
+        while (fs.existsSync(path.join(projectPath, finalRepoFolderName))) {
+          counter++;
+          finalRepoFolderName = `${repoName}-${counter}`;
+        }
+        repoDirPath = path.join(projectPath, finalRepoFolderName);
+
+        await executeCommand('git', ['clone', githubUrl, finalRepoFolderName], projectPath, projectId);
+        sendOutput(`Repository cloned into ${repoDirPath}\n`);
+        sendStatus('success');
+        await delay(3000);
+
+        // Update repoFolderName in DB
+        await new Promise((resolve, reject) => {
+          db.run(`UPDATE projects SET repoFolderName = ? WHERE id = ?`, [finalRepoFolderName, projectId], (err) => {
+            if (err) {
+              console.error('Error updating repoFolderName:', err.message);
+              reject(err.message);
+            } else {
+              console.log(`repoFolderName updated for project ${projectId}`);
+              resolve();
+            }
+          });
+        });
+      }
+
+      // Step 2: git checkout preview (skip if existing git repo)
+      if (!isExistingGitRepo) {
+        sendOutput('Checking out preview branch...\n');
+        await executeCommand('git', ['checkout', 'preview'], repoDirPath, projectId);
+        sendOutput('Checked out preview branch.\n');
+        sendStatus('success');
+        await delay(3000);
+      } else {
+        sendOutput('Skipping checkout for existing repository.\n');
+        sendStatus('success');
+        await delay(3000);
+      }
 
       // Step 3: npm install
       sendOutput('Installing dependencies...\n');
@@ -456,6 +633,55 @@ app.whenReady().then(() => {
       }
     }
     mainWindow.webContents.send('command-status', 'cancelled');
+  });
+
+
+
+  ipcMain.handle('remove-project', async (event, projectId) => {
+    return new Promise((resolve, reject) => {
+      console.log('Removing project:', projectId);
+      
+      // Get project details first
+      db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
+        if (err) {
+          console.error('Error fetching project details:', err.message);
+          reject(err.message);
+          return;
+        }
+
+        if (!row) {
+          reject('Project not found');
+          return;
+        }
+
+        // Delete project from database first
+        db.run('DELETE FROM projects WHERE id = ?', [projectId], function(err) {
+          if (err) {
+            console.error('Error deleting project from database:', err.message);
+            reject(err.message);
+            return;
+          }
+
+          console.log(`Project ${projectId} deleted from database.`);
+
+          // Try to delete the folder (but don't fail if it doesn't work)
+          if (row.repoFolderName && row.projectPath) {
+            const repoDirPath = path.join(row.projectPath, row.repoFolderName);
+            if (fs.existsSync(repoDirPath)) {
+              try {
+                fs.rmSync(repoDirPath, { recursive: true, force: true });
+                console.log(`Repository folder ${repoDirPath} deleted.`);
+              } catch (err) {
+                console.error(`Error deleting repository folder ${repoDirPath}: ${err.message}`);
+                // Don't reject - the project was removed from DB
+              }
+            }
+          }
+
+          resolve({ success: true });
+        });
+      });
+    });
   });
 
   app.on('activate', () => {

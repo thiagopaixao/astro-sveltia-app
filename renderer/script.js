@@ -8,7 +8,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load recent projects
   await loadRecentProjects();
-
+  
+  // Load all projects if on all-projects page
+  await loadAllProjects();
+  
+  // Handle open folder button
+  const openFolderButton = document.getElementById('open-folder-button');
+  if (openFolderButton) {
+    openFolderButton.addEventListener('click', async () => {
+      if (window.electronAPI && window.electronAPI.openDirectoryDialog) {
+        const selectedPath = await window.electronAPI.openDirectoryDialog();
+        if (selectedPath) {
+          await handleFolderSelection(selectedPath);
+        }
+      }
+    });
+  }
+  
   navigateButtons.forEach(button => {
     button.addEventListener('click', () => {
       const page = button.dataset.navigate;
@@ -20,32 +36,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Set default project path
-  if (window.electronAPI && window.electronAPI.getHomeDirectory) {
-    const homeDir = await window.electronAPI.getHomeDirectory();
-    projectPathInput.value = `${homeDir}/Workspaces/`;
+  // Set default project path only if empty
+  if (window.electronAPI && window.electronAPI.getHomeDirectory && projectPathInput) {
+    if (!projectPathInput.value) {
+      const homeDir = await window.electronAPI.getHomeDirectory();
+      projectPathInput.value = `${homeDir}/Workspaces/`;
+    }
   } else {
-    console.error('Electron API not available or getHomeDirectory function missing.');
+    // Don't log error if elements don't exist (they may not be on this page)
   }
 
   // Handle folder selection
   if (selectFolderButton && window.electronAPI && window.electronAPI.openDirectoryDialog) {
     selectFolderButton.addEventListener('click', async () => {
       const selectedPath = await window.electronAPI.openDirectoryDialog();
-      if (selectedPath) {
+      if (selectedPath && projectPathInput) {
         projectPathInput.value = selectedPath;
       }
     });
   } else {
-    console.error('Select folder button or Electron API for openDirectoryDialog missing.');
+    // Don't log error if elements don't exist (they may not be on this page)
   }
 
   // Handle project creation
   if (createProjectButton && window.electronAPI && window.electronAPI.saveProject) {
     createProjectButton.addEventListener('click', async () => {
-      const projectName = projectNameInput.value;
-      const githubUrl = githubUrlInput.value;
-      const projectPath = projectPathInput.value;
+      const projectName = projectNameInput ? projectNameInput.value : '';
+      const githubUrl = githubUrlInput ? githubUrlInput.value : '';
+      const projectPath = projectPathInput ? projectPathInput.value : '';
 
       if (!projectName || !githubUrl || !projectPath) {
         alert('Por favor, preencha todos os campos.');
@@ -53,8 +71,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       try {
+        // Check if this is an existing git repo or empty folder
+        let isExistingGitRepo = false;
+        let isEmptyFolder = false;
+        const folderInfo = sessionStorage.getItem('folderInfo');
+        if (folderInfo) {
+          const info = JSON.parse(folderInfo);
+          isExistingGitRepo = info.isGitRepo;
+          isEmptyFolder = info.isEmpty;
+        }
+        
         const projectId = await window.electronAPI.saveProject({ projectName, githubUrl, projectPath });
         sessionStorage.setItem('currentProjectId', projectId);
+        sessionStorage.setItem('isExistingGitRepo', isExistingGitRepo.toString());
+        sessionStorage.setItem('isEmptyFolder', isEmptyFolder.toString());
+        sessionStorage.removeItem('folderInfo'); // Clean up
         window.electronAPI.navigateTo('create.html'); // Navigate to create page after creation
       } catch (error) {
         alert(`Erro ao criar projeto: ${error}`);
@@ -62,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   } else {
-    console.error('Create project button or Electron API for saveProject missing.');
+    // Don't log error if elements don't exist (they may not be on this page)
   }
 
   // Function to load recent projects
@@ -114,7 +145,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           button.addEventListener('click', (e) => {
             e.stopPropagation();
             const projectId = button.dataset.projectId;
-            removeRecentProject(projectId);
+            const projectItem = button.closest('.recent-project-item');
+            const projectName = projectItem.querySelector('.font-semibold').textContent;
+            removeProject(projectId, projectName);
           });
         });
 
@@ -143,9 +176,205 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Function to remove recent project (placeholder for future implementation)
-  function removeRecentProject(projectId) {
-    console.log('Remove project:', projectId);
-    // Future: Implement project removal from database
+  // Function to remove project
+  async function removeProject(projectId, projectName = null) {
+    // Simple confirmation for now
+    const confirmRemoval = confirm(`Tem certeza que deseja remover o projeto "${projectName || `Projeto #${projectId}`}"? Esta ação não pode ser desfeita.`);
+    
+    if (!confirmRemoval) {
+      return;
+    }
+    
+    try {
+      if (window.electronAPI && window.electronAPI.removeProject) {
+        await window.electronAPI.removeProject(projectId);
+        
+        // Reload the projects list
+        await loadAllProjects();
+        await loadRecentProjects(); // Also reload recent projects if on index page
+        
+        console.log('Project removed successfully');
+      } else {
+        console.error('removeProject API not available');
+        alert('Erro: função de remover projeto não disponível');
+      }
+    } catch (error) {
+      console.error('Error removing project:', error);
+      alert('Erro ao remover projeto: ' + error);
+    }
   }
+
+  // Function to load all projects
+  async function loadAllProjects() {
+    const allProjectsContainer = document.getElementById('all-projects-container');
+    const projectsCount = document.getElementById('projects-count');
+    if (!allProjectsContainer) return;
+
+    try {
+      console.log('Loading all projects...');
+      if (window.electronAPI && window.electronAPI.getAllProjects) {
+        console.log('Calling getAllProjects API...');
+        const allProjects = await window.electronAPI.getAllProjects();
+        console.log('Received projects:', allProjects);
+        
+        if (projectsCount) {
+          projectsCount.textContent = allProjects.length;
+        }
+        
+        if (allProjects.length === 0) {
+          allProjectsContainer.innerHTML = `
+            <div class="text-center text-muted-dark py-8">
+              <span class="material-symbols-outlined text-4xl mb-2">folder_off</span>
+              <p>Nenhum projeto encontrado.</p>
+            </div>
+          `;
+          return;
+        }
+
+        allProjectsContainer.innerHTML = allProjects.map(project => `
+          <div class="flex items-center justify-between bg-gray-900/50 p-4 rounded-lg hover:bg-gray-800 cursor-pointer all-project-item" data-project-id="${project.id}">
+            <div class="flex items-center gap-4">
+              <span class="material-symbols-outlined text-muted-dark">description</span>
+              <div>
+                <p class="font-semibold text-text-dark">${project.projectName}</p>
+                <p class="text-sm text-muted-dark">${project.projectPath}${project.repoFolderName ? '/' + project.repoFolderName : ''}</p>
+                <p class="text-xs text-muted-dark mt-1">Criado em: ${new Date(project.createdAt).toLocaleDateString('pt-BR')}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="p-2 rounded-full hover:bg-gray-700 open-project" data-project-id="${project.id}" title="Abrir projeto">
+                <span class="material-symbols-outlined text-primary text-xl">folder_open</span>
+              </button>
+              <button class="p-2 rounded-full hover:bg-gray-700 remove-project" data-project-id="${project.id}" title="Remover projeto">
+                <span class="material-symbols-outlined text-red-400 text-xl">delete</span>
+              </button>
+            </div>
+          </div>
+        `).join('');
+
+        // Add click handlers for all projects
+        document.querySelectorAll('.all-project-item').forEach(item => {
+          item.addEventListener('click', (e) => {
+            if (!e.target.closest('.open-project') && !e.target.closest('.remove-project')) {
+              const projectId = item.dataset.projectId;
+              openRecentProject(projectId);
+            }
+          });
+        });
+
+        // Add click handlers for open buttons
+        document.querySelectorAll('.open-project').forEach(button => {
+          button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const projectId = button.dataset.projectId;
+            openRecentProject(projectId);
+          });
+        });
+
+        // Add click handlers for remove buttons
+        document.querySelectorAll('.remove-project').forEach(button => {
+          button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const projectId = button.dataset.projectId;
+            const projectItem = button.closest('.all-project-item');
+            const projectName = projectItem.querySelector('.font-semibold').textContent;
+            removeProject(projectId, projectName);
+          });
+        });
+
+      } else {
+        console.error('Electron API for getAllProjects missing.');
+        allProjectsContainer.innerHTML = `
+          <div class="text-center text-red-400 py-8">
+            <p>API getAllProjects não encontrada.</p>
+          </div>
+        `;
+      }
+    } catch (error) {
+      console.error('Error loading all projects:', error);
+      allProjectsContainer.innerHTML = `
+        <div class="text-center text-red-400 py-8">
+          <p>Erro ao carregar projetos: ${error.message || error}</p>
+        </div>
+      `;
+    }
+  }
+
+  // Function to handle folder selection
+  async function handleFolderSelection(folderPath) {
+    try {
+      if (window.electronAPI && window.electronAPI.checkProjectExists) {
+        const projectExists = await window.electronAPI.checkProjectExists(folderPath);
+        
+        if (projectExists.exists) {
+          // Project exists, open it
+          sessionStorage.setItem('currentProjectId', projectExists.projectId);
+          sessionStorage.setItem('reopenMode', 'true');
+          window.electronAPI.navigateTo('create.html');
+        } else {
+          // Project doesn't exist, show modal
+          showFolderModal(folderPath, projectExists.folderInfo);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking folder:', error);
+      alert('Erro ao verificar pasta: ' + error);
+    }
+  }
+
+  // Function to show folder modal
+  function showFolderModal(folderPath, folderInfo) {
+    const folderModal = document.getElementById('folder-modal');
+    const folderInfoDiv = document.getElementById('folder-info');
+    
+    folderModal.dataset.selectedPath = folderPath;
+    
+    let infoHTML = `<p><strong>Caminho:</strong> ${folderPath}</p>`;
+    
+    if (folderInfo) {
+      if (folderInfo.isEmpty) {
+        infoHTML += `<p><strong>Status:</strong> Pasta vazia</p>`;
+        infoHTML += `<p><strong>Ação:</strong> O repositório será clonado diretamente nesta pasta</p>`;
+      } else if (folderInfo.isGitRepo) {
+        infoHTML += `<p><strong>Status:</strong> Repositório Git válido</p>`;
+        if (folderInfo.remoteUrl) {
+          infoHTML += `<p><strong>URL Remota:</strong> ${folderInfo.remoteUrl}</p>`;
+        }
+        infoHTML += `<p><strong>Ação:</strong> Usará repositório existente (clone ignorado)</p>`;
+      } else {
+        infoHTML += `<p><strong>Status:</strong> Pasta com arquivos (não é um repositório Git)</p>`;
+        infoHTML += `<p><strong>Ação:</strong> Criará subpasta para o novo projeto</p>`;
+      }
+      infoHTML += `<p><strong>Conteúdo:</strong> ${folderInfo.fileCount || 0} arquivos/pastas</p>`;
+    }
+    
+    folderInfoDiv.innerHTML = infoHTML;
+    folderModal.style.display = 'flex';
+  }
+
+  // Handle confirm new project button
+  const confirmNewProjectBtn = document.getElementById('confirm-new-project');
+  if (confirmNewProjectBtn) {
+    confirmNewProjectBtn.addEventListener('click', () => {
+      const folderModal = document.getElementById('folder-modal');
+      const selectedPath = folderModal.dataset.selectedPath;
+      
+      if (selectedPath) {
+        sessionStorage.setItem('selectedProjectPath', selectedPath);
+        sessionStorage.setItem('createFromFolder', 'true');
+        window.electronAPI.navigateTo('new.html');
+      }
+      folderModal.style.display = 'none';
+    });
+  }
+
+  // Handle cancel folder button
+  const cancelFolderBtn = document.getElementById('cancel-folder');
+  if (cancelFolderBtn) {
+    cancelFolderBtn.addEventListener('click', () => {
+      const folderModal = document.getElementById('folder-modal');
+      folderModal.style.display = 'none';
+    });
+  }
+
 });

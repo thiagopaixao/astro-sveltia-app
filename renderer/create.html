@@ -48,8 +48,8 @@
                 transform: rotate(360deg);
             }
         }
-        [x-cloak] {
-            display: none !important;
+        .modal-backdrop {
+            backdrop-filter: blur(4px);
         }
     </style>
 <script>
@@ -84,6 +84,7 @@
         activeStepId: 1,
         processFinished: false,
         processFailed: false,
+        processPaused: false,
         steps: [
             { id: 1, title: 'Clonando repositório git do projeto...', status: 'pending', log: '', expanded: false },
             { id: 2, title: 'Verificando branch preview...', status: 'pending', log: '', expanded: false },
@@ -98,8 +99,17 @@
             return this.steps.some(s => s.status === 'failure');
         },
         init() {
+            // Watch for process pause
+            this.$watch('processPaused', (value) => {
+                if (value) {
+                    console.log('Process paused');
+                }
+            });
+            
             this.projectId = sessionStorage.getItem('currentProjectId');
             this.isReopenMode = sessionStorage.getItem('reopenMode') === 'true';
+            this.isExistingGitRepo = sessionStorage.getItem('isExistingGitRepo') === 'true';
+            this.isEmptyFolder = sessionStorage.getItem('isEmptyFolder') === 'true';
             
             if (!this.projectId) {
                 console.error('No project ID found in session storage.');
@@ -117,6 +127,17 @@
                 this.steps[2].status = 'success';
                 this.steps[3].status = 'active';
                 this.activeStepId = 4;
+            } else if (this.isExistingGitRepo) {
+                // For existing git repo, skip git clone step
+                this.steps[0].status = 'success';
+                this.steps[0].title = 'Repositório git encontrado (clone ignorado)...';
+                this.steps[1].status = 'active';
+                this.activeStepId = 2;
+            } else if (this.isEmptyFolder) {
+                // For empty folder, clone directly into the folder
+                this.steps[0].title = 'Clonando repositório para pasta selecionada...';
+                this.steps[0].status = 'active';
+                this.activeStepId = 1;
             } else {
                 this.steps[0].status = 'active';
             }
@@ -179,6 +200,43 @@
             });
 
             this.startCreationProcess();
+            
+            // Setup modal event listeners
+            this.setupModalListeners();
+        },
+        
+        setupModalListeners() {
+            const modal = document.getElementById('cancel-modal');
+            const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+            const confirmReturnBtn = document.getElementById('confirm-return-btn');
+            const cancelModalBtn = document.getElementById('cancel-modal-btn');
+            
+            if (confirmDeleteBtn) {
+                confirmDeleteBtn.addEventListener('click', () => {
+                    this.confirmCancelAndDelete();
+                });
+            }
+            
+            if (confirmReturnBtn) {
+                confirmReturnBtn.addEventListener('click', () => {
+                    this.confirmCancelAndReturn();
+                });
+            }
+            
+            if (cancelModalBtn) {
+                cancelModalBtn.addEventListener('click', () => {
+                    this.closeCancelModal();
+                });
+            }
+            
+            // Close modal when clicking outside
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        this.closeCancelModal();
+                    }
+                });
+            }
         },
         async startCreationProcess() {
             try {
@@ -194,7 +252,7 @@
                         await window.electronAPI.reopenProject(this.projectId, this.projectPath, this.githubUrl, this.repoFolderName);
                     } else {
                         // For new projects, run full creation process
-                        await window.electronAPI.startProjectCreation(this.projectId, this.projectPath, this.githubUrl);
+                        await window.electronAPI.startProjectCreation(this.projectId, this.projectPath, this.githubUrl, this.isExistingGitRepo || false, this.isEmptyFolder || false);
                     }
                 }
             } catch (error) {
@@ -209,16 +267,67 @@
             }
         },
         async cancelProcess() {
-            if (this.projectId && this.projectPath) {
-                await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
+            // Pause the process and show confirmation modal
+            console.log('cancelProcess called');
+            this.processPaused = true;
+            
+            // Show modal using vanilla JavaScript
+            const modal = document.getElementById('cancel-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                console.log('Modal shown');
             }
-            this.processFinished = true;
-            this.processFailed = true;
-            // Clear session storage for this project
-            sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
-            sessionStorage.removeItem('currentProjectId');
-            sessionStorage.removeItem('reopenMode');
-            window.close();
+        },
+        
+        async confirmCancelAndDelete() {
+            try {
+                // Cancel the process and delete project
+                if (this.projectId && this.projectPath) {
+                    await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
+                    // Also remove from database
+                    await window.electronAPI.removeProject(this.projectId);
+                }
+                
+                // Clear session storage
+                sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
+                sessionStorage.removeItem('currentProjectId');
+                sessionStorage.removeItem('reopenMode');
+                
+                // Navigate to index
+                window.electronAPI.navigateTo('index.html');
+            } catch (error) {
+                console.error('Error canceling and deleting project:', error);
+                alert('Erro ao cancelar e excluir projeto: ' + error);
+            }
+        },
+        
+        async confirmCancelAndReturn() {
+            try {
+                // Just cancel the process without deleting
+                if (this.projectId && this.projectPath) {
+                    await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
+                }
+                
+                // Clear session storage
+                sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
+                sessionStorage.removeItem('currentProjectId');
+                sessionStorage.removeItem('reopenMode');
+                
+                // Navigate to index
+                window.electronAPI.navigateTo('index.html');
+            } catch (error) {
+                console.error('Error canceling project:', error);
+                alert('Erro ao cancelar projeto: ' + error);
+            }
+        },
+        
+        closeCancelModal() {
+            const modal = document.getElementById('cancel-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+            this.processPaused = false;
+            // Continue the process
         },
         async retryProcess() {
             this.processFinished = false;
@@ -252,6 +361,7 @@
     }">
 <div class="flex-1 flex items-center justify-center p-8 overflow-y-auto">
 <div class="w-full max-w-2xl">
+
 <div class="text-center mb-8">
 <div class="flex items-center justify-center gap-4 mb-3">
 <div class="creative-loader"></div>
@@ -296,7 +406,7 @@
 </div>
 <div class="p-4 border-t border-gray-800 bg-surface-dark mt-auto">
 <div class="flex justify-end gap-4 max-w-2xl mx-auto">
-<button @click="cancelProcess()" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-5 rounded-md transition-colors duration-300 text-sm">
+ <button @click="cancelProcess()" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-5 rounded-md transition-colors duration-300 text-sm">
                     Cancelar
                 </button>
 <template x-if="!anyStepFailed">
@@ -312,4 +422,31 @@
 </div>
 </div>
 </div>
+
+<!-- Modal de confirmação para cancelar -->
+<div id="cancel-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;">
+    <div class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div class="flex items-center gap-3 mb-4">
+            <span class="material-symbols-outlined text-yellow-500 text-2xl">warning</span>
+            <h3 class="text-lg font-medium text-text-dark">Cancelar Criação do Projeto</h3>
+        </div>
+        <p class="text-sm text-muted-dark mb-6">O processo de criação está em andamento. Deseja realmente cancelar?</p>
+        
+        <div class="space-y-3">
+            <button id="confirm-delete-btn" 
+                    class="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors duration-200">
+                Sim e excluir projeto
+            </button>
+            <button id="confirm-return-btn" 
+                    class="w-full px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 transition-colors duration-200">
+                Sim e voltar ao início
+            </button>
+            <button id="cancel-modal-btn" 
+                    class="w-full px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600 transition-colors duration-200">
+                Não e continuar
+            </button>
+        </div>
+    </div>
+</div>
+
 </body></html>

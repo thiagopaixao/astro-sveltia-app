@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html class="dark" lang="pt-BR"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Documental - Todos os Projetos</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style type="text/tailwindcss">
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+    .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+    }
+</style>
+<script>
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    primary: "#22c55e",
+                    "background-light": "#f3f4f6",
+                    "background-dark": "#111827",
+                    "surface-light": "#ffffff",
+                    "surface-dark": "#1f2937",
+                    "text-light": "#111827",
+                    "text-dark": "#f9fafb",
+                    "muted-light": "#6b7280",
+                    "muted-dark": "#9ca3af",
+                },
+            },
+        },
+    };
+    </script>
+<script src="script.js" defer></script>
+</head>
+<body class="bg-background-dark text-text-dark antialiased">
+<div class="flex flex-col h-screen">
+<div class="flex-1 flex items-center justify-center p-8">
+<div class="w-full max-w-4xl">
+<div class="text-center mb-8">
+<div class="flex items-center justify-center gap-4 mb-4">
+<svg class="h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<h1 class="text-4xl font-black text-text-dark">Todos os Projetos</h1>
+</div>
+<p class="text-muted-dark text-lg">Acesse todos os seus projetos criados.</p>
+</div>
+
+<div class="mb-6">
+<button data-navigate="index.html" class="flex items-center gap-2 text-muted-dark hover:text-text-dark transition-colors duration-200">
+<span class="material-symbols-outlined">arrow_back</span>
+<span>Voltar para tela inicial</span>
+</button>
+</div>
+
+<div class="bg-surface-dark rounded-lg p-6">
+<div class="flex items-center justify-between mb-4">
+<h2 class="text-xl font-semibold text-text-dark">Lista de Projetos</h2>
+<div class="text-sm text-muted-dark">
+<span id="projects-count">0</span> projetos encontrados
+</div>
+</div>
+<div class="space-y-3" id="all-projects-container">
+<!-- All projects will be loaded dynamically here -->
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Modal de confirmação para remover projeto -->
+<div id="delete-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;">
+  <div class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
+    <div class="flex items-center gap-3 mb-4">
+      <span class="material-symbols-outlined text-red-500 text-2xl">delete</span>
+      <h3 class="text-lg font-medium text-text-dark">Confirmar Remoção</h3>
+    </div>
+    <p class="text-sm text-muted-dark mb-6">Tem certeza que deseja remover este projeto? Esta ação não pode ser desfeita e irá apagar permanentemente o projeto e seus arquivos.</p>
+    <div class="mb-4">
+      <p class="text-xs text-muted-dark">Projeto:</p>
+      <p id="delete-project-name" class="text-sm font-medium text-text-dark"></p>
+    </div>
+    <div class="flex justify-end space-x-3">
+      <button id="cancel-delete" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600 transition-colors duration-200">Cancelar</button>
+      <button id="confirm-delete" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors duration-200">Remover</button>
+    </div>
+  </div>
+</div>
+
+</body></html>

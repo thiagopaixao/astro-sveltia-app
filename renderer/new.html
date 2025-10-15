@@ -39,10 +39,92 @@
     };
     </script>
 <script src="script.js" defer></script>
+<script>
+// Wait for both DOM and script.js to be ready
+function waitForElements() {
+  return new Promise((resolve) => {
+    const checkElements = () => {
+      const projectPathInput = document.getElementById('project-path');
+      const projectNameInput = document.getElementById('project-name');
+      const githubUrlInput = document.getElementById('github-url');
+      
+      if (projectPathInput && projectNameInput && githubUrlInput) {
+        resolve();
+      } else {
+        setTimeout(checkElements, 50);
+      }
+    };
+    checkElements();
+  });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Wait for elements to be available
+  await waitForElements();
+  
+  // Check if creating from folder selection
+  const createFromFolder = sessionStorage.getItem('createFromFolder');
+  const selectedProjectPath = sessionStorage.getItem('selectedProjectPath');
+  
+  if (createFromFolder === 'true' && selectedProjectPath) {
+    console.log('Creating from folder:', selectedProjectPath);
+    
+    // Small delay to ensure script.js has finished
+    setTimeout(() => {
+      // Pre-fill the project path
+      const projectPathInput = document.getElementById('project-path');
+      if (projectPathInput) {
+        projectPathInput.value = selectedProjectPath;
+        console.log('Project path set to:', projectPathInput.value);
+        
+        // Trigger input event to ensure any listeners are notified
+        projectPathInput.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        console.error('Project path input not found');
+      }
+      
+      // Get folder info and pre-fill other fields if possible
+      (async () => {
+        if (window.electronAPI && window.electronAPI.getFolderInfo) {
+          try {
+            const folderInfo = await window.electronAPI.getFolderInfo(selectedProjectPath);
+            
+            if (folderInfo.isGitRepo && folderInfo.remoteUrl) {
+              // Pre-fill GitHub URL
+              const githubUrlInput = document.getElementById('github-url');
+              if (githubUrlInput) {
+                githubUrlInput.value = folderInfo.remoteUrl;
+                githubUrlInput.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+              
+              // Pre-fill project name from repo name
+              const projectNameInput = document.getElementById('project-name');
+              if (projectNameInput && !projectNameInput.value) {
+                const repoName = folderInfo.remoteUrl.split('/').pop().replace('.git', '');
+                projectNameInput.value = repoName;
+                projectNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+            }
+            
+            // Store folder info for later use
+            sessionStorage.setItem('folderInfo', JSON.stringify(folderInfo));
+          } catch (error) {
+            console.error('Error getting folder info:', error);
+          }
+        }
+        
+        // Clear session storage
+        sessionStorage.removeItem('createFromFolder');
+        sessionStorage.removeItem('selectedProjectPath');
+      })();
+    }, 100); // Small delay to ensure script.js has finished
+  }
+});
+</script>
 </head>
 <body class="bg-background-dark text-text-dark antialiased">
 <div class="flex flex-col h-screen">
-<div class="flex-1 flex items-center justify-center p-8">
+<div class="flex-1 flex items-center justify-center p-8 pb-24">
 <div class="w-full max-w-2xl">
 <div class="text-center mb-10">
 <div class="flex items-center justify-center gap-4 mb-4">
@@ -52,6 +134,13 @@
 <h1 class="text-4xl font-black text-text-dark">Criar Novo Projeto</h1>
 </div>
 <p class="text-muted-dark text-lg">Preencha os detalhes abaixo para criar seu novo projeto.</p>
+</div>
+
+<div class="mb-6">
+<button data-navigate="index.html" class="flex items-center gap-2 text-muted-dark hover:text-text-dark transition-colors duration-200">
+<span class="material-symbols-outlined">arrow_back</span>
+<span>Voltar para tela inicial</span>
+</button>
 </div>
 <div class="bg-surface-dark rounded-lg p-8 space-y-6">
 <div>
@@ -73,12 +162,14 @@
 </div>
 </div>
 </div>
-<div class="mt-8 flex justify-end">
-<button class="bg-primary hover:bg-green-500 text-white font-bold py-3 px-8 rounded-lg flex items-center gap-2 text-lg transition-colors duration-300" id="create-project-button">
+</div>
+</div>
+<div class="p-4 border-t border-gray-800 bg-surface-dark mt-auto">
+<div class="flex justify-end max-w-2xl mx-auto">
+<button class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 text-sm" id="create-project-button">
 <span class="material-symbols-outlined">add_circle</span>
 <span>Criar Projeto</span>
 </button>
-</div>
 </div>
 </div>
 </div>
