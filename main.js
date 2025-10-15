@@ -18,39 +18,228 @@ const windowBrowserViews = new Map(); // windowId -> { editorView, viewerView }
 // Flag to prevent multiple cleanup attempts
 let isCleaningUp = false;
 
+// Secure process tracking for Documental only
+let activeDocumentalProcesses = {}; // { pid: { pid, port, projectId, startTime, command, cwd } }
+const PROCESSES_FILE = path.join(app.getPath('userData'), 'documental-processes.json');
+
+// Functions to persist Documental processes
+function loadDocumentalProcesses() {
+  try {
+    if (fs.existsSync(PROCESSES_FILE)) {
+      const data = fs.readFileSync(PROCESSES_FILE, 'utf8');
+      const processes = JSON.parse(data);
+      console.log('📂 Loaded Documental processes from file:', Object.keys(processes));
+      return processes;
+    }
+  } catch (error) {
+    console.error('Error loading Documental processes:', error);
+  }
+  return {};
+}
+
+function saveDocumentalProcesses() {
+  try {
+    fs.writeFileSync(PROCESSES_FILE, JSON.stringify(activeDocumentalProcesses, null, 2));
+    console.log('💾 Saved Documental processes to file');
+  } catch (error) {
+    console.error('Error saving Documental processes:', error);
+  }
+}
+
+function addDocumentalProcess(pid, processInfo) {
+  activeDocumentalProcesses[pid] = {
+    pid,
+    port: processInfo.port,
+    projectId: processInfo.projectId,
+    startTime: Date.now(),
+    command: processInfo.command,
+    cwd: processInfo.cwd
+  };
+  saveDocumentalProcesses();
+  console.log(`➕ Added Documental process to tracking: PID ${pid}, Port ${processInfo.port}`);
+}
+
+function removeDocumentalProcess(pid) {
+  if (activeDocumentalProcesses[pid]) {
+    delete activeDocumentalProcesses[pid];
+    saveDocumentalProcesses();
+    console.log(`➖ Removed Documental process from tracking: PID ${pid}`);
+  }
+}
+
 // Reset cleanup flag when app starts
 app.on('ready', async () => {
   isCleaningUp = false;
   console.log('🚀 App ready - cleanup flag reset');
   
-  // Clean up any orphaned processes from previous runs
-  await cleanupOrphanedProcesses();
+  // Load previously tracked Documental processes
+  activeDocumentalProcesses = loadDocumentalProcesses();
+  
+  // Clean up only Documental orphaned processes from previous runs
+  await cleanupDocumentalOrphanedProcesses();
 });
 
-// Function to clean up orphaned processes from previous runs
-async function cleanupOrphanedProcesses() {
-  console.log('🧹 Checking for orphaned processes from previous runs...');
+// Function to check if a process belongs to Documental
+async function isDocumentalProcess(pid, expectedPort = null) {
+  try {
+    if (process.platform === 'win32') {
+      // Windows: Use tasklist to get process info
+      const { spawn } = require('child_process');
+      return new Promise((resolve) => {
+        const tasklist = spawn('tasklist', ['/fi', `PID eq ${pid}`, '/fo', 'csv', '/v']);
+        let output = '';
+        
+        tasklist.stdout.on('data', (data) => {
+          output += data.toString();
+        });
+        
+        tasklist.on('close', () => {
+          const lines = output.split('\n');
+          if (lines.length > 1) {
+            const processLine = lines[1];
+            // Check if it's node.exe and has Documental-related command
+            if (processLine.includes('node.exe')) {
+              // Get command line arguments
+              const wmic = spawn('wmic', ['process', 'where', `ProcessId=${pid}`, 'get', 'CommandLine', '/value']);
+              let cmdOutput = '';
+              
+              wmic.stdout.on('data', (data) => {
+                cmdOutput += data.toString();
+              });
+              
+              wmic.on('close', () => {
+                const isDocumental = cmdOutput.includes('npm run dev') || 
+                                   cmdOutput.includes('documental') ||
+                                   cmdOutput.includes('astro');
+                console.log(`🔍 Windows process ${pid} cmdline check: ${isDocumental}`);
+                console.log(`   Command line: ${cmdOutput.substring(0, 200)}...`);
+                resolve(isDocumental);
+              });
+            } else {
+              console.log(`🔍 Windows process ${pid} is not node.exe`);
+              resolve(false);
+            }
+          } else {
+            console.log(`🔍 Windows process ${pid} not found in tasklist`);
+            resolve(false);
+          }
+        });
+      });
+    } else {
+      // Linux/Mac: Use /proc filesystem
+      if (!fs.existsSync(`/proc/${pid}`)) {
+        console.log(`🔍 Process ${pid} does not exist in /proc`);
+        return false;
+      }
+      
+      try {
+        // Read command line
+        const cmdline = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0/g, ' ');
+        const cwd = fs.readlinkSync(`/proc/${pid}/cwd`);
+        
+        console.log(`🔍 Linux process ${pid} analysis:`);
+        console.log(`   Command line: ${cmdline}`);
+        console.log(`   Working directory: ${cwd}`);
+        
+        // Check if it's a Node.js process related to Documental
+        const isNodeProcess = cmdline.includes('node');
+        const hasNpmDev = cmdline.includes('npm run dev') || cmdline.includes('npm start');
+        const isDocumentalRelated = cmdline.includes('documental') || 
+                                  cmdline.includes('astro') ||
+                                  cwd.includes('documental');
+        
+        // Consider it Documental if it has npm run dev OR is Node.js + Documental-related
+        const isDocumental = hasNpmDev || (isNodeProcess && isDocumentalRelated);
+        
+        console.log(`   Node process: ${isNodeProcess}`);
+        console.log(`   Has npm dev: ${hasNpmDev}`);
+        console.log(`   Documental related: ${isDocumentalRelated}`);
+        console.log(`   Final result: ${isDocumental}`);
+        
+        return isDocumental;
+      } catch (error) {
+        console.log(`Error checking process ${pid}:`, error.message);
+        return false;
+      }
+    }
+  } catch (error) {
+    console.log(`Error checking if process ${pid} is Documental:`, error.message);
+    return false;
+  }
+}
+
+// Function to clean up only Documental orphaned processes from previous runs
+async function cleanupDocumentalOrphanedProcesses() {
+  console.log('🧹 Checking for Documental orphaned processes from previous runs...');
   
-  // If we have a global dev server URL stored, try to kill any process on that port
-  if (globalDevServerUrl) {
-    const port = extractPortFromUrl(globalDevServerUrl);
-    if (port) {
-      console.log(`🔍 Checking for orphaned process on port ${port}...`);
-      await killProcessByPort(port);
+  const trackedProcesses = Object.values(activeDocumentalProcesses);
+  if (trackedProcesses.length === 0) {
+    console.log('📂 No previously tracked Documental processes found');
+    return;
+  }
+  
+  console.log(`📂 Found ${trackedProcesses.length} previously tracked Documental processes`);
+  
+  for (const processInfo of trackedProcesses) {
+    const { pid, port, projectId, command, cwd } = processInfo;
+    
+    console.log(`🔍 Checking tracked process: PID ${pid}, Port ${port}, Project ${projectId}, Command ${command}`);
+    
+    // Check if process is still running
+    const isRunning = await isProcessRunning(pid);
+    console.log(`📊 Process ${pid} is running: ${isRunning}`);
+    
+    if (isRunning) {
+      // Check if it belongs to Documental
+      const isDocumental = await isDocumentalProcess(pid, port);
+      console.log(`🎯 Process ${pid} is Documental: ${isDocumental}`);
+      
+      if (isDocumental) {
+        console.log(`🔍 Found Documental orphaned process: PID ${pid} on port ${port} (Project: ${projectId})`);
+        const killed = await killDocumentalProcess(pid, port);
+        if (killed) {
+          console.log(`✅ Successfully killed orphaned process ${pid}`);
+        } else {
+          console.log(`❌ Failed to kill orphaned process ${pid}`);
+        }
+      } else {
+        console.log(`⚠️ Process ${pid} is running but not Documental, removing from tracking`);
+        console.log(`   Process details: Command=${command}, CWD=${cwd}`);
+        removeDocumentalProcess(pid);
+      }
+    } else {
+      console.log(`🗑️ Process ${pid} is not running, removing from tracking`);
+      removeDocumentalProcess(pid);
     }
   }
   
-  // Also check common development ports (3000-3010, 4320-4330)
-  const commonPorts = [];
-  for (let i = 3000; i <= 3010; i++) commonPorts.push(i);
-  for (let i = 4320; i <= 4330; i++) commonPorts.push(i);
-  
-  console.log('🔍 Checking common development ports for orphaned processes...');
-  for (const port of commonPorts) {
-    await killProcessByPort(port);
+  console.log('✅ Documental orphaned process cleanup completed');
+}
+
+// Function to check if a process is still running
+async function isProcessRunning(pid) {
+  try {
+    if (process.platform === 'win32') {
+      const { spawn } = require('child_process');
+      return new Promise((resolve) => {
+        const tasklist = spawn('tasklist', ['/fi', `PID eq ${pid}`, '/fo', 'csv']);
+        let output = '';
+        
+        tasklist.stdout.on('data', (data) => {
+          output += data.toString();
+        });
+        
+        tasklist.on('close', () => {
+          resolve(output.includes(pid.toString()));
+        });
+      });
+    } else {
+      // Linux/Mac: Check if /proc/pid exists
+      return fs.existsSync(`/proc/${pid}`);
+    }
+  } catch (error) {
+    return false;
   }
-  
-  console.log('✅ Orphaned process cleanup completed');
 }
 
 // Function to check if a process is still alive
@@ -109,9 +298,100 @@ async function killProcess(processId, process) {
   }
 }
 
-// Function to kill process by port (fallback method)
+// Function to kill only Documental processes by port
+async function killDocumentalProcess(pid, port) {
+  console.log(`🔍 Attempting to kill Documental process: PID ${pid} on port ${port}`);
+  
+  try {
+    // First verify it's actually a Documental process
+    const isDocumental = await isDocumentalProcess(pid, port);
+    if (!isDocumental) {
+      console.log(`⚠️ Process ${pid} is not a Documental process, skipping`);
+      removeDocumentalProcess(pid);
+      return false;
+    }
+    
+    // Kill the process safely and wait for it to complete
+    console.log(`🔪 Sending kill signal to process ${pid}...`);
+    
+    if (process.platform === 'win32') {
+      await new Promise((resolve, reject) => {
+        const taskkill = spawn('taskkill', ['/F', '/PID', pid]);
+        taskkill.on('close', (code) => {
+          if (code === 0) {
+            console.log(`✅ taskkill completed successfully for PID ${pid}`);
+            resolve();
+          } else {
+            console.log(`⚠️ taskkill exited with code ${code} for PID ${pid}`);
+            resolve(); // Still resolve, process might already be dead
+          }
+        });
+        taskkill.on('error', (error) => {
+          console.log(`⚠️ taskkill error for PID ${pid}:`, error.message);
+          resolve(); // Still resolve, process might already be dead
+        });
+      });
+    } else {
+      await new Promise((resolve, reject) => {
+        const kill = spawn('kill', ['-9', pid]);
+        kill.on('close', (code) => {
+          if (code === 0) {
+            console.log(`✅ kill completed successfully for PID ${pid}`);
+            resolve();
+          } else {
+            console.log(`⚠️ kill exited with code ${code} for PID ${pid}`);
+            resolve(); // Still resolve, process might already be dead
+          }
+        });
+        kill.on('error', (error) => {
+          console.log(`⚠️ kill error for PID ${pid}:`, error.message);
+          resolve(); // Still resolve, process might already be dead
+        });
+      });
+    }
+    
+    // Wait a moment for the process to actually die
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Verify the process is actually dead
+    const isStillRunning = await isProcessRunning(pid);
+    if (isStillRunning) {
+      console.log(`⚠️ Process ${pid} is still running after kill attempt, trying alternative method...`);
+      
+      // Try alternative method
+      if (process.platform === 'win32') {
+        spawn('wmic', ['process', 'where', `ProcessId=${pid}`, 'delete']);
+      } else {
+        spawn('pkill', ['-f', `npm run dev`]);
+      }
+      
+      // Wait again
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Final check
+      const finalCheck = await isProcessRunning(pid);
+      if (finalCheck) {
+        console.log(`❌ Process ${pid} survived all kill attempts!`);
+        return false;
+      } else {
+        console.log(`✅ Process ${pid} finally killed with alternative method`);
+      }
+    } else {
+      console.log(`✅ Successfully killed Documental process ${pid}`);
+    }
+    
+    // Only remove from tracking after confirming it's dead
+    removeDocumentalProcess(pid);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error killing Documental process ${pid}:`, error.message);
+    return false;
+  }
+}
+
+// Function to kill process by port (only for Documental processes)
 async function killProcessByPort(port) {
-  console.log(`🔍 Attempting to kill process using port ${port}`);
+  console.log(`🔍 Checking for Documental processes using port ${port}`);
   
   return new Promise((resolve) => {
     const { spawn } = require('child_process');
@@ -125,19 +405,29 @@ async function killProcessByPort(port) {
         output += data.toString();
       });
       
-      netstat.on('close', () => {
+      netstat.on('close', async () => {
         const lines = output.split('\n');
+        let killedCount = 0;
+        
         for (const line of lines) {
           if (line.includes(`:${port}`) && line.includes('LISTENING')) {
             const parts = line.trim().split(/\s+/);
             const pid = parts[parts.length - 1];
             if (pid && pid !== '0') {
-              console.log(`🔪 Found process ${pid} using port ${port}, killing...`);
-              spawn('taskkill', ['/F', '/PID', pid]);
+              const isDocumental = await isDocumentalProcess(parseInt(pid), port);
+              if (isDocumental) {
+                console.log(`🔪 Found Documental process ${pid} using port ${port}, killing...`);
+                spawn('taskkill', ['/F', '/PID', pid]);
+                killedCount++;
+              } else {
+                console.log(`⚠️ Process ${pid} on port ${port} is not Documental, skipping`);
+              }
             }
           }
         }
-        resolve();
+        
+        console.log(`✅ Killed ${killedCount} Documental processes on port ${port}`);
+        resolve(killedCount);
       });
     } else {
       // Unix-like: use lsof
@@ -148,13 +438,24 @@ async function killProcessByPort(port) {
         output += data.toString();
       });
       
-      lsof.on('close', () => {
+      lsof.on('close', async () => {
         const pids = output.trim().split('\n').filter(pid => pid);
-        for (const pid of pids) {
-          console.log(`🔪 Found process ${pid} using port ${port}, killing...`);
-          spawn('kill', ['-9', pid]);
+        let killedCount = 0;
+        
+        for (const pidStr of pids) {
+          const pid = parseInt(pidStr);
+          const isDocumental = await isDocumentalProcess(pid, port);
+          if (isDocumental) {
+            console.log(`🔪 Found Documental process ${pid} using port ${port}, killing...`);
+            spawn('kill', ['-9', pid]);
+            killedCount++;
+          } else {
+            console.log(`⚠️ Process ${pid} on port ${port} is not Documental, skipping`);
+          }
         }
-        resolve();
+        
+        console.log(`✅ Killed ${killedCount} Documental processes on port ${port}`);
+        resolve(killedCount);
       });
     }
   });
@@ -166,7 +467,7 @@ function extractPortFromUrl(url) {
   return match ? parseInt(match[1]) : null;
 }
 
-// Function to kill all active processes
+// Function to kill all active Documental processes
 async function killAllActiveProcesses() {
   if (isCleaningUp) {
     console.log('⚠️  Cleanup already in progress, skipping...');
@@ -175,50 +476,46 @@ async function killAllActiveProcesses() {
   
   isCleaningUp = true;
   const processIds = Object.keys(activeProcesses);
-  console.log(`🔄 Killing all active processes... Found ${processIds.length} processes:`, processIds);
+  console.log(`🔄 Killing all active Documental processes... Found ${processIds.length} processes:`, processIds);
   
-  if (processIds.length === 0) {
+  // First, kill tracked active processes
+  if (processIds.length > 0) {
+    const killPromises = processIds.map(async (processId) => {
+      const process = activeProcesses[processId];
+      const success = await killProcess(processId, process);
+      delete activeProcesses[processId];
+      return success;
+    });
+    
+    const results = await Promise.all(killPromises);
+    const successCount = results.filter(r => r).length;
+    const failCount = results.length - successCount;
+    
+    console.log(`📊 Active process kill results: ${successCount} successful, ${failCount} failed`);
+  } else {
     console.log('✅ No active processes to kill');
-    return;
   }
   
-  // Store URLs for fallback port killing
-  const urlsToKill = [];
-  
-  // Kill all registered processes
-  const killPromises = processIds.map(async (processId) => {
-    const process = activeProcesses[processId];
+  // Then, clean up any remaining tracked Documental processes
+  const trackedProcesses = Object.values(activeDocumentalProcesses);
+  if (trackedProcesses.length > 0) {
+    console.log(`🔄 Cleaning up ${trackedProcesses.length} tracked Documental processes...`);
     
-    // Store URL for fallback if it's a dev server
-    if (processId.includes('dev-') && globalDevServerUrl) {
-      urlsToKill.push(globalDevServerUrl);
-    }
-    
-    const success = await killProcess(processId, process);
-    delete activeProcesses[processId];
-    return success;
-  });
-  
-  // Wait for all kills to complete
-  const results = await Promise.all(killPromises);
-  const successCount = results.filter(r => r).length;
-  const failCount = results.length - successCount;
-  
-  console.log(`📊 Kill results: ${successCount} successful, ${failCount} failed`);
-  
-  // Fallback: kill by port if any processes failed
-  if (failCount > 0 || urlsToKill.length > 0) {
-    console.log('🔄 Using fallback method: killing by port...');
-    
-    for (const url of urlsToKill) {
-      const port = extractPortFromUrl(url);
-      if (port) {
-        await killProcessByPort(port);
-      }
+    for (const processInfo of trackedProcesses) {
+      await killDocumentalProcess(processInfo.pid, processInfo.port);
     }
   }
   
-  console.log('✅ All active processes killed (or attempted)');
+  // Fallback: only kill by port if we have a global dev server URL
+  if (globalDevServerUrl) {
+    const port = extractPortFromUrl(globalDevServerUrl);
+    if (port) {
+      console.log('🔄 Using fallback method: killing Documental processes by port...');
+      await killProcessByPort(port);
+    }
+  }
+  
+  console.log('✅ All Documental processes killed (or attempted)');
 }
 
 function createWindow() {
@@ -542,6 +839,18 @@ app.whenReady().then(() => {
           if (match) {
             devServerUrl = match[0];
             globalDevServerUrl = devServerUrl;
+            
+            // Extract port and update the tracked Documental process
+            const port = extractPortFromUrl(devServerUrl);
+            if (port && devProcess.pid) {
+              // Update the process with port information
+              if (activeDocumentalProcesses[devProcess.pid]) {
+                activeDocumentalProcesses[devProcess.pid].port = port;
+                saveDocumentalProcesses();
+                console.log(`📝 Updated Documental process ${devProcess.pid} with port ${port}`);
+              }
+            }
+            
             console.log(`URL do servidor de desenvolvimento: ${devServerUrl}`);
             // Send to all windows for synchronization
             const allWindows = BrowserWindow.getAllWindows();
@@ -559,11 +868,24 @@ app.whenReady().then(() => {
       const devProcess = spawn('npm', ['run', 'dev'], { cwd: repoDirPath });
       activeProcesses[`dev-reopen-${projectId}`] = devProcess;
 
+      // Track this as a Documental process
+      if (devProcess.pid) {
+        addDocumentalProcess(devProcess.pid, {
+          port: null, // Will be updated when URL is detected
+          projectId: projectId,
+          command: 'npm run dev',
+          cwd: repoDirPath
+        });
+      }
+
       devProcess.stdout.on('data', processOutput);
       devProcess.stderr.on('data', processOutput);
 
       devProcess.on('close', (code) => {
         delete activeProcesses[`dev-reopen-${projectId}`];
+        if (devProcess.pid) {
+          removeDocumentalProcess(devProcess.pid);
+        }
         if (code !== 0) {
           sendOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
           sendStatus('failure');
@@ -572,6 +894,9 @@ app.whenReady().then(() => {
 
       devProcess.on('error', (err) => {
         delete activeProcesses[`dev-reopen-${projectId}`];
+        if (devProcess.pid) {
+          removeDocumentalProcess(devProcess.pid);
+        }
         sendOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
         sendStatus('failure');
       });
@@ -769,6 +1094,18 @@ app.whenReady().then(() => {
           if (match) {
             devServerUrl = match[0];
             globalDevServerUrl = devServerUrl; // Store globally
+            
+            // Extract port and update the tracked Documental process
+            const port = extractPortFromUrl(devServerUrl);
+            if (port && devProcess.pid) {
+              // Update the process with port information
+              if (activeDocumentalProcesses[devProcess.pid]) {
+                activeDocumentalProcesses[devProcess.pid].port = port;
+                saveDocumentalProcesses();
+                console.log(`📝 Updated Documental process ${devProcess.pid} with port ${port}`);
+              }
+            }
+            
             console.log(`Development server URL: ${devServerUrl}`);
             // Send to all windows for synchronization
             const allWindows = BrowserWindow.getAllWindows();
@@ -786,11 +1123,24 @@ app.whenReady().then(() => {
       const devProcess = spawn('npm', ['run', 'dev'], { cwd: repoDirPath });
       activeProcesses[`dev-${projectId}`] = devProcess;
 
+      // Track this as a Documental process
+      if (devProcess.pid) {
+        addDocumentalProcess(devProcess.pid, {
+          port: null, // Will be updated when URL is detected
+          projectId: projectId,
+          command: 'npm run dev',
+          cwd: repoDirPath
+        });
+      }
+
       devProcess.stdout.on('data', processOutput);
       devProcess.stderr.on('data', processOutput);
 
       devProcess.on('close', (code) => {
         delete activeProcesses[`dev-${projectId}`];
+        if (devProcess.pid) {
+          removeDocumentalProcess(devProcess.pid);
+        }
         if (code !== 0) {
           sendOutput(`Development server exited with code ${code}\n`);
           sendStatus('failure');
@@ -799,6 +1149,9 @@ app.whenReady().then(() => {
 
       devProcess.on('error', (err) => {
         delete activeProcesses[`dev-${projectId}`];
+        if (devProcess.pid) {
+          removeDocumentalProcess(devProcess.pid);
+        }
         sendOutput(`Failed to start development server: ${err.message}\n`);
         sendStatus('failure');
       });
@@ -824,11 +1177,19 @@ app.whenReady().then(() => {
 ipcMain.handle('cancel-project-creation', async (event, projectId, projectPath, repoFolderName) => {
     // Terminate active processes for this project
     if (activeProcesses[projectId]) {
-      activeProcesses[projectId].kill();
+      const process = activeProcesses[projectId];
+      if (process.pid) {
+        removeDocumentalProcess(process.pid);
+      }
+      process.kill();
       delete activeProcesses[projectId];
     }
     if (activeProcesses[`dev-${projectId}`]) {
-      activeProcesses[`dev-${projectId}`].kill();
+      const process = activeProcesses[`dev-${projectId}`];
+      if (process.pid) {
+        removeDocumentalProcess(process.pid);
+      }
+      process.kill();
       delete activeProcesses[`dev-${projectId}`];
     }
 
