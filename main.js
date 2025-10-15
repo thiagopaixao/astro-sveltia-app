@@ -47,7 +47,8 @@ function initializeDatabase() {
         projectName TEXT NOT NULL,
         githubUrl TEXT NOT NULL,
         projectPath TEXT NOT NULL,
-        repoFolderName TEXT
+        repoFolderName TEXT,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )`, (err) => {
         if (err) {
           console.error('Error creating projects table:', err.message);
@@ -93,6 +94,19 @@ app.whenReady().then(() => {
     });
   });
 
+  ipcMain.handle('get-recent-projects', async () => {
+    return new Promise((resolve, reject) => {
+      db.all(`SELECT id, projectName, projectPath, repoFolderName FROM projects ORDER BY createdAt DESC LIMIT 3`, (err, rows) => {
+        if (err) {
+          console.error('Error getting recent projects:', err.message);
+          reject(err.message);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  });
+
   ipcMain.handle('save-project', async (event, projectData) => {
     return new Promise((resolve, reject) => {
       const { projectName, githubUrl, projectPath } = projectData;
@@ -109,6 +123,132 @@ app.whenReady().then(() => {
         }
       );
     });
+  });
+
+  ipcMain.handle('reopen-project', async (event, projectId, projectPath, githubUrl, repoFolderName) => {
+    const sendOutput = (output) => {
+      mainWindow.webContents.send('command-output', output);
+    };
+
+    const sendStatus = (status) => {
+      mainWindow.webContents.send('command-status', status);
+    };
+
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    const executeCommand = (command, args, cwd, processId) => {
+      return new Promise((resolve, reject) => {
+        const child = spawn(command, args, { cwd });
+        activeProcesses[processId] = child;
+
+        child.stdout.on('data', (data) => {
+          sendOutput(data.toString());
+        });
+
+        child.stderr.on('data', (data) => {
+          sendOutput(data.toString());
+        });
+
+        child.on('close', (code) => {
+          delete activeProcesses[processId];
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(`Command failed with code ${code}`);
+          }
+        });
+
+        child.on('error', (err) => {
+          delete activeProcesses[processId];
+          reject(`Failed to start command: ${err.message}`);
+        });
+      });
+    };
+
+    try {
+      const repoDirPath = path.join(projectPath, repoFolderName);
+
+      // Step 4: npm run build
+      sendOutput('Construindo projeto...\n');
+      await executeCommand('npm', ['run', 'build'], repoDirPath, `reopen-${projectId}`);
+      sendOutput('Projeto construído.\n');
+      sendStatus('success');
+      await delay(3000);
+
+      // Step 5: npm run dev (keep in background)
+      sendOutput('Iniciando servidor de desenvolvimento...\n');
+      const devProcess = spawn('npm', ['run', 'dev'], { cwd: repoDirPath });
+      activeProcesses[`dev-reopen-${projectId}`] = devProcess;
+
+      devProcess.stdout.on('data', (data) => {
+        sendOutput(data.toString());
+      });
+
+      devProcess.stderr.on('data', (data) => {
+        sendOutput(data.toString());
+      });
+
+      devProcess.on('close', (code) => {
+        delete activeProcesses[`dev-reopen-${projectId}`];
+        if (code !== 0) {
+          sendOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
+          sendStatus('failure');
+        }
+      });
+
+      let serverReady = false;
+      const checkServerReady = (data) => {
+        if (!serverReady && (data.includes('ready') || data.includes('compiled successfully') || data.includes('listening on'))) {
+          serverReady = true;
+          sendOutput('Servidor de desenvolvimento está pronto.\n');
+          sendStatus('success');
+        }
+      };
+
+      let devServerUrl = null;
+      const urlRegex = /http:\/\/localhost:\d+\//;
+
+      const processOutput = (data) => {
+        const output = data.toString();
+        sendOutput(output);
+        checkServerReady(output);
+
+        if (!devServerUrl) {
+          const match = output.match(urlRegex);
+          if (match) {
+            devServerUrl = match[0];
+            globalDevServerUrl = devServerUrl;
+            console.log(`URL do servidor de desenvolvimento: ${devServerUrl}`);
+            mainWindow.webContents.send('dev-server-url', devServerUrl);
+          }
+        }
+      };
+
+      devProcess.stdout.on('data', processOutput);
+      devProcess.stderr.on('data', processOutput);
+
+      devProcess.on('close', (code) => {
+        delete activeProcesses[`dev-reopen-${projectId}`];
+        if (code !== 0) {
+          sendOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
+          sendStatus('failure');
+        } else if (!serverReady) {
+          sendOutput('Servidor de desenvolvimento encerrado sem sinalizar prontidão.\n');
+          sendStatus('failure');
+        }
+      });
+
+      devProcess.on('error', (err) => {
+        delete activeProcesses[`dev-reopen-${projectId}`];
+        sendOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
+        sendStatus('failure');
+      });
+
+      sendOutput('Servidor de desenvolvimento iniciado em segundo plano. Aguardando sinal de prontidão...\n');
+    } catch (error) {
+      sendOutput(`Erro durante a reabertura do projeto: ${error}\n`);
+      sendStatus('failure');
+    }
   });
 
   ipcMain.handle('start-project-creation', async (event, projectId, projectPath, githubUrl) => {

@@ -99,6 +99,8 @@
         },
         init() {
             this.projectId = sessionStorage.getItem('currentProjectId');
+            this.isReopenMode = sessionStorage.getItem('reopenMode') === 'true';
+            
             if (!this.projectId) {
                 console.error('No project ID found in session storage.');
                 this.processFailed = true;
@@ -108,6 +110,13 @@
             const savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${this.projectId}`));
             if (savedState) {
                 Object.assign(this.$data, savedState);
+            } else if (this.isReopenMode) {
+                // For reopen mode, mark first 3 steps as completed
+                this.steps[0].status = 'success';
+                this.steps[1].status = 'success';
+                this.steps[2].status = 'success';
+                this.steps[3].status = 'active';
+                this.activeStepId = 4;
             } else {
                 this.steps[0].status = 'active';
             }
@@ -180,7 +189,13 @@
 
                 // If process was not finished, restart it
                 if (!this.processFinished) {
-                    await window.electronAPI.startProjectCreation(this.projectId, this.projectPath, this.githubUrl);
+                    if (this.isReopenMode && this.repoFolderName) {
+                        // For reopen mode, only run build and dev server
+                        await window.electronAPI.reopenProject(this.projectId, this.projectPath, this.githubUrl, this.repoFolderName);
+                    } else {
+                        // For new projects, run full creation process
+                        await window.electronAPI.startProjectCreation(this.projectId, this.projectPath, this.githubUrl);
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching project details or starting creation:', error);
@@ -202,16 +217,35 @@
             // Clear session storage for this project
             sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
             sessionStorage.removeItem('currentProjectId');
+            sessionStorage.removeItem('reopenMode');
             window.close();
         },
         async retryProcess() {
             this.processFinished = false;
             this.processFailed = false;
-            this.activeStepId = 1;
-            this.steps.forEach((step, index) => {
-                step.status = index === 0 ? 'active' : 'pending';
-                step.log = '';
-            });
+            
+            if (this.isReopenMode) {
+                this.activeStepId = 4;
+                this.steps.forEach((step, index) => {
+                    if (index < 3) {
+                        step.status = 'success';
+                        step.log = 'Passo concluído anteriormente.';
+                    } else if (index === 3) {
+                        step.status = 'active';
+                        step.log = '';
+                    } else {
+                        step.status = 'pending';
+                        step.log = '';
+                    }
+                });
+            } else {
+                this.activeStepId = 1;
+                this.steps.forEach((step, index) => {
+                    step.status = index === 0 ? 'active' : 'pending';
+                    step.log = '';
+                });
+            }
+            
             sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
             await this.startCreationProcess();
         }
@@ -222,8 +256,8 @@
 <div class="flex items-center justify-center gap-4 mb-3">
 <div class="creative-loader"></div>
 </div>
-<h1 class="text-3xl font-bold text-text-dark">Criando Espaço de Trabalho</h1>
-<p class="text-muted-dark text-base mt-1">Aguarde enquanto preparamos tudo para você.</p>
+<h1 class="text-3xl font-bold text-text-dark" x-text="isReopenMode ? 'Reabrindo Espaço de Trabalho' : 'Criando Espaço de Trabalho'"></h1>
+<p class="text-muted-dark text-base mt-1" x-text="isReopenMode ? 'Aguarde enquanto preparamos seu projeto novamente.' : 'Aguarde enquanto preparamos tudo para você.'"></p>
 </div>
 <div class="bg-surface-dark rounded-lg p-4 space-y-2">
 <template :key="step.id" x-for="(step, index) in steps">
