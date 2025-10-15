@@ -82,6 +82,11 @@
         [x-cloak] {
             display: none !important;
         }
+        .content-loader {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
 <script>
         tailwind.config = {
@@ -137,9 +142,11 @@ clearingCache: false,
     currentBranch: 'stage',
     branchAction: 'change',
     copySuccess: false,
-    initialLoading: true,
-    viewerLoaded: false,
-    editorLoaded: false,
+     initialLoading: true,
+     contentLoading: false,
+     contentReady: false,
+     viewerLoaded: false,
+     editorLoaded: false,
     devServerUrl: 'https://documental.xyz/', // Default fallback
     viewerScreenshot: null,
     editorScreenshot: null,
@@ -231,6 +238,8 @@ clearingCache: false,
                 
                 // Show loading state during reload
                 this.initialLoading = true;
+                this.contentLoading = false;
+                this.contentReady = false;
                 this.viewerLoaded = false;
                 this.editorLoaded = false;
                 
@@ -398,6 +407,8 @@ clearingCache: false,
         console.log('🚀 INIT STARTED - Renderer initialization beginning');
         console.log('📊 Initial Alpine.js state:', {
             initialLoading: this.initialLoading,
+            contentLoading: this.contentLoading,
+            contentReady: this.contentReady,
             viewerLoaded: this.viewerLoaded,
             editorLoaded: this.editorLoaded
         });
@@ -513,6 +524,8 @@ clearingCache: false,
         console.log('🚀 Initial BrowserView load - viewerUrl:', this.viewerUrl, 'editorUrl:', this.editorUrl);
         console.log('📊 Initial loading state:', {
             initialLoading: this.initialLoading,
+            contentLoading: this.contentLoading,
+            contentReady: this.contentReady,
             viewerLoaded: this.viewerLoaded,
             editorLoaded: this.editorLoaded
         });
@@ -521,6 +534,8 @@ clearingCache: false,
         if (!this.initialLoading) {
             console.log('⚠️ initialLoading was false, setting it back to true');
             this.initialLoading = true;
+            this.contentLoading = false;
+            this.contentReady = false;
             this.viewerLoaded = false;
             this.editorLoaded = false;
         }
@@ -530,6 +545,8 @@ clearingCache: false,
         console.log('✅ Initial BrowserView load completed');
         console.log('📊 Loading state after load:', {
             initialLoading: this.initialLoading,
+            contentLoading: this.contentLoading,
+            contentReady: this.contentReady,
             viewerLoaded: this.viewerLoaded,
             editorLoaded: this.editorLoaded
         });
@@ -586,13 +603,15 @@ clearingCache: false,
 
         // Fallback timeout to ensure loading animation doesn't get stuck
         setTimeout(() => {
-            if (this.initialLoading) {
+            if (this.initialLoading || this.contentLoading) {
                 console.log('⏰ Loading timeout - forcing loading to complete');
                 this.initialLoading = false;
+                this.contentLoading = false;
+                this.contentReady = false;
                 this.viewerLoaded = true;
                 this.editorLoaded = true;
             }
-        }, 10000); // 10 seconds fallback
+        }, 12000); // 12 seconds fallback (increased for new states)
 
         // Set up exit confirmation handlers
         if (window.electronAPI && window.electronAPI.onShowExitConfirmation) {
@@ -705,7 +724,7 @@ clearingCache: false,
         if (this.activeTab !== 'editor') {
             this.addressValue = url;
         }
-        if (this.initialLoading) {
+        if (this.initialLoading || this.contentLoading) {
             this.viewerLoaded = false;
             console.log('🔄 Viewer loading reset - viewerLoaded set to false');
         }
@@ -723,7 +742,7 @@ clearingCache: false,
         if (this.activeTab === 'editor') {
             this.addressValue = url;
         }
-        if (this.initialLoading) {
+        if (this.initialLoading || this.contentLoading) {
             this.editorLoaded = false;
             console.log('🔄 Editor loading reset - editorLoaded set to false');
         }
@@ -804,6 +823,8 @@ clearingCache: false,
     markViewLoaded(target) {
         console.log(`📝 markViewLoaded called for ${target}. Current state:`, {
             initialLoading: this.initialLoading,
+            contentLoading: this.contentLoading,
+            contentReady: this.contentReady,
             editorLoaded: this.editorLoaded,
             viewerLoaded: this.viewerLoaded
         });
@@ -816,9 +837,24 @@ clearingCache: false,
             console.log('✅ Viewer marked as loaded');
         }
         
-        if (this.initialLoading && this.editorLoaded && this.viewerLoaded) {
-            console.log('🎉 Both BrowserViews loaded - hiding loading animation');
+        // Transition to content loading state when first view loads
+        if (this.initialLoading && (this.editorLoaded || this.viewerLoaded)) {
+            console.log('🔄 First view loaded - transitioning to content loading');
+            this.contentLoading = true;
             this.initialLoading = false;
+        }
+        
+        // Transition to content ready when both views are loaded
+        if (this.contentLoading && this.editorLoaded && this.viewerLoaded) {
+            console.log('🎉 Both BrowserViews loaded - transitioning to content ready');
+            this.contentReady = true;
+            
+            // Final transition to complete loading after a short delay
+            setTimeout(() => {
+                console.log('✨ Loading complete - hiding all loading states');
+                this.contentLoading = false;
+                this.contentReady = false;
+            }, 300); // 300ms for smooth transition
         }
     },
     updateBrowserViewBounds() {
@@ -989,13 +1025,53 @@ clearingCache: false,
     <!-- Placeholder for BrowserViews, which are managed by the main process -->
     <div class="w-full h-full absolute inset-0 pointer-events-none"></div>
 
-    <div x-cloak x-show="initialLoading || clearingCache" class="absolute inset-0 z-30 flex flex-col items-center justify-center space-y-4 bg-background-dark">
+    <!-- Initial Loading State -->
+    <div x-cloak x-show="initialLoading || clearingCache" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="absolute inset-0 z-30 flex flex-col items-center justify-center space-y-4 bg-background-dark">
         <div class="initial-loader">
             <span class="initial-loader__dot"></span>
             <span class="initial-loader__dot"></span>
             <span class="initial-loader__dot"></span>
         </div>
         <p class="text-xs uppercase tracking-[0.3em] text-muted-dark" x-text="clearingCache ? 'limpando cache...' : 'carregando ambiente'"></p>
+    </div>
+
+    <!-- Content Loading State -->
+    <div x-cloak x-show="contentLoading" 
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-500"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="absolute inset-0 z-20 flex flex-col items-center justify-center space-y-4 bg-background-dark">
+        <div class="content-loader">
+            <div class="w-16 h-16 border-4 border-gray-600 border-t-primary rounded-full animate-spin"></div>
+        </div>
+        <p class="text-xs uppercase tracking-[0.3em] text-muted-dark">preparando conteúdo</p>
+    </div>
+
+    <!-- Content Ready State (fade out) -->
+    <div x-cloak x-show="contentReady" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-300"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background-dark">
+        <div class="text-center">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-primary flex items-center justify-center">
+                <span class="material-icons text-white text-xl">check</span>
+            </div>
+            <p class="text-sm text-text-dark">pronto!</p>
+        </div>
     </div>
 
     <!-- Screenshot overlays for modals/menus -->

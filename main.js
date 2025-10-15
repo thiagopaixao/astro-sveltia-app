@@ -1015,38 +1015,68 @@ ipcMain.on('navigate', (event, page) => {
         console.log(`🎯 Setting up load tracking for ${viewName} BrowserView`);
         
         let hasFired = false;
+        let domReady = false;
+        let loadStopped = false;
+        
         const fireLoadedEvent = () => {
           if (hasFired) return;
+          
+          // Only fire when both DOM is ready AND loading has stopped
+          if (!domReady || !loadStopped) {
+            console.log(`⏳ ${viewName} waiting for both events - DOM: ${domReady}, LoadStopped: ${loadStopped}`);
+            return;
+          }
+          
           hasFired = true;
           
           const window = targetWindow || mainWindow;
           if (window && !window.isDestroyed()) {
             const currentUrl = view.webContents.getURL();
-            console.log(`✅ ${viewName} BrowserView loaded successfully: ${currentUrl}`);
-            // Send to all windows for synchronization
-            broadcastToAllWindows('browser-view-loaded', { viewName, url: currentUrl });
+            console.log(`✅ ${viewName} BrowserView fully loaded and ready: ${currentUrl}`);
+            
+            // Additional delay to ensure content is actually rendered
+            setTimeout(() => {
+              // Send to all windows for synchronization
+              broadcastToAllWindows('browser-view-loaded', { viewName, url: currentUrl });
+            }, 800); // 800ms delay for content rendering
           }
         };
 
-        // Try multiple events to ensure loading is detected
-        view.webContents.once('did-finish-load', () => {
-          console.log(`📄 ${viewName} did-finish-load fired`);
-          // Add a small delay to ensure content is ready
-          setTimeout(fireLoadedEvent, 100);
-        });
-        
+        // Track when DOM content is ready
         view.webContents.once('dom-content-loaded', () => {
           console.log(`🌳 ${viewName} dom-content-loaded fired`);
-          setTimeout(fireLoadedEvent, 200);
+          domReady = true;
+          fireLoadedEvent();
+        });
+        
+        // Track when loading has completely stopped (better than did-finish-load)
+        view.webContents.once('did-stop-loading', () => {
+          console.log(`🛑 ${viewName} did-stop-loading fired`);
+          loadStopped = true;
+          fireLoadedEvent();
+        });
+        
+        // Fallback: also listen to did-finish-load as backup
+        view.webContents.once('did-finish-load', () => {
+          console.log(`📄 ${viewName} did-finish-load fired (backup)`);
+          if (!loadStopped) {
+            loadStopped = true;
+            fireLoadedEvent();
+          }
         });
         
         // Fallback timeout to prevent loading from getting stuck
         setTimeout(() => {
           if (!hasFired) {
             console.log(`⏰ ${viewName} loading timeout - firing anyway`);
-            fireLoadedEvent();
+            hasFired = true;
+            const window = targetWindow || mainWindow;
+            if (window && !window.isDestroyed()) {
+              const currentUrl = view.webContents.getURL();
+              broadcastToAllWindows('browser-view-loaded', { viewName, url: currentUrl });
+            }
           }
-        }, 5000);
+        }, 8000); // Increased to 8 seconds
       };
 
       // IPC handlers for BrowserView control
