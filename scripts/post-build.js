@@ -30,15 +30,16 @@ class PostBuildProcessor {
   getDistPaths() {
     const paths = [];
     
-    // Check for different Linux build outputs
-    const linuxBuilds = [
+    // Check for different build outputs
+    const builds = [
       'linux-unpacked',
-      'AppImage',
+      'AppImage', 
       'deb',
-      'snap'
+      'snap',
+      'win-unpacked'
     ];
 
-    linuxBuilds.forEach(build => {
+    builds.forEach(build => {
       const buildPath = path.join(this.distBasePath, build);
       if (fs.existsSync(buildPath)) {
         const appPath = path.join(buildPath, 'resources', 'app.asar.unpacked', 'node_modules');
@@ -101,36 +102,53 @@ class PostBuildProcessor {
   verifyBuildIntegrity(distPath) {
     console.log('🔍 Verifying build integrity...');
     
-    const checks = [
-      {
-        name: 'Main executable',
-        check: () => {
-          const executablePath = path.join(distPath, '..', '..', '..', 'app-git-electron');
-          return this.checkExecutable(executablePath);
+    // Determine platform based on path
+    const isWindows = distPath.includes('win-unpacked');
+    const isLinux = distPath.includes('linux-unpacked') || distPath.includes('AppImage');
+    
+    const checks = [];
+    
+    if (isWindows) {
+      checks.push(
+        {
+          name: 'Main executable (Documental.exe)',
+          check: () => {
+            const executablePath = path.join(distPath, '..', '..', '..', 'Documental.exe');
+            return this.checkExecutable(executablePath);
+          }
+        },
+        {
+          name: 'ASAR archive exists',
+          check: () => {
+            const asarPath = path.join(distPath, '..', '..', 'app.asar');
+            return fs.existsSync(asarPath);
+          }
         }
-      },
+      );
+    }
+    
+    // Common checks
+    checks.push(
       {
-        name: 'Main.js exists',
+        name: 'Critical modules present',
         check: () => {
-          const mainJsPath = path.join(distPath, '..', '..', 'main.js');
-          return fs.existsSync(mainJsPath);
-        }
-      },
-      {
-        name: 'Package.json exists',
-        check: () => {
-          const packageJsonPath = path.join(distPath, '..', '..', 'package.json');
-          return fs.existsSync(packageJsonPath);
-        }
-      },
-      {
-        name: 'Renderer files exist',
-        check: () => {
-          const rendererPath = path.join(distPath, '..', '..', 'renderer');
-          return fs.existsSync(rendererPath) && fs.existsSync(path.join(rendererPath, 'index.html'));
+          return this.criticalModules.every(module => this.verifyModule(module, distPath));
         }
       }
-    ];
+    );
+    
+    // Only check for package.json in non-ASAR builds
+    if (!isWindows) {
+      checks.push(
+        {
+          name: 'Package.json exists',
+          check: () => {
+            const packageJsonPath = path.join(distPath, '..', 'package.json');
+            return fs.existsSync(packageJsonPath);
+          }
+        }
+      );
+    }
 
     const results = checks.map(({ name, check }) => {
       try {

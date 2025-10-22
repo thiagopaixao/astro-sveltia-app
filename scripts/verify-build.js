@@ -27,14 +27,15 @@ class BuildVerifier {
   getDistPaths() {
     const paths = [];
     
-    const linuxBuilds = [
+    const builds = [
       'linux-unpacked',
       'AppImage',
       'deb',
-      'snap'
+      'snap',
+      'win-unpacked'
     ];
 
-    linuxBuilds.forEach(build => {
+    builds.forEach(build => {
       const buildPath = path.join(this.distBasePath, build);
       if (fs.existsSync(buildPath)) {
         const appPath = path.join(buildPath, 'resources', 'app.asar.unpacked', 'node_modules');

@@ -13,12 +13,18 @@
     "build:linux:dir": "electron-builder --linux dir",
     "build:linux:snap": "electron-builder --linux snap",
     "build:linux:appimage": "electron-builder --linux AppImage",
+    "build:win": "electron-builder --win portable",
     "dist": "npm run build && node scripts/post-build.js",
     "build:fixed": "npm run build:linux:appimage && node scripts/post-build.js",
     "verify-build": "node scripts/verify-build.js",
     "clean": "rimraf dist"
   },
-  "keywords": ["documentation", "git", "github", "development"],
+  "keywords": [
+    "documentation",
+    "git",
+    "github",
+    "development"
+  ],
   "author": {
     "name": "Documental Team",
     "email": "team@documental.com"
@@ -26,24 +32,25 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "asar": "^3.2.0",
     "electron": "^38.2.0",
     "electron-builder": "^25.1.8"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.0",
-    "isomorphic-git": "^1.34.0",
-    "keytar": "^7.9.0",
-    "sqlite3": "^5.1.7",
+    "call-bind": "^1.0.8",
     "call-bind-apply-helpers": "^1.0.2",
+    "call-bound": "^1.0.4",
+    "dunder-proto": "^1.0.1",
     "es-errors": "^1.3.0",
+    "get-intrinsic": "^1.3.0",
+    "get-proto": "^1.0.1",
     "gopd": "^1.0.1",
     "has-proto": "^1.0.3",
     "has-symbols": "^1.0.3",
-    "call-bind": "^1.0.8",
-    "get-intrinsic": "^1.3.0",
-    "get-proto": "^1.0.1",
-    "dunder-proto": "^1.0.1",
-    "call-bound": "^1.0.4"
+    "isomorphic-git": "^1.34.0",
+    "keytar": "^7.9.0",
+    "sqlite3": "^5.1.7"
   },
   "build": {
     "appId": "com.documental.app",
@@ -117,6 +124,25 @@
         "Keywords": "documentation;git;github;development;"
       },
       "maintainer": "Documental Team <team@documental.com>"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "sign": false,
+      "signDlls": false
     },
     "snap": {
       "plugs": [
