@@ -12,8 +12,11 @@
     "build:linux:deb": "electron-builder --linux deb",
     "build:linux:dir": "electron-builder --linux dir",
     "build:linux:snap": "electron-builder --linux snap",
-    "dist": "npm run build && node fix-modules.js",
-    "build:fixed": "npm run build:linux:appimage && node fix-modules.js"
+    "build:linux:appimage": "electron-builder --linux AppImage",
+    "dist": "npm run build && node scripts/post-build.js",
+    "build:fixed": "npm run build:linux:appimage && node scripts/post-build.js",
+    "verify-build": "node scripts/verify-build.js",
+    "clean": "rimraf dist"
   },
   "keywords": ["documentation", "git", "github", "development"],
   "author": {
@@ -30,7 +33,17 @@
     "@octokit/rest": "^22.0.0",
     "isomorphic-git": "^1.34.0",
     "keytar": "^7.9.0",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "call-bind-apply-helpers": "^1.0.2",
+    "es-errors": "^1.3.0",
+    "gopd": "^1.0.1",
+    "has-proto": "^1.0.3",
+    "has-symbols": "^1.0.3",
+    "call-bind": "^1.0.8",
+    "get-intrinsic": "^1.3.0",
+    "get-proto": "^1.0.1",
+    "dunder-proto": "^1.0.1",
+    "call-bound": "^1.0.4"
   },
   "build": {
     "appId": "com.documental.app",
@@ -43,11 +56,33 @@
       "preload.js",
       "renderer/**/*",
       "github-config.js",
+      "package.json",
       "node_modules/**/*",
-      "package.json"
+      "!node_modules/.cache/**",
+      "!node_modules/.bin/**",
+      "!node_modules/**/test/**",
+      "!node_modules/**/tests/**",
+      "!node_modules/**/example/**",
+      "!node_modules/**/examples/**",
+      "!node_modules/**/*.md",
+      "!node_modules/**/*.txt",
+      "!node_modules/**/CHANGELOG*",
+      "!node_modules/**/LICENSE*",
+      "!node_modules/**/README*"
     ],
     "asarUnpack": [
-      "node_modules/**/*"
+      "node_modules/call-bind-apply-helpers/**/*",
+      "node_modules/es-errors/**/*",
+      "node_modules/gopd/**/*",
+      "node_modules/has-proto/**/*",
+      "node_modules/has-symbols/**/*",
+      "node_modules/call-bind/**/*",
+      "node_modules/get-intrinsic/**/*",
+      "node_modules/get-proto/**/*",
+      "node_modules/dunder-proto/**/*",
+      "node_modules/call-bound/**/*",
+      "node_modules/sqlite3/**/*",
+      "node_modules/keytar/**/*"
     ],
     "extraResources": [],
     "linux": {

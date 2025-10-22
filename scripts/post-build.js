@@ -3,10 +3,10 @@
 const fs = require('fs');
 const path = require('path');
 
-// Enhanced module fix script with better error handling and comprehensive module copying
-class ModuleFixer {
+// Enhanced post-build script with comprehensive module fixing and verification
+class PostBuildProcessor {
   constructor() {
-    this.projectRoot = __dirname;
+    this.projectRoot = path.join(__dirname, '..');
     this.distBasePath = path.join(this.projectRoot, 'dist');
     this.sourceModulesPath = path.join(this.projectRoot, 'node_modules');
     this.criticalModules = [
@@ -89,21 +89,77 @@ class ModuleFixer {
     return fs.existsSync(modulePath) && fs.existsSync(packageJsonPath);
   }
 
-  fixModules() {
-    console.log('🔧 Starting enhanced module dependency fix...');
+  checkExecutable(executablePath) {
+    try {
+      fs.accessSync(executablePath, fs.constants.F_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  verifyBuildIntegrity(distPath) {
+    console.log('🔍 Verifying build integrity...');
+    
+    const checks = [
+      {
+        name: 'Main executable',
+        check: () => {
+          const executablePath = path.join(distPath, '..', '..', '..', 'app-git-electron');
+          return this.checkExecutable(executablePath);
+        }
+      },
+      {
+        name: 'Main.js exists',
+        check: () => {
+          const mainJsPath = path.join(distPath, '..', '..', 'main.js');
+          return fs.existsSync(mainJsPath);
+        }
+      },
+      {
+        name: 'Package.json exists',
+        check: () => {
+          const packageJsonPath = path.join(distPath, '..', '..', 'package.json');
+          return fs.existsSync(packageJsonPath);
+        }
+      },
+      {
+        name: 'Renderer files exist',
+        check: () => {
+          const rendererPath = path.join(distPath, '..', '..', 'renderer');
+          return fs.existsSync(rendererPath) && fs.existsSync(path.join(rendererPath, 'index.html'));
+        }
+      }
+    ];
+
+    const results = checks.map(({ name, check }) => {
+      try {
+        const passed = check();
+        console.log(`   ${passed ? '✅' : '❌'} ${name}`);
+        return passed;
+      } catch (error) {
+        console.log(`   ❌ ${name} (Error: ${error.message})`);
+        return false;
+      }
+    });
+
+    return results.every(r => r);
+  }
+
+  processBuild() {
+    console.log('🚀 Starting post-build processing...');
     
     const distPaths = this.getDistPaths();
     
     if (distPaths.length === 0) {
       console.error('❌ No distribution paths found. Run build first.');
-      process.exit(1);
+      return false;
     }
 
     console.log(`📁 Found ${distPaths.length} distribution path(s):`);
     distPaths.forEach((path, index) => console.log(`   ${index + 1}. ${path}`));
 
-    let totalSuccess = 0;
-    let totalFailures = 0;
+    let overallSuccess = true;
 
     distPaths.forEach((distPath, distIndex) => {
       console.log(`\n🔨 Processing distribution ${distIndex + 1}/${distPaths.length}: ${distPath}`);
@@ -116,20 +172,16 @@ class ModuleFixer {
       // Copy critical modules
       console.log('📦 Copying critical modules...');
       this.criticalModules.forEach(moduleName => {
-        if (this.copyModule(moduleName, distPath)) {
-          totalSuccess++;
-        } else {
-          totalFailures++;
+        if (!this.copyModule(moduleName, distPath)) {
+          overallSuccess = false;
         }
       });
 
       // Copy native modules
       console.log('🔧 Copying native modules...');
       this.nativeModules.forEach(moduleName => {
-        if (this.copyModule(moduleName, distPath)) {
-          totalSuccess++;
-        } else {
-          totalFailures++;
+        if (!this.copyModule(moduleName, distPath)) {
+          overallSuccess = false;
         }
       });
 
@@ -145,27 +197,34 @@ class ModuleFixer {
       if (failedVerifications.length > 0) {
         console.warn(`⚠️  ${failedVerifications.length} modules failed verification:`);
         failedVerifications.forEach(r => console.warn(`   - ${r.name}`));
+        overallSuccess = false;
       } else {
         console.log('✅ All modules verified successfully');
       }
+
+      // Verify overall build integrity
+      const buildIntegrity = this.verifyBuildIntegrity(distPath);
+      if (!buildIntegrity) {
+        console.warn('⚠️  Build integrity check failed');
+        overallSuccess = false;
+      }
     });
 
-    console.log(`\n📊 Summary:`);
-    console.log(`   ✅ Successful copies: ${totalSuccess}`);
-    console.log(`   ❌ Failed copies: ${totalFailures}`);
+    console.log(`\n📊 Post-build processing completed:`);
+    console.log(`   ${overallSuccess ? '✅' : '❌'} Overall status: ${overallSuccess ? 'SUCCESS' : 'FAILED'}`);
     
-    if (totalFailures === 0) {
-      console.log('🎉 All module dependencies fixed successfully!');
-      return true;
+    if (overallSuccess) {
+      console.log('🎉 Build is ready for distribution!');
     } else {
-      console.log('⚠️  Some modules could not be fixed. Check the logs above.');
-      return false;
+      console.log('⚠️  Some issues were detected. Check the logs above.');
     }
+
+    return overallSuccess;
   }
 }
 
-// Run the fixer
-const fixer = new ModuleFixer();
-const success = fixer.fixModules();
+// Run the post-build processor
+const processor = new PostBuildProcessor();
+const success = processor.processBuild();
 
 process.exit(success ? 0 : 1);

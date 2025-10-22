@@ -1,0 +1,71 @@
+appId: com.documental.app
+productName: Documental
+directories:
+  output: dist
+files:
+  - main.js
+  - preload.js
+  - renderer/**/*
+  - github-config.js
+  - package.json
+  - node_modules/**/*
+  - "!node_modules/.cache/**"
+  - "!node_modules/.bin/**"
+  - "!node_modules/**/test/**"
+  - "!node_modules/**/tests/**"
+  - "!node_modules/**/example/**"
+  - "!node_modules/**/examples/**"
+  - "!node_modules/**/*.md"
+  - "!node_modules/**/*.txt"
+  - "!node_modules/**/CHANGELOG*"
+  - "!node_modules/**/LICENSE*"
+  - "!node_modules/**/README*"
+asarUnpack:
+  - node_modules/call-bind-apply-helpers/**/*
+  - node_modules/es-errors/**/*
+  - node_modules/gopd/**/*
+  - node_modules/has-proto/**/*
+  - node_modules/has-symbols/**/*
+  - node_modules/call-bind/**/*
+  - node_modules/get-intrinsic/**/*
+  - node_modules/get-proto/**/*
+  - node_modules/dunder-proto/**/*
+  - node_modules/call-bound/**/*
+  - node_modules/sqlite3/**/*
+  - node_modules/keytar/**/*
+extraResources: []
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
+    - target: snap
+      arch:
+        - x64
+        - arm64
+  icon: assets/icon.png
+  category: Development
+  desktop:
+    Name: Documental
+    Comment: Ambiente de documentação centralizado com integração Git
+    Keywords: documentation;git;github;development;
+  maintainer: Documental Team <team@documental.com>
+snap:
+  plugs:
+    - default
+    - desktop
+    - desktop-legacy
+    - home
+    - x11
+    - unity7
+    - browser-support
+    - network
+    - gsettings
+    - audio-playback
+    - pulseaudio
+    - opengl
