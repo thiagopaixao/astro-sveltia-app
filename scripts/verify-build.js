@@ -94,10 +94,32 @@ class BuildVerifier {
       { name: 'renderer/index.html', path: path.join(buildPath, 'resources', 'app', 'renderer', 'index.html') }
     ];
 
-    return checks.map(check => ({
+    // First check if files exist directly (for non-ASAR builds)
+    const directChecks = checks.map(check => ({
       name: check.name,
       exists: fs.existsSync(check.path)
     }));
+
+    // If direct checks fail, check in ASAR
+    if (directChecks.some(check => !check.exists)) {
+      const asarPath = path.join(buildPath, 'resources', 'app.asar');
+      if (fs.existsSync(asarPath)) {
+        try {
+          const asar = require('asar');
+          const asarFiles = asar.listFile(asarPath);
+          
+          return checks.map(check => ({
+            name: check.name,
+            exists: asarFiles.some(file => file.endsWith(check.name))
+          }));
+        } catch (error) {
+          console.warn('Could not check ASAR contents:', error.message);
+          return directChecks;
+        }
+      }
+    }
+
+    return directChecks;
   }
 
   verifyBuild() {
