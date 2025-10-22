@@ -205,9 +205,9 @@
                             </div>
                         </div>
 
-                        <button @click="completeSetup()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 mx-auto">
-                            <span>Finalizar Configuração</span>
-                            <span class="material-symbols-outlined">check</span>
+                        <button @click="nextStep()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 mx-auto">
+                            <span>Continuar</span>
+                            <span class="material-symbols-outlined">arrow_forward</span>
                         </button>
                     </div>
 
@@ -216,6 +216,172 @@
                             <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
                             Voltar
                         </button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Node.js Installation -->
+                <div x-show="currentStep === 4" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="text-center fade-in">
+                    <div class="mb-8">
+                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gray-800 mb-6">
+                            <span class="material-symbols-outlined text-4xl text-primary">code</span>
+                        </div>
+                        <h1 class="text-4xl font-black text-text-dark mb-4">Configurar Node.js</h1>
+                        <p class="text-xl text-muted-dark max-w-2xl mx-auto leading-relaxed mb-8">
+                            O Documental requer Node.js v22 ou superior para funcionar corretamente.
+                        </p>
+                    </div>
+
+                    <!-- Node.js Detection Status -->
+                    <div x-show="!nodeInstallationChecked" class="space-y-6">
+                        <div class="bg-surface-dark rounded-lg p-6 max-w-md mx-auto">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="animate-spin">
+                                    <span class="material-symbols-outlined text-primary">refresh</span>
+                                </div>
+                                <p class="text-sm text-muted-dark">Verificando instalação do Node.js...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Node.js Already Installed and Valid -->
+                    <div x-show="nodeInstallationChecked && nodeInfo.installed && nodeInfo.valid" class="space-y-6">
+                        <div class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-md mx-auto">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="material-symbols-outlined text-green-500">check_circle</span>
+                                <p class="text-sm text-green-400">Node.js já está instalado e configurado!</p>
+                            </div>
+                            <div class="text-left">
+                                <p class="text-sm text-muted-dark mb-2">Versão detectada:</p>
+                                <div class="bg-surface-dark rounded p-3">
+                                    <p class="font-mono text-text-dark" x-text="`Node.js v${nodeInfo.version}`"></p>
+                                    <p class="text-xs text-muted-dark" x-text="nodeInfo.path"></p>
+                                    <p class="text-xs text-primary mt-1" x-show="nodeInfo.isCustom">
+                                        <span class="material-symbols-outlined text-xs align-middle">auto_awesome</span>
+                                        Instalação personalizada do Documental
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button @click="completeSetup()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 mx-auto">
+                            <span>Finalizar Configuração</span>
+                            <span class="material-symbols-outlined">check</span>
+                        </button>
+                    </div>
+
+                    <!-- Node.js Not Installed or Invalid Version -->
+                    <div x-show="nodeInstallationChecked && (!nodeInfo.installed || !nodeInfo.valid)" class="space-y-6">
+                        <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-6 max-w-2xl mx-auto mb-6">
+                            <div class="flex items-start gap-3">
+                                <span class="material-symbols-outlined text-yellow-500 text-xl mt-1">warning</span>
+                                <div class="text-left">
+                                    <h3 class="font-semibold text-text-dark mb-2">Node.js Requerido</h3>
+                                    <div class="space-y-2 text-sm text-muted-dark">
+                                        <p x-show="!nodeInfo.installed">❌ Node.js não foi encontrado no sistema</p>
+                                        <p x-show="nodeInfo.installed && !nodeInfo.valid">⚠️ Node.js v<span x-text="nodeInfo.version"></span> encontrado, mas requeremos v22 ou superior</p>
+                                        <p>✅ O Documental pode instalar automaticamente a versão correta para você</p>
+                                        <div x-show="nodeInfo.nvmInfo && nodeInfo.nvmInfo.exists" class="mt-2 p-2 bg-yellow-800/30 rounded">
+                                            <span class="material-symbols-outlined text-xs align-middle">settings</span>
+                                            <span class="text-xs">NVM detectado em <span x-text="nodeInfo.nvmInfo.path"></span> - será usado para instalação</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Installation Options -->
+                        <div class="bg-surface-dark rounded-lg p-8 max-w-2xl mx-auto">
+                            <h3 class="font-semibold text-text-dark mb-4">Opções de Instalação</h3>
+                            
+                            <div class="space-y-4 text-left">
+                                <div class="border border-gray-700 rounded-lg p-4">
+                                    <div class="flex items-start gap-3">
+                                        <span class="material-symbols-outlined text-primary">auto_awesome</span>
+                                        <div>
+                                            <h4 class="font-medium text-text-dark mb-1">Instalação Automática (Recomendado)</h4>
+                                            <p class="text-sm text-muted-dark mb-3">
+                                                Instalaremos Node.js v22 via NVM no diretório do usuário, sem precisar de permissões de administrador.
+                                            </p>
+                                            <ul class="text-xs text-muted-dark space-y-1">
+                                                <li>• Instalação isolada no seu perfil de usuário</li>
+                                                <li>• Não afeta outras instalações do Node.js</li>
+                                                <li>• Configuração automática do ambiente</li>
+                                                <li>• Compatível com Windows, macOS e Linux</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="border border-gray-700 rounded-lg p-4 opacity-60">
+                                    <div class="flex items-start gap-3">
+                                        <span class="material-symbols-outlined text-gray-500">build</span>
+                                        <div>
+                                            <h4 class="font-medium text-text-dark mb-1">Instalação Manual</h4>
+                                            <p class="text-sm text-muted-dark">
+                                                Você pode instalar o Node.js manualmente em <a href="https://nodejs.org" target="_blank" class="text-primary hover:underline">nodejs.org</a> e depois reiniciar o assistente.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Installation Progress -->
+                        <div x-show="isInstallingNode" class="bg-surface-dark rounded-lg p-6 max-w-md mx-auto">
+                            <div class="space-y-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="animate-spin">
+                                        <span class="material-symbols-outlined text-primary">refresh</span>
+                                    </div>
+                                    <p class="text-sm text-muted-dark">
+                                        <span x-text="nodeInstallStatus.message || 'Instalando Node.js...'"></span>
+                                    </p>
+                                </div>
+                                
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div class="bg-primary h-2 rounded-full transition-all duration-300" 
+                                         :style="`width: ${nodeInstallStatus.progress || 0}%`"></div>
+                                </div>
+                                
+                                <div class="text-xs text-muted-dark text-left">
+                                    <p x-show="nodeInstallStatus.stage === 'nvm'">📦 Baixando e instalando NVM...</p>
+                                    <p x-show="nodeInstallStatus.stage === 'node'">🔄 Instalando Node.js v22...</p>
+                                    <p x-show="nodeInstallStatus.stage === 'config'">⚙️ Configurando ambiente...</p>
+                                    <p x-show="nodeInstallStatus.stage === 'verify'">✅ Verificando instalação...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Installation Error -->
+                        <div x-show="nodeInstallError" class="bg-red-900/20 border border-red-700 rounded-lg p-6 max-w-md mx-auto">
+                            <div class="flex items-start gap-3">
+                                <span class="material-symbols-outlined text-red-500 text-xl mt-1">error</span>
+                                <div class="text-left">
+                                    <h4 class="font-semibold text-text-dark mb-2">Erro na Instalação</h4>
+                                    <p class="text-sm text-red-400" x-text="nodeInstallError"></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div x-show="!isInstallingNode" class="flex gap-4 justify-center">
+                            <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                                <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
+                                Voltar
+                            </button>
+                            <button @click="installNodeJs()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                <span class="material-symbols-outlined">download</span>
+                                <span>Instalar Automaticamente</span>
+                            </button>
+                        </div>
+
+                        <!-- Retry Button -->
+                        <div x-show="nodeInstallError && !isInstallingNode" class="flex justify-center">
+                            <button @click="installNodeJs()" class="bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                                <span class="material-symbols-outlined align-middle mr-2">refresh</span>
+                                Tentar Novamente
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -242,10 +408,20 @@
         document.addEventListener('alpine:init', () => {
             Alpine.data('welcomeWizard', () => ({
                 currentStep: 1,
-                totalSteps: 3,
+                totalSteps: 4,
                 isAuthenticating: false,
                 isAuthenticated: false,
                 userInfo: null,
+                // Node.js installation properties
+                nodeInstallationChecked: false,
+                nodeInfo: null,
+                isInstallingNode: false,
+                nodeInstallStatus: {
+                    stage: 'ready',
+                    progress: 0,
+                    message: ''
+                },
+                nodeInstallError: null,
 
                 init() {
                     // Check if already authenticated
@@ -255,6 +431,11 @@
                 nextStep() {
                     if (this.currentStep < this.totalSteps) {
                         this.currentStep++;
+                        
+                        // Check Node.js installation when moving to step 4
+                        if (this.currentStep === 4) {
+                            this.checkNodeInstallation();
+                        }
                     }
                 },
 
@@ -307,6 +488,112 @@
                     } catch (error) {
                         console.error('Error completing setup:', error);
                         alert('Erro ao finalizar configuração: ' + error.message);
+                    }
+                },
+
+                // Node.js related methods
+                async checkNodeInstallation() {
+                    try {
+                        if (window.electronAPI && window.electronAPI.checkNodeInstallation) {
+                            const detectionResult = await window.electronAPI.checkNodeInstallation();
+                            console.log('Node.js intelligent detection result:', detectionResult);
+                            
+                            // Convert new format to legacy format for UI compatibility
+                            if (detectionResult.status === 'valid') {
+                                this.nodeInfo = {
+                                    installed: true,
+                                    version: detectionResult.nodeInfo.version,
+                                    valid: true,
+                                    path: detectionResult.nodeInfo.path,
+                                    isCustom: detectionResult.nodeInfo.isCustom
+                                };
+                            } else {
+                                this.nodeInfo = {
+                                    installed: detectionResult.nodeInfo?.installed || false,
+                                    version: detectionResult.nodeInfo?.version || null,
+                                    valid: false,
+                                    path: detectionResult.nodeInfo?.path || null,
+                                    needsInstallation: detectionResult.needsInstallation,
+                                    message: detectionResult.message,
+                                    nvmInfo: detectionResult.nvmInfo
+                                };
+                            }
+                            
+                            this.nodeInstallationChecked = true;
+                        }
+                    } catch (error) {
+                        console.error('Error checking Node.js installation:', error);
+                        this.nodeInfo = {
+                            installed: false,
+                            version: null,
+                            valid: false,
+                            path: null,
+                            needsInstallation: true,
+                            error: error.message
+                        };
+                        this.nodeInstallationChecked = true;
+                    }
+                },
+
+                async installNodeJs() {
+                    this.isInstallingNode = true;
+                    this.nodeInstallError = null;
+                    this.nodeInstallStatus = {
+                        stage: 'nvm',
+                        progress: 25,
+                        message: 'Instalando NVM...'
+                    };
+
+                    try {
+                        if (window.electronAPI && window.electronAPI.installNodeDependencies) {
+                            // Simulate progress updates
+                            const progressInterval = setInterval(() => {
+                                if (this.nodeInstallStatus.stage === 'nvm' && this.nodeInstallStatus.progress < 50) {
+                                    this.nodeInstallStatus.progress += 5;
+                                } else if (this.nodeInstallStatus.stage === 'nvm' && this.nodeInstallStatus.progress >= 50) {
+                                    this.nodeInstallStatus.stage = 'node';
+                                    this.nodeInstallStatus.message = 'Instalando Node.js v22...';
+                                } else if (this.nodeInstallStatus.stage === 'node' && this.nodeInstallStatus.progress < 75) {
+                                    this.nodeInstallStatus.progress += 5;
+                                } else if (this.nodeInstallStatus.stage === 'node' && this.nodeInstallStatus.progress >= 75) {
+                                    this.nodeInstallStatus.stage = 'config';
+                                    this.nodeInstallStatus.message = 'Configurando ambiente...';
+                                } else if (this.nodeInstallStatus.stage === 'config' && this.nodeInstallStatus.progress < 90) {
+                                    this.nodeInstallStatus.progress += 5;
+                                } else if (this.nodeInstallStatus.stage === 'config' && this.nodeInstallStatus.progress >= 90) {
+                                    this.nodeInstallStatus.stage = 'verify';
+                                    this.nodeInstallStatus.message = 'Verificando instalação...';
+                                }
+                            }, 200);
+
+                            const result = await window.electronAPI.installNodeDependencies();
+                            
+                            clearInterval(progressInterval);
+                            
+                            if (result.success) {
+                                this.nodeInstallStatus.progress = 100;
+                                this.nodeInstallStatus.message = 'Instalação concluída!';
+                                
+                                // Update node info with the new installation
+                                this.nodeInfo = {
+                                    installed: true,
+                                    version: result.nodeVersion,
+                                    valid: true,
+                                    path: result.nodePath
+                                };
+                                
+                                // Wait a moment to show success before allowing continuation
+                                setTimeout(() => {
+                                    this.isInstallingNode = false;
+                                }, 2000);
+                            } else {
+                                throw new Error(result.error || 'Falha na instalação');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error installing Node.js:', error);
+                        this.nodeInstallError = error.message;
+                        this.isInstallingNode = false;
                     }
                 }
             }));

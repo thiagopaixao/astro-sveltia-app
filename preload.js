@@ -35,5 +35,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // GitHub authentication functions
   checkGitHubAuth: () => ipcRenderer.invoke('checkGitHubAuth'),
   authenticateWithGitHub: () => ipcRenderer.invoke('authenticateWithGitHub'),
-  completeWelcomeSetup: () => ipcRenderer.invoke('completeWelcomeSetup')
+  completeWelcomeSetup: () => ipcRenderer.invoke('completeWelcomeSetup'),
+  // Node.js detection and installation functions
+  checkNodeInstallation: () => ipcRenderer.invoke('checkNodeInstallation'),
+  installNodeDependencies: (options) => ipcRenderer.invoke('installNodeDependencies', options),
+  getNodeInstallationProgress: () => ipcRenderer.invoke('getNodeInstallationProgress')
 });
