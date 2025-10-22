@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html class="dark" lang="pt-BR">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Documental - Bem-vindo</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <style type="text/tailwindcss">
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings:
+            'FILL' 0,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24
+        }
+        .welcome-gradient {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        }
+        .fade-in {
+            animation: fadeIn 0.6s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .slide-in {
+            animation: slideIn 0.8s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#22c55e",
+                        "background-light": "#f3f4f6",
+                        "background-dark": "#111827",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1f2937",
+                        "text-light": "#111827",
+                        "text-dark": "#f9fafb",
+                        "muted-light": "#6b7280",
+                        "muted-dark": "#9ca3af",
+                    },
+                },
+            },
+        };
+    </script>
+    <script src="script.js" defer></script>
+</head>
+<body class="bg-background-dark text-text-dark antialiased">
+    <div class="flex flex-col h-screen" x-data="welcomeWizard">
+        <!-- Progress Bar -->
+        <div class="h-1 bg-gray-800">
+            <div class="h-full welcome-gradient transition-all duration-500" :style="`width: ${(currentStep / totalSteps) * 100}%`"></div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex items-center justify-center p-8">
+            <div class="w-full max-w-4xl">
+                
+                <!-- Step 1: Welcome -->
+                <div x-show="currentStep === 1" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="text-center fade-in">
+                    <div class="mb-8">
+                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full welcome-gradient mb-6">
+                            <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+                            </svg>
+                        </div>
+                        <h1 class="text-5xl font-black text-text-dark mb-4">Bem-vindo ao Documental</h1>
+                        <p class="text-xl text-muted-dark max-w-2xl mx-auto leading-relaxed">
+                            Seu ambiente de documentação centralizado está pronto para transformar a forma como você cria e gerencia seus projetos.
+                        </p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 max-w-3xl mx-auto">
+                        <div class="bg-surface-dark rounded-lg p-6 text-center">
+                            <span class="material-symbols-outlined text-3xl text-primary mb-3">rocket_launch</span>
+                            <h3 class="font-semibold text-text-dark mb-2">Início Rápido</h3>
+                            <p class="text-sm text-muted-dark">Configure em minutos e comece a documentar</p>
+                        </div>
+                        <div class="bg-surface-dark rounded-lg p-6 text-center">
+                            <span class="material-symbols-outlined text-3xl text-primary mb-3">integration_instructions</span>
+                            <h3 class="font-semibold text-text-dark mb-2">Integração Git</h3>
+                            <p class="text-sm text-muted-dark">Controle de versão integrado com GitHub</p>
+                        </div>
+                        <div class="bg-surface-dark rounded-lg p-6 text-center">
+                            <span class="material-symbols-outlined text-3xl text-primary mb-3">auto_awesome</span>
+                            <h3 class="font-semibold text-text-dark mb-2">Experiência Moderna</h3>
+                            <p class="text-sm text-muted-dark">Interface intuitiva e poderosa</p>
+                        </div>
+                    </div>
+
+                    <button @click="nextStep()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 mx-auto">
+                        <span>Começar Configuração</span>
+                        <span class="material-symbols-outlined">arrow_forward</span>
+                    </button>
+                </div>
+
+                <!-- Step 2: GitHub Authentication Explanation -->
+                <div x-show="currentStep === 2" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="text-center fade-in">
+                    <div class="mb-8">
+                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gray-800 mb-6">
+                            <span class="material-symbols-outlined text-4xl text-primary">link</span>
+                        </div>
+                        <h1 class="text-4xl font-black text-text-dark mb-4">Conecte com o GitHub</h1>
+                        <p class="text-xl text-muted-dark max-w-2xl mx-auto leading-relaxed mb-8">
+                            Para oferecer a melhor experiência de controle de versão, precisamos conectar sua conta GitHub.
+                        </p>
+                    </div>
+
+                    <div class="bg-surface-dark rounded-lg p-8 max-w-2xl mx-auto mb-8">
+                        <div class="space-y-6">
+                            <div class="flex items-start gap-4">
+                                <span class="material-symbols-outlined text-primary text-xl mt-1">check_circle</span>
+                                <div class="text-left">
+                                    <h3 class="font-semibold text-text-dark mb-1">Autenticação Segura</h3>
+                                    <p class="text-sm text-muted-dark">Usamos OAuth 2.0 padrão do GitHub para proteger suas credenciais</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-4">
+                                <span class="material-symbols-outlined text-primary text-xl mt-1">check_circle</span>
+                                <div class="text-left">
+                                    <h3 class="font-semibold text-text-dark mb-1">Acesso Controlado</h3>
+                                    <p class="text-sm text-muted-dark">Solicitamos apenas as permissões necessárias para operações git</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start gap-4">
+                                <span class="material-symbols-outlined text-primary text-xl mt-1">check_circle</span>
+                                <div class="text-left">
+                                    <h3 class="font-semibold text-text-dark mb-1">Dados Automáticos</h3>
+                                    <p class="text-sm text-muted-dark">Seu nome e email serão configurados automaticamente para commits</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4 justify-center">
+                        <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                            <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
+                            Voltar
+                        </button>
+                        <button @click="nextStep()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                            <span>Entendido</span>
+                            <span class="material-symbols-outlined">arrow_forward</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 3: GitHub Authentication -->
+                <div x-show="currentStep === 3" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="text-center fade-in">
+                    <div class="mb-8">
+                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gray-800 mb-6">
+                            <svg class="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                            </svg>
+                        </div>
+                        <h1 class="text-4xl font-black text-text-dark mb-4">Autentique com GitHub</h1>
+                        <p class="text-xl text-muted-dark max-w-2xl mx-auto leading-relaxed mb-8">
+                            Clique no botão abaixo para abrir a página de autenticação do GitHub em uma nova janela.
+                        </p>
+                    </div>
+
+                    <div x-show="!isAuthenticated" class="space-y-6">
+                        <div class="bg-surface-dark rounded-lg p-6 max-w-md mx-auto">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="material-symbols-outlined text-primary">info</span>
+                                <p class="text-sm text-muted-dark">Você será redirecionado para o GitHub para autorizar o acesso</p>
+                            </div>
+                        </div>
+
+                        <button @click="authenticateWithGitHub()" :disabled="isAuthenticating" class="bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 mx-auto disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                            </svg>
+                            <span x-text="isAuthenticating ? 'Conectando...' : 'Conectar com GitHub'"></span>
+                        </button>
+                    </div>
+
+                    <div x-show="isAuthenticated" class="space-y-6">
+                        <div class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-md mx-auto">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="material-symbols-outlined text-green-500">check_circle</span>
+                                <p class="text-sm text-green-400">Autenticação realizada com sucesso!</p>
+                            </div>
+                            <div x-show="userInfo" class="text-left">
+                                <p class="text-sm text-muted-dark mb-2">Conectado como:</p>
+                                <div class="flex items-center gap-3">
+                                    <img x-show="userInfo.avatar_url" :src="userInfo.avatar_url" :alt="userInfo.name" class="w-10 h-10 rounded-full">
+                                    <div>
+                                        <p class="font-semibold text-text-dark" x-text="userInfo.name || userInfo.login"></p>
+                                        <p class="text-sm text-muted-dark" x-text="userInfo.email"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button @click="completeSetup()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 mx-auto">
+                            <span>Finalizar Configuração</span>
+                            <span class="material-symbols-outlined">check</span>
+                        </button>
+                    </div>
+
+                    <div class="flex gap-4 justify-center mt-8">
+                        <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                            <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
+                            Voltar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-4 border-t border-gray-800 bg-surface-dark">
+            <div class="flex justify-between items-center max-w-4xl mx-auto">
+                <p class="text-sm text-muted-dark">
+                    Passo <span x-text="currentStep"></span> de <span x-text="totalSteps"></span>
+                </p>
+                <div class="flex gap-2">
+                    <template x-for="step in totalSteps" :key="step">
+                        <div class="w-2 h-2 rounded-full transition-colors duration-300" 
+                             :class="step <= currentStep ? 'bg-primary' : 'bg-gray-600'"></div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('welcomeWizard', () => ({
+                currentStep: 1,
+                totalSteps: 3,
+                isAuthenticating: false,
+                isAuthenticated: false,
+                userInfo: null,
+
+                init() {
+                    // Check if already authenticated
+                    this.checkAuthenticationStatus();
+                },
+
+                nextStep() {
+                    if (this.currentStep < this.totalSteps) {
+                        this.currentStep++;
+                    }
+                },
+
+                previousStep() {
+                    if (this.currentStep > 1) {
+                        this.currentStep--;
+                    }
+                },
+
+                async checkAuthenticationStatus() {
+                    try {
+                        if (window.electronAPI && window.electronAPI.checkGitHubAuth) {
+                            const authStatus = await window.electronAPI.checkGitHubAuth();
+                            if (authStatus.authenticated) {
+                                this.isAuthenticated = true;
+                                this.userInfo = authStatus.userInfo;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error checking authentication status:', error);
+                    }
+                },
+
+                async authenticateWithGitHub() {
+                    this.isAuthenticating = true;
+                    try {
+                        if (window.electronAPI && window.electronAPI.authenticateWithGitHub) {
+                            const result = await window.electronAPI.authenticateWithGitHub();
+                            if (result.success) {
+                                this.isAuthenticated = true;
+                                this.userInfo = result.userInfo;
+                            } else {
+                                alert('Erro na autenticação: ' + result.error);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Authentication error:', error);
+                        alert('Erro na autenticação: ' + error.message);
+                    } finally {
+                        this.isAuthenticating = false;
+                    }
+                },
+
+                async completeSetup() {
+                    try {
+                        if (window.electronAPI && window.electronAPI.completeWelcomeSetup) {
+                            await window.electronAPI.completeWelcomeSetup();
+                            window.electronAPI.navigateTo('index.html');
+                        }
+                    } catch (error) {
+                        console.error('Error completing setup:', error);
+                        alert('Erro ao finalizar configuração: ' + error.message);
+                    }
+                }
+            }));
+        });
+    </script>
+</body>
+</html>

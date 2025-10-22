@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, BrowserView } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, BrowserView, shell } = require('electron');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
@@ -6,11 +6,21 @@ const { spawn } = require('child_process');
 const { rimraf } = require('rimraf');
 const { execSync } = require('child_process');
 
+// New imports for GitHub authentication and git operations
+const keytar = require('keytar');
+const { Octokit } = require('@octokit/rest');
+const git = require('isomorphic-git');
+const http = require('isomorphic-git/http/node');
+const GITHUB_CONFIG = require('./github-config');
+
 let mainWindow;
 let editorView;
 let viewerView;
 let globalDevServerUrl = null; // Global variable to store dev server URL
 let activeProcesses = {}; // To keep track of running child processes
+
+// GitHub authentication variables
+
 
 // Store BrowserViews per window for independent control
 const windowBrowserViews = new Map(); // windowId -> { editorView, viewerView }
@@ -518,7 +528,630 @@ async function killAllActiveProcesses() {
   console.log('✅ All Documental processes killed (or attempted)');
 }
 
-function createWindow() {
+// Git operations using isomorphic-git
+async function gitClone(url, dir, options = {}) {
+  try {
+    console.log(`🔄 Cloning repository from ${url} to ${dir}`);
+    
+    const token = await getGitHubToken();
+    const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+    
+    await git.clone({
+      fs,
+      http,
+      dir,
+      url,
+      auth,
+      ...options
+    });
+    
+    console.log(`✅ Repository cloned successfully to ${dir}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error cloning repository:`, error);
+    throw error;
+  }
+}
+
+async function gitCheckout(dir, branch) {
+  try {
+    console.log(`🔄 Checking out branch ${branch} in ${dir}`);
+    
+    await git.checkout({
+      fs,
+      dir,
+      ref: branch
+    });
+    
+    console.log(`✅ Checked out branch ${branch} successfully`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error checking out branch:`, error);
+    throw error;
+  }
+}
+
+async function gitGetRemoteUrl(dir) {
+  try {
+    const url = await git.getConfig({
+      fs,
+      dir,
+      path: 'remote.origin.url'
+    });
+    return url;
+  } catch (error) {
+    console.error('Error getting remote URL:', error);
+    return null;
+  }
+}
+
+async function gitSetUserConfig(dir, name, email) {
+  try {
+    console.log(`🔄 Setting git user config: ${name} <${email}>`);
+    
+    await git.setConfig({
+      fs,
+      dir,
+      path: 'user.name',
+      value: name
+    });
+    
+    await git.setConfig({
+      fs,
+      dir,
+      path: 'user.email',
+      value: email
+    });
+    
+    console.log(`✅ Git user config set successfully`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error setting git user config:`, error);
+    throw error;
+  }
+}
+
+async function configureGitForUser(dir) {
+  try {
+    const userInfo = await getGitHubUserInfo();
+    if (!userInfo) {
+      console.warn('⚠️ No GitHub user info available, skipping git config');
+      return false;
+    }
+    
+    const name = userInfo.name || userInfo.login;
+    const email = userInfo.email || `${userInfo.login}@users.noreply.github.com`;
+    
+    await gitSetUserConfig(dir, name, email);
+    return true;
+  } catch (error) {
+    console.error('Error configuring git for user:', error);
+    return false;
+  }
+}
+
+// Device Flow: Authorization code extraction is no longer needed
+// The Device Flow handles authorization through polling instead of code extraction
+
+// GitHub authentication functions
+async function checkFirstTimeUser() {
+  const isFirstTime = !fs.existsSync(path.join(app.getPath('userData'), 'setup-completed.flag'));
+  return isFirstTime;
+}
+
+function markSetupCompleted() {
+  fs.writeFileSync(path.join(app.getPath('userData'), 'setup-completed.flag'), 'true');
+}
+
+async function getGitHubToken() {
+  try {
+    return await keytar.getPassword(GITHUB_CONFIG.SERVICE_NAME, 'github-token');
+  } catch (error) {
+    console.error('Error getting GitHub token:', error);
+    return null;
+  }
+}
+
+async function setGitHubToken(token) {
+  try {
+    await keytar.setPassword(GITHUB_CONFIG.SERVICE_NAME, 'github-token', token);
+    return true;
+  } catch (error) {
+    console.error('Error setting GitHub token:', error);
+    return false;
+  }
+}
+
+async function getGitHubUserInfo() {
+  try {
+    const token = await getGitHubToken();
+    if (!token) return null;
+
+    const octokit = new Octokit({ auth: token });
+    const { data: user } = await octokit.rest.users.getAuthenticated();
+    
+    return {
+      login: user.login,
+      name: user.name,
+      email: user.email,
+      avatar_url: user.avatar_url,
+      id: user.id
+    };
+  } catch (error) {
+    console.error('Error getting GitHub user info:', error);
+    return null;
+  }
+}
+
+// Device Flow: Request device and user codes from GitHub
+async function requestDeviceCode() {
+  try {
+    console.log('Requesting device code from GitHub...');
+    
+    // Validate configuration
+    if (!GITHUB_CONFIG.CLIENT_ID || GITHUB_CONFIG.CLIENT_ID === 'Iv1.a1b2c3d4e5f6g7h8') {
+      throw new Error('GitHub Client ID not configured. Please set GITHUB_CLIENT_ID environment variable.');
+    }
+    
+    const response = await fetch(GITHUB_CONFIG.DEVICE_CODE_URL, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Documental-App/1.0'
+      },
+      body: JSON.stringify({
+        client_id: GITHUB_CONFIG.CLIENT_ID,
+        scope: GITHUB_CONFIG.SCOPES.join(' ')
+      })
+    });
+    
+    const data = await response.json();
+    console.log('Device code response:', { ...data, device_code: data.device_code ? '***' : undefined });
+    
+    if (data.error) {
+      throw new Error(data.error_description || data.error);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error requesting device code:', error);
+    throw error;
+  }
+}
+
+// Device Flow: Poll GitHub for access token
+async function pollForToken(deviceCode, interval, maxAttempts = 60) {
+  console.log(`Starting token polling with interval: ${interval}s, max attempts: ${maxAttempts}`);
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      console.log(`Polling attempt ${attempt + 1}/${maxAttempts}...`);
+      
+      const response = await fetch(GITHUB_CONFIG.TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Documental-App/1.0'
+        },
+        body: JSON.stringify({
+          client_id: GITHUB_CONFIG.CLIENT_ID,
+          device_code: deviceCode,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+        })
+      });
+      
+      const data = await response.json();
+      console.log('Token poll response:', { 
+        ...data, 
+        access_token: data.access_token ? '***' : undefined,
+        device_code: '***'
+      });
+      
+      if (data.access_token) {
+        console.log('✅ Access token received successfully');
+        return { success: true, token: data.access_token };
+      }
+      
+      if (data.error === 'authorization_pending') {
+        console.log('Authorization pending, continuing polling...');
+        // Continuar polling
+        await new Promise(resolve => setTimeout(resolve, interval * 1000));
+        continue;
+      }
+      
+      if (data.error === 'slow_down') {
+        console.log('Slow down requested, increasing interval...');
+        // Aumentar intervalo em 5 segundos
+        await new Promise(resolve => setTimeout(resolve, (interval + 5) * 1000));
+        continue;
+      }
+      
+      if (data.error === 'expired_token') {
+        console.log('Device code expired');
+        return { success: false, error: 'Código de autorização expirado. Tente novamente.' };
+      }
+      
+      if (data.error === 'access_denied') {
+        console.log('Access denied by user');
+        return { success: false, error: 'Autorização negada pelo usuário.' };
+      }
+      
+      // Outros erros
+      const errorMsg = data.error_description || data.error || 'Erro desconhecido';
+      console.error('Token polling error:', data);
+      return { success: false, error: errorMsg };
+      
+    } catch (error) {
+      console.error(`Error in polling attempt ${attempt + 1}:`, error);
+      
+      // Se for o último erro, retornar falha
+      if (attempt === maxAttempts - 1) {
+        return { success: false, error: error.message };
+      }
+      
+      // Esperar antes da próxima tentativa
+      await new Promise(resolve => setTimeout(resolve, interval * 1000));
+    }
+  }
+  
+  console.log('Polling timeout reached');
+  return { success: false, error: 'Tempo esgotado. Por favor, tente novamente.' };
+}
+
+// Device Flow: Exchange device code for access token and get user info
+async function exchangeDeviceCodeForToken(deviceCode, interval) {
+  try {
+    console.log('Exchanging device code for token...');
+    
+    const tokenResult = await pollForToken(deviceCode, interval);
+    
+    if (tokenResult.success) {
+      // Store the token
+      await setGitHubToken(tokenResult.token);
+      console.log('Token stored successfully');
+      
+      // Get user info
+      const userInfo = await getGitHubUserInfo();
+      console.log('User info retrieved:', userInfo?.login);
+      
+      return { success: true, userInfo };
+    } else {
+      throw new Error(tokenResult.error);
+    }
+  } catch (error) {
+    console.error('Error exchanging device code for token:', error);
+    throw error;
+  }
+}
+
+async function authenticateWithGitHub() {
+  return new Promise(async (resolve, reject) => {
+    try {
+      console.log('🚀 Starting GitHub Device Flow authentication...');
+      
+      // 1. Solicitar device code
+      const deviceResponse = await requestDeviceCode();
+      
+      const { 
+        device_code, 
+        user_code, 
+        verification_uri, 
+        expires_in, 
+        interval 
+      } = deviceResponse;
+      
+      console.log('📱 Device code received:', { 
+        user_code, 
+        verification_uri, 
+        expires_in, 
+        interval,
+        device_code: '***'
+      });
+      
+      // 2. Criar janela modal para mostrar instruções
+      const authWindow = new BrowserWindow({
+        width: 650,
+        height: 550,
+        show: false,
+        parent: mainWindow,
+        modal: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        alwaysOnTop: true,
+        webPreferences: {
+          nodeIntegration: true,
+          contextIsolation: false
+        }
+      });
+      
+      // 3. Criar HTML com instruções claras
+      const instructionsHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Autenticação GitHub - Documental</title>
+          <meta charset="utf-8">
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #0d1117 0%, #161b22 100%); 
+              color: #c9d1d9; 
+              padding: 30px; 
+              text-align: center; 
+              margin: 0; 
+              height: 100vh; 
+              overflow-y: auto;
+            }
+            .container { 
+              max-width: 450px; 
+              margin: 0 auto; 
+              background: #21262d;
+              border-radius: 12px;
+              padding: 30px;
+              border: 1px solid #30363d;
+              box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            }
+            .logo { 
+              font-size: 48px; 
+              margin-bottom: 20px;
+            }
+            h2 { 
+              color: #58a6ff; 
+              margin-bottom: 15px;
+              font-size: 24px;
+              font-weight: 600;
+            }
+            .subtitle {
+              color: #8b949e;
+              margin-bottom: 25px;
+              font-size: 14px;
+            }
+            .code-container {
+              background: #0d1117;
+              border: 2px solid #58a6ff;
+              border-radius: 8px;
+              padding: 20px;
+              margin: 25px 0;
+              position: relative;
+            }
+            .code-label {
+              position: absolute;
+              top: -10px;
+              left: 20px;
+              background: #21262d;
+              padding: 0 10px;
+              color: #58a6ff;
+              font-size: 12px;
+              font-weight: 600;
+            }
+            .code { 
+              font-size: 36px; 
+              font-weight: bold; 
+              letter-spacing: 6px; 
+              font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+              color: #c9d1d9;
+              text-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+            }
+            .steps { 
+              text-align: left; 
+              margin: 25px 0; 
+            }
+            .step { 
+              margin: 15px 0; 
+              padding: 15px; 
+              background: #161b22; 
+              border-radius: 8px;
+              border-left: 3px solid #58a6ff;
+            }
+            .step-number { 
+              font-weight: bold; 
+              color: #58a6ff; 
+              margin-right: 8px;
+            }
+            .link { 
+              color: #58a6ff; 
+              text-decoration: none; 
+              font-weight: 500;
+            }
+            .link:hover { 
+              text-decoration: underline; 
+            }
+            .status { 
+              margin-top: 25px; 
+              font-size: 14px; 
+              color: #8b949e;
+            }
+            .spinner { 
+              border: 3px solid #21262d; 
+              border-top: 3px solid #58a6ff; 
+              border-radius: 50%; 
+              width: 24px; 
+              height: 24px; 
+              animation: spin 1s linear infinite; 
+              margin: 15px auto;
+            }
+            @keyframes spin { 
+              0% { transform: rotate(0deg); } 
+              100% { transform: rotate(360deg); } 
+            }
+            .warning {
+              background: #441e1e;
+              border: 1px solid #f85149;
+              border-radius: 6px;
+              padding: 12px;
+              margin: 15px 0;
+              font-size: 12px;
+              color: #f85149;
+            }
+            .success {
+              background: #1a3f1a;
+              border: 1px solid #3fb950;
+              border-radius: 6px;
+              padding: 12px;
+              margin: 15px 0;
+              color: #3fb950;
+            }
+            .error {
+              background: #441e1e;
+              border: 1px solid #f85149;
+              border-radius: 6px;
+              padding: 12px;
+              margin: 15px 0;
+              color: #f85149;
+            }
+            .copy-button {
+              background: #58a6ff;
+              color: white;
+              border: none;
+              padding: 8px 16px;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 12px;
+              margin-top: 10px;
+              transition: background 0.2s;
+            }
+            .copy-button:hover {
+              background: #4493f8;
+            }
+            .copy-button.copied {
+              background: #3fb950;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="logo">🔐</div>
+            <h2>Conectar com GitHub</h2>
+            <p class="subtitle">Use o código abaixo para autorizar o Documental</p>
+            
+            <div class="warning">
+              ⚠️ Mantenha esta janela aberta durante a autenticação
+            </div>
+            
+            <div class="code-container">
+              <div class="code-label">SEU CÓDIGO</div>
+              <div class="code" id="userCode">${user_code}</div>
+              <button class="copy-button" onclick="copyCode()">📋 Copiar Código</button>
+            </div>
+            
+            <div class="steps">
+              <div class="step">
+                <span class="step-number">1.</span>
+                <strong>Visite:</strong> 
+                <a href="${verification_uri}" target="_blank" class="link">${verification_uri}</a>
+              </div>
+              <div class="step">
+                <span class="step-number">2.</span>
+                <strong>Digite o código:</strong> ${user_code}
+              </div>
+              <div class="step">
+                <span class="step-number">3.</span>
+                <strong>Autorize</strong> o acesso do Documental App
+              </div>
+            </div>
+            
+            <div class="status" id="status">
+              <div class="spinner"></div>
+              <p><strong>Aguardando autorização...</strong></p>
+              <p id="timer">⏱️ Tempo restante: ${Math.floor(expires_in / 60)}:${(expires_in % 60).toString().padStart(2, '0')}</p>
+            </div>
+          </div>
+          
+          <script>
+            let timeLeft = ${expires_in};
+            const timerEl = document.getElementById('timer');
+            const statusEl = document.getElementById('status');
+            
+            function updateStatus(message, type = 'info') {
+              const statusHTML = type === 'success' ? 
+                '<div class="success">✅ ' + message + '</div>' :
+                type === 'error' ? 
+                '<div class="error">❌ ' + message + '</div>' :
+                '<div class="spinner"></div><p><strong>' + message + '</strong></p>';
+              
+              statusEl.innerHTML = statusHTML + '<p id="timer">⏱️ Tempo restante: ' + formatTime(timeLeft) + '</p>';
+            }
+            
+            function formatTime(seconds) {
+              const mins = Math.floor(seconds / 60);
+              const secs = seconds % 60;
+              return mins + ':' + secs.toString().padStart(2, '0');
+            }
+            
+            function copyCode() {
+              const code = '${user_code}';
+              navigator.clipboard.writeText(code).then(() => {
+                const btn = document.querySelector('.copy-button');
+                btn.textContent = '✅ Copiado!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                  btn.textContent = '📋 Copiar Código';
+                  btn.classList.remove('copied');
+                }, 2000);
+              });
+            }
+            
+            const timer = setInterval(() => {
+              timeLeft--;
+              const timerEl = document.getElementById('timer');
+              if (timerEl) {
+                timerEl.textContent = '⏱️ Tempo restante: ' + formatTime(timeLeft);
+              }
+              
+              if (timeLeft <= 60) {
+                updateStatus('Código expirando em breve! Aja rápido.', 'warning');
+              }
+              
+              if (timeLeft <= 0) {
+                clearInterval(timer);
+                updateStatus('Código expirado. Feche esta janela e tente novamente.', 'error');
+              }
+            }, 1000);
+            
+            // Auto-focus on the code for better visibility
+            document.addEventListener('DOMContentLoaded', () => {
+              const codeEl = document.getElementById('userCode');
+              if (codeEl) {
+                codeEl.style.animation = 'pulse 2s infinite';
+              }
+            });
+          </script>
+        </body>
+        </html>
+      `;
+      
+      // 4. Carregar página de instruções
+      await authWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(instructionsHTML));
+      authWindow.show();
+      authWindow.center();
+      
+      // 5. Iniciar polling em background
+      console.log('🔄 Starting token polling...');
+      const tokenResult = await exchangeDeviceCodeForToken(device_code, interval);
+      
+      // 6. Fechar janela de instruções
+      authWindow.close();
+      
+      if (tokenResult.success) {
+        console.log('✅ Authentication successful');
+        resolve(tokenResult);
+      } else {
+        console.log('❌ Authentication failed:', tokenResult.error);
+        resolve({ success: false, error: tokenResult.error });
+      }
+      
+    } catch (error) {
+      console.error('❌ Device flow authentication error:', error);
+      resolve({ success: false, error: error.message });
+    }
+  });
+}
+
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
     height: 600,
@@ -534,7 +1167,14 @@ function createWindow() {
   mainWindow.maximize();
   mainWindow.show();
 
-  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  // Check if it's the first time using the app
+  const isFirstTime = await checkFirstTimeUser();
+  
+  if (isFirstTime) {
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'welcome.html'));
+  } else {
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  }
 
   // Hide the menu bar
   Menu.setApplicationMenu(null);
@@ -554,6 +1194,8 @@ function initializeDatabase() {
       console.error('Error opening database:', err.message);
     } else {
       console.log('Connected to the SQLite database.');
+      
+      // Create projects table
       db.run(`CREATE TABLE IF NOT EXISTS projects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         projectName TEXT NOT NULL,
@@ -566,6 +1208,24 @@ function initializeDatabase() {
           console.error('Error creating projects table:', err.message);
         } else {
           console.log('Projects table ensured.');
+        }
+      });
+      
+      // Create users table for GitHub authentication
+      db.run(`CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        githubId INTEGER UNIQUE NOT NULL,
+        login TEXT NOT NULL,
+        name TEXT,
+        email TEXT,
+        avatarUrl TEXT,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`, (err) => {
+        if (err) {
+          console.error('Error creating users table:', err.message);
+        } else {
+          console.log('Users table ensured.');
         }
       });
     }
@@ -588,6 +1248,64 @@ app.whenReady().then(() => {
       return null;
     } else {
       return filePaths[0];
+    }
+  });
+
+  // GitHub authentication handlers
+  ipcMain.handle('checkGitHubAuth', async () => {
+    try {
+      const token = await getGitHubToken();
+      if (!token) {
+        return { authenticated: false };
+      }
+
+      const userInfo = await getGitHubUserInfo();
+      if (userInfo) {
+        return { authenticated: true, userInfo };
+      } else {
+        return { authenticated: false };
+      }
+    } catch (error) {
+      console.error('Error checking GitHub auth:', error);
+      return { authenticated: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('authenticateWithGitHub', async () => {
+    try {
+      const result = await authenticateWithGitHub();
+      
+      if (result.success && result.userInfo) {
+        // Save user info to database
+        await new Promise((resolve, reject) => {
+          db.run(`INSERT OR REPLACE INTO users (githubId, login, name, email, avatarUrl, updatedAt) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            [result.userInfo.id, result.userInfo.login, result.userInfo.name, result.userInfo.email, result.userInfo.avatar_url],
+            (err) => {
+              if (err) {
+                console.error('Error saving user info:', err.message);
+                reject(err);
+              } else {
+                console.log('User info saved to database');
+                resolve();
+              }
+            });
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error in GitHub authentication:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('completeWelcomeSetup', async () => {
+    try {
+      markSetupCompleted();
+      return { success: true };
+    } catch (error) {
+      console.error('Error completing welcome setup:', error);
+      return { success: false, error: error.message };
     }
   });
 
@@ -635,53 +1353,58 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('checkProjectExists', async (event, folderPath) => {
-    return new Promise((resolve, reject) => {
+    try {
       // Check if folder exists
       if (!fs.existsSync(folderPath)) {
-        reject('Pasta não encontrada');
-        return;
+        throw new Error('Pasta não encontrada');
       }
 
       // Check if this path matches any existing project
-      db.all(`SELECT id, projectName, projectPath, repoFolderName FROM projects`, (err, rows) => {
-        if (err) {
-          reject(err.message);
-          return;
-        }
-
-        let matchingProject = null;
-        for (const project of rows) {
-          const fullProjectPath = path.join(project.projectPath, project.repoFolderName || '');
-          if (fullProjectPath === folderPath) {
-            matchingProject = project;
-            break;
+      return new Promise((resolve, reject) => {
+        db.all(`SELECT id, projectName, projectPath, repoFolderName FROM projects`, async (err, rows) => {
+          if (err) {
+            reject(err.message);
+            return;
           }
-        }
 
-        if (matchingProject) {
-          resolve({ exists: true, projectId: matchingProject.id });
-        } else {
-          // Get folder info
-          const folderInfo = getFolderInfo(folderPath);
-          resolve({ exists: false, folderInfo });
-        }
+          let matchingProject = null;
+          for (const project of rows) {
+            const fullProjectPath = path.join(project.projectPath, project.repoFolderName || '');
+            if (fullProjectPath === folderPath) {
+              matchingProject = project;
+              break;
+            }
+          }
+
+          if (matchingProject) {
+            resolve({ exists: true, projectId: matchingProject.id });
+          } else {
+            // Get folder info
+            try {
+              const folderInfo = await getFolderInfo(folderPath);
+              resolve({ exists: false, folderInfo });
+            } catch (error) {
+              reject(error.message);
+            }
+          }
+        });
       });
-    });
+    } catch (error) {
+      throw error;
+    }
   });
 
   ipcMain.handle('getFolderInfo', async (event, folderPath) => {
-    return new Promise((resolve, reject) => {
-      try {
-        const folderInfo = getFolderInfo(folderPath);
-        resolve(folderInfo);
-      } catch (error) {
-        reject(error.message);
-      }
-    });
+    try {
+      const folderInfo = await getFolderInfo(folderPath);
+      return folderInfo;
+    } catch (error) {
+      throw error;
+    }
   });
 
   // Helper function to get folder information
-  function getFolderInfo(folderPath) {
+  async function getFolderInfo(folderPath) {
     try {
       if (!fs.existsSync(folderPath)) {
         throw new Error('Pasta não encontrada');
@@ -703,12 +1426,8 @@ app.whenReady().then(() => {
       if (fs.existsSync(gitPath)) {
         isGitRepo = true;
         try {
-          // Get remote URL
-          const gitRemote = execSync('git remote get-url origin', { 
-            cwd: folderPath, 
-            encoding: 'utf8' 
-          }).trim();
-          remoteUrl = gitRemote;
+          // Get remote URL using isomorphic-git
+          remoteUrl = await gitGetRemoteUrl(folderPath);
         } catch (error) {
           console.log('Could not get git remote URL:', error.message);
         }
@@ -994,9 +1713,14 @@ app.whenReady().then(() => {
         const folderName = path.basename(projectPath);
         
         sendOutput('Cloning repository directly into selected folder...\n');
-        await executeCommand('git', ['clone', githubUrl, '.'], repoDirPath, projectId);
-        sendOutput(`Repository cloned into ${repoDirPath}\n`);
-        sendStatus('success');
+        try {
+          await gitClone(githubUrl, repoDirPath);
+          sendOutput(`Repository cloned into ${repoDirPath}\n`);
+          sendStatus('success');
+        } catch (error) {
+          sendOutput(`Error cloning repository: ${error.message}\n`);
+          throw error;
+        }
         await delay(3000);
 
         // Update repoFolderName in DB
@@ -1023,9 +1747,14 @@ app.whenReady().then(() => {
         }
         repoDirPath = path.join(projectPath, finalRepoFolderName);
 
-        await executeCommand('git', ['clone', githubUrl, finalRepoFolderName], projectPath, projectId);
-        sendOutput(`Repository cloned into ${repoDirPath}\n`);
-        sendStatus('success');
+        try {
+          await gitClone(githubUrl, repoDirPath);
+          sendOutput(`Repository cloned into ${repoDirPath}\n`);
+          sendStatus('success');
+        } catch (error) {
+          sendOutput(`Error cloning repository: ${error.message}\n`);
+          throw error;
+        }
         await delay(3000);
 
         // Update repoFolderName in DB
@@ -1045,14 +1774,29 @@ app.whenReady().then(() => {
       // Step 2: git checkout preview (skip if existing git repo)
       if (!isExistingGitRepo) {
         sendOutput('Checking out preview branch...\n');
-        await executeCommand('git', ['checkout', 'preview'], repoDirPath, projectId);
-        sendOutput('Checked out preview branch.\n');
-        sendStatus('success');
+        try {
+          await gitCheckout(repoDirPath, 'preview');
+          sendOutput('Checked out preview branch.\n');
+          sendStatus('success');
+        } catch (error) {
+          sendOutput(`Error checking out preview branch: ${error.message}\n`);
+          // Don't throw error for checkout failure, continue with setup
+          sendStatus('success');
+        }
         await delay(3000);
       } else {
         sendOutput('Skipping checkout for existing repository.\n');
         sendStatus('success');
         await delay(3000);
+      }
+
+      // Configure git user for this repository
+      sendOutput('Configuring git user...\n');
+      try {
+        await configureGitForUser(repoDirPath);
+        sendOutput('Git user configured successfully.\n');
+      } catch (error) {
+        sendOutput(`Warning: Could not configure git user: ${error.message}\n`);
       }
 
       // Step 3: npm install
