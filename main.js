@@ -1151,6 +1151,1150 @@ async function authenticateWithGitHub() {
   });
 }
 
+// Node.js detection and installation functions
+const MIN_NODE_VERSION = 22;
+const NODE_VERSION = '22.11.0'; // Specific version to install
+
+// Store custom Node.js paths for future use
+let customNodePath = null;
+let customNpmPath = null;
+
+async function detectNodeInstallation() {
+  try {
+    console.log('🔍 Starting intelligent Node.js detection...');
+    
+    // Step 1: Detect existing Node.js installation
+    const nodeInfo = await detectNodeVersion();
+    
+    if (nodeInfo.installed && nodeInfo.valid) {
+      console.log(`✅ Valid Node.js installation found: v${nodeInfo.version}`);
+      return {
+        status: 'valid',
+        message: `Node.js v${nodeInfo.version} já está instalado e é válido`,
+        nodeInfo,
+        needsInstallation: false
+      };
+    }
+    
+    // Step 2: If invalid or missing, detect existing NVM
+    console.log('🔍 Node.js not valid or missing, checking for existing NVM...');
+    const nvmInfo = await detectExistingNvm();
+    
+    let message = nodeInfo.installed ? 
+      `Node.js v${nodeInfo.version} é muito antigo (requer v${MIN_NODE_VERSION}+)` : 
+      'Node.js não encontrado';
+    
+    if (nvmInfo.exists) {
+      message += ` - NVM detectado em ${nvmInfo.path}`;
+    }
+    
+    console.log(`📋 Detection result: ${message}`);
+    
+    return {
+      status: 'needs_installation',
+      message,
+      nodeInfo,
+      nvmInfo,
+      needsInstallation: true
+    };
+  } catch (error) {
+    console.error('Error in intelligent Node.js detection:', error);
+    return {
+      status: 'error',
+      message: `Erro na detecção: ${error.message}`,
+      needsInstallation: true,
+      error: error.message
+    };
+  }
+}
+
+async function detectNodeVersion() {
+  try {
+    console.log('🔍 Detecting Node.js installation...');
+    
+    // First try to detect custom installation if available
+    if (customNodePath) {
+      console.log('🔍 Checking custom Node.js installation...');
+      const customResult = await checkSpecificNodeInstallation(customNodePath);
+      if (customResult.installed && customResult.valid) {
+        console.log(`✅ Custom Node.js detected: v${customResult.version}`);
+        return {
+          installed: true,
+          version: customResult.version,
+          valid: customResult.valid,
+          path: customNodePath,
+          isCustom: true
+        };
+      }
+    }
+    
+    // Then try to detect from PATH
+    console.log('🔍 Checking system PATH Node.js installation...');
+    const systemResult = await checkSpecificNodeInstallation('node');
+    if (systemResult.installed) {
+      console.log(`✅ System Node.js detected: v${systemResult.version}`);
+      return {
+        installed: true,
+        version: systemResult.version,
+        valid: systemResult.valid,
+        path: systemResult.path,
+        isCustom: false
+      };
+    }
+    
+    console.log('❌ Node.js not found');
+    return {
+      installed: false,
+      version: null,
+      valid: false,
+      path: null,
+      isCustom: false
+    };
+  } catch (error) {
+    console.error('Error detecting Node.js:', error);
+    return {
+      installed: false,
+      version: null,
+      valid: false,
+      path: null,
+      isCustom: false
+    };
+  }
+}
+
+async function detectExistingNvm() {
+  try {
+    console.log('🔍 Detecting existing NVM installation...');
+    
+    const os = require('os');
+    const possibleNvmPaths = [
+      path.join(os.homedir(), '.nvm'),
+      path.join(os.homedir(), '.config', 'nvm'),
+      process.env.NVM_DIR
+    ].filter(Boolean);
+    
+    // Remove duplicates
+    const uniquePaths = [...new Set(possibleNvmPaths)];
+    
+    for (const nvmPath of uniquePaths) {
+      console.log(`🔍 Checking NVM path: ${nvmPath}`);
+      
+      if (fs.existsSync(nvmPath)) {
+        console.log(`📁 NVM directory found: ${nvmPath}`);
+        
+        // Check for Unix NVM
+        const nvmSh = path.join(nvmPath, 'nvm.sh');
+        if (fs.existsSync(nvmSh)) {
+          console.log('✅ Unix NVM detected (nvm.sh found)');
+          return {
+            exists: true,
+            path: nvmPath,
+            type: 'unix',
+            executable: nvmSh
+          };
+        }
+        
+        // Check for Windows NVM
+        const nvmExe = path.join(nvmPath, 'nvm.exe');
+        if (fs.existsSync(nvmExe)) {
+          console.log('✅ Windows NVM detected (nvm.exe found)');
+          return {
+            exists: true,
+            path: nvmPath,
+            type: 'windows',
+            executable: nvmExe
+          };
+        }
+        
+        console.log(`⚠️ NVM directory exists but no executable found`);
+      }
+    }
+    
+    console.log('❌ No existing NVM installation found');
+    return { exists: false };
+  } catch (error) {
+    console.error('Error detecting existing NVM:', error);
+    return { exists: false, error: error.message };
+  }
+}
+
+async function checkSpecificNodeInstallation(nodeExecutable) {
+  try {
+    const { spawn } = require('child_process');
+    
+    return new Promise((resolve) => {
+      const nodeProcess = spawn(nodeExecutable, ['--version'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: false
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      nodeProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      
+      nodeProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      nodeProcess.on('close', (code) => {
+        if (code === 0 && stdout) {
+          const version = stdout.trim().replace('v', '');
+          resolve({
+            installed: true,
+            version: version,
+            valid: isNodeVersionValid(version),
+            path: nodeExecutable
+          });
+        } else {
+          resolve({
+            installed: false,
+            version: null,
+            valid: false,
+            path: nodeExecutable
+          });
+        }
+      });
+      
+      nodeProcess.on('error', () => {
+        resolve({
+          installed: false,
+          version: null,
+          valid: false,
+          path: nodeExecutable
+        });
+      });
+    });
+  } catch (error) {
+    return {
+      installed: false,
+      version: null,
+      valid: false,
+      path: nodeExecutable
+    };
+  }
+}
+
+function isNodeVersionValid(version) {
+  if (!version) return false;
+  
+  try {
+    const versionParts = version.split('.').map(part => parseInt(part, 10));
+    const majorVersion = versionParts[0];
+    
+    return majorVersion >= MIN_NODE_VERSION;
+  } catch (error) {
+    console.error('Error parsing Node.js version:', error);
+    return false;
+  }
+}
+
+function getNodeExecutablePath() {
+  try {
+    if (process.platform === 'win32') {
+      return process.env.NODE_PATH || 'node.exe';
+    } else {
+      return process.env.NODE_PATH || 'node';
+    }
+  } catch (error) {
+    return null;
+  }
+}
+
+function getNvmInstallPath() {
+  const userDataPath = app.getPath('userData');
+  const nvmPath = path.join(userDataPath, 'nvm');
+  
+  if (!fs.existsSync(nvmPath)) {
+    fs.mkdirSync(nvmPath, { recursive: true });
+  }
+  
+  return nvmPath;
+}
+
+function getNodeInstallPath() {
+  const nvmPath = getNvmInstallPath();
+  const nodePath = path.join(nvmPath, 'node-v' + NODE_VERSION);
+  
+  if (!fs.existsSync(nodePath)) {
+    fs.mkdirSync(nodePath, { recursive: true });
+  }
+  
+  return nodePath;
+}
+
+async function installNvm() {
+  try {
+    console.log('🔄 Installing NVM...');
+    const platform = process.platform;
+    const nvmPath = getNvmInstallPath();
+    
+    if (platform === 'win32') {
+      return await installNvmWindows(nvmPath);
+    } else {
+      return await installNvmUnix(nvmPath);
+    }
+  } catch (error) {
+    console.error('Error installing NVM:', error);
+    throw error;
+  }
+}
+
+async function installNvmWindows(nvmPath) {
+  try {
+    console.log('📦 Installing NVM for Windows...');
+    
+    // Download NVM for Windows
+    const https = require('https');
+    const fs = require('fs');
+    const path = require('path');
+    
+    const nvmZipPath = path.join(nvmPath, 'nvm-windows.zip');
+    const nvmUrl = 'https://github.com/coreybutler/nvm-windows/releases/download/1.1.11/nvm-noinstall.zip';
+    
+    return new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(nvmZipPath);
+      
+      https.get(nvmUrl, (response) => {
+        response.pipe(file);
+        
+        file.on('finish', () => {
+          file.close();
+          console.log('✅ NVM for Windows downloaded');
+          
+          // Extract the ZIP file
+          const { spawn } = require('child_process');
+          const tar = spawn('tar', ['-xf', nvmZipPath, '-C', nvmPath], {
+            stdio: 'pipe'
+          });
+          
+          tar.on('close', (code) => {
+            if (code === 0) {
+              console.log('✅ NVM for Windows extracted');
+              
+              // Create settings.txt
+              const settingsPath = path.join(nvmPath, 'settings.txt');
+              const settings = `root: ${nvmPath.replace(/\\/g, '/')}/nodejs
+path: ${nvmPath.replace(/\\/g, '/')}/nodejs
+arch: 64
+proxy: none
+originalpath: ${nvmPath.replace(/\\/g, '/')}/nodejs
+originalversion: `;
+              
+              fs.writeFileSync(settingsPath, settings);
+              
+              // Create nodejs directory
+              const nodejsPath = path.join(nvmPath, 'nodejs');
+              if (!fs.existsSync(nodejsPath)) {
+                fs.mkdirSync(nodejsPath, { recursive: true });
+              }
+              
+              resolve({ success: true, nvmPath: path.join(nvmPath, 'nvm.exe') });
+            } else {
+              reject(new Error('Failed to extract NVM for Windows'));
+            }
+          });
+        });
+      }).on('error', (error) => {
+        reject(error);
+      });
+    });
+  } catch (error) {
+    console.error('Error installing NVM for Windows:', error);
+    throw error;
+  }
+}
+
+async function installNvmUnix(nvmPath) {
+  try {
+    console.log('📦 Installing NVM for Unix...');
+    
+    const { spawn } = require('child_process');
+    
+    return new Promise((resolve, reject) => {
+      // Download and install NVM using curl
+      const installScript = `
+        # Limpar ambiente para evitar conflitos
+        unset npm_config_prefix
+        unset NVM_BIN
+        unset NODE_PATH
+        export NVM_DIR="${nvmPath}"
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+        source "${nvmPath}/nvm.sh"
+      `;
+      
+      const install = spawn('bash', ['-c', installScript], {
+        stdio: 'pipe',
+        env: {
+          ...process.env,
+          NVM_DIR: nvmPath,
+          // Limpar variáveis conflitantes
+          npm_config_prefix: undefined,
+          NVM_BIN: undefined,
+          NODE_PATH: undefined
+        }
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      install.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      
+      install.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      install.on('close', (code) => {
+        if (code === 0) {
+          console.log('✅ NVM for Unix installed');
+          resolve({ success: true, nvmPath: path.join(nvmPath, 'nvm.sh') });
+        } else {
+          console.error('NVM installation stderr:', stderr);
+          
+          // Check for specific npm_config_prefix error
+          if (stderr.includes('npm_config_prefix') && stderr.includes('not compatible')) {
+            const errorMsg = 'NVM installation failed due to conflicting npm_config_prefix environment variable. ' +
+                           'This usually happens when Node.js was previously installed with NVM. ' +
+                           'Try running: unset npm_config_prefix && npm start';
+            reject(new Error(errorMsg));
+          } else {
+            reject(new Error('Failed to install NVM for Unix'));
+          }
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error installing NVM for Unix:', error);
+    throw error;
+  }
+}
+
+async function installNodeJsIntelligently() {
+  try {
+    console.log('🚀 Starting intelligent Node.js installation...');
+    
+    const nvmInfo = await detectExistingNvm();
+    
+    if (nvmInfo.exists) {
+      console.log('🔧 Using existing NVM installation');
+      console.log(`📍 NVM path: ${nvmInfo.path}`);
+      console.log(`📍 NVM type: ${nvmInfo.type}`);
+      return await installNodeViaExistingNvm(nvmInfo);
+    } else {
+      console.log('📦 No existing NVM found, installing NVM first...');
+      return await installNvmAndNode();
+    }
+  } catch (error) {
+    console.error('Error in intelligent Node.js installation:', error);
+    throw error;
+  }
+}
+
+async function installNodeViaExistingNvm(nvmInfo) {
+  try {
+    console.log(`🔧 Installing Node.js v${NODE_VERSION} via existing NVM...`);
+    
+    if (nvmInfo.type === 'windows') {
+      return await installNodeViaExistingNvmWindows(nvmInfo.path);
+    } else {
+      return await installNodeViaExistingNvmUnix(nvmInfo.path);
+    }
+  } catch (error) {
+    console.error('Error installing Node.js via existing NVM:', error);
+    throw error;
+  }
+}
+
+async function installNodeViaExistingNvmUnix(nvmPath) {
+  try {
+    console.log('📦 Installing Node.js via existing Unix NVM...');
+    
+    const { spawn } = require('child_process');
+    
+    return new Promise((resolve, reject) => {
+      const installScript = `
+        # Limpar ambiente para evitar conflitos
+        unset npm_config_prefix
+        unset NVM_BIN
+        export NVM_DIR="${nvmPath}"
+        
+        # Carregar NVM existente
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        
+        # Verificar se NVM está funcionando
+        nvm --version
+        
+        # Instalar versão correta
+        echo "Installing Node.js ${NODE_VERSION}..."
+        nvm install ${NODE_VERSION}
+        nvm use ${NODE_VERSION}
+        nvm alias default ${NODE_VERSION}
+        
+        # Garantir que NVM_BIN esteja definido
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        
+        # Obter caminhos corretos
+        NODE_PATH=$(which node)
+        NPM_PATH=$(which npm)
+        
+        echo "NODE_PATH:$NODE_PATH"
+        echo "NPM_PATH:$NPM_PATH"
+        
+        # Verificar versões
+        $NODE_PATH --version
+        $NPM_PATH --version
+      `;
+      
+      const install = spawn('bash', ['-c', installScript], {
+        stdio: 'pipe',
+        env: {
+          ...process.env,
+          NVM_DIR: nvmPath,
+          // Limpar variáveis conflitantes
+          npm_config_prefix: undefined,
+          NVM_BIN: undefined
+        }
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      install.stdout.on('data', (data) => {
+        const output = data.toString();
+        stdout += output;
+        console.log('Existing NVM Install Output:', output.trim());
+      });
+      
+      install.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderr += output;
+        console.log('Existing NVM Install Error:', output.trim());
+      });
+      
+      install.on('close', (code) => {
+        if (code === 0) {
+          console.log('✅ Node.js installed via existing NVM');
+          
+          const lines = stdout.split('\n');
+          const nodeLine = lines.find(line => line.startsWith('NODE_PATH:'));
+          const npmLine = lines.find(line => line.startsWith('NPM_PATH:'));
+          
+          if (nodeLine && npmLine) {
+            const nodePath = nodeLine.replace('NODE_PATH:', '').trim();
+            const npmPath = npmLine.replace('NPM_PATH:', '').trim();
+            
+            console.log(`📍 Extracted paths from existing NVM:`);
+            console.log(`   Node: ${nodePath}`);
+            console.log(`   npm: ${npmPath}`);
+            
+            // Verify the paths exist
+            if (!fs.existsSync(nodePath)) {
+              reject(new Error(`Node.js executable not found at: ${nodePath}`));
+              return;
+            }
+            
+            if (!fs.existsSync(npmPath)) {
+              reject(new Error(`npm executable not found at: ${npmPath}`));
+              return;
+            }
+            
+            customNodePath = nodePath;
+            customNpmPath = npmPath;
+            
+            resolve({ 
+              success: true, 
+              nodePath: nodePath,
+              npmPath: npmPath,
+              usedExistingNvm: true
+            });
+          } else {
+            console.error('Could not find path markers in existing NVM output');
+            console.error('STDOUT:', stdout);
+            reject(new Error('Could not determine Node.js/npm paths from existing NVM installation'));
+          }
+        } else {
+          console.error('Node.js installation via existing NVM failed with code:', code);
+          console.error('STDERR:', stderr);
+          reject(new Error(`Failed to install Node.js via existing NVM (exit code: ${code})`));
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error installing Node.js via existing NVM Unix:', error);
+    throw error;
+  }
+}
+
+async function installNodeViaExistingNvmWindows(nvmPath) {
+  try {
+    console.log('📦 Installing Node.js via existing Windows NVM...');
+    
+    const { spawn } = require('child_process');
+    const nvmExe = path.join(nvmPath, 'nvm.exe');
+    
+    return new Promise((resolve, reject) => {
+      // Install the specific version
+      const install = spawn(nvmExe, ['install', NODE_VERSION], {
+        stdio: 'pipe',
+        cwd: nvmPath,
+        env: {
+          ...process.env,
+          // Limpar variáveis conflitantes
+          npm_config_prefix: undefined
+        }
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      install.stdout.on('data', (data) => {
+        const output = data.toString();
+        stdout += output;
+        console.log('Existing NVM Windows Install:', output.trim());
+      });
+      
+      install.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderr += output;
+        console.log('Existing NVM Windows Error:', output.trim());
+      });
+      
+      install.on('close', (code) => {
+        if (code === 0) {
+          console.log('✅ Node.js installed via existing Windows NVM');
+          
+          // Set the installed version as current
+          const use = spawn(nvmExe, ['use', NODE_VERSION], {
+            stdio: 'pipe',
+            cwd: nvmPath,
+            env: { ...process.env, npm_config_prefix: undefined }
+          });
+          
+          let useStdout = '';
+          let useStderr = '';
+          
+          use.stdout.on('data', (data) => {
+            const output = data.toString();
+            useStdout += output;
+            console.log('Existing NVM Windows Use:', output.trim());
+          });
+          
+          use.stderr.on('data', (data) => {
+            const output = data.toString();
+            useStderr += output;
+            console.log('Existing NVM Windows Use Error:', output.trim());
+          });
+          
+          use.on('close', (useCode) => {
+            if (useCode === 0) {
+              console.log('✅ Node.js set as current via existing NVM');
+              
+              // Try to find the installed Node.js in the existing NVM structure
+              const nodejsDir = path.join(nvmPath, 'nodejs');
+              if (fs.existsSync(nodejsDir)) {
+                const versions = fs.readdirSync(nodejsDir).filter(dir => 
+                  dir.includes(`node-v${NODE_VERSION}`)
+                );
+                
+                if (versions.length > 0) {
+                  const versionDir = path.join(nodejsDir, versions[0]);
+                  const nodePath = path.join(versionDir, 'node.exe');
+                  const npmPath = path.join(versionDir, 'npm.cmd');
+                  
+                  if (fs.existsSync(nodePath) && fs.existsSync(npmPath)) {
+                    console.log(`📍 Found Node.js in existing NVM: ${nodePath}`);
+                    
+                    customNodePath = nodePath;
+                    customNpmPath = npmPath;
+                    
+                    resolve({ 
+                      success: true, 
+                      nodePath: nodePath,
+                      npmPath: npmPath,
+                      usedExistingNvm: true
+                    });
+                    return;
+                  }
+                }
+              }
+              
+              reject(new Error('Could not locate Node.js in existing NVM installation'));
+            } else {
+              console.error('Failed to use Node.js version in existing NVM. Code:', useCode);
+              console.error('STDERR:', useStderr);
+              reject(new Error('Failed to use Node.js version via existing NVM'));
+            }
+          });
+        } else {
+          console.error('Node.js installation via existing NVM failed. Code:', code);
+          console.error('STDERR:', stderr);
+          reject(new Error(`Failed to install Node.js via existing NVM (exit code: ${code})`));
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error installing Node.js via existing NVM Windows:', error);
+    throw error;
+  }
+}
+
+async function installNvmAndNode() {
+  try {
+    console.log('📦 Installing NVM first, then Node.js...');
+    
+    // Step 1: Install NVM
+    const nvmResult = await installNvm();
+    if (!nvmResult.success) {
+      throw new Error('Failed to install NVM: ' + (nvmResult.error || 'Unknown error'));
+    }
+    console.log('✅ NVM installation completed');
+    
+    // Step 2: Install Node.js via newly installed NVM
+    const nodeResult = await installNodeViaNvm();
+    if (!nodeResult.success) {
+      throw new Error('Failed to install Node.js: ' + (nodeResult.error || 'Unknown error'));
+    }
+    console.log('✅ Node.js installation completed via new NVM');
+    
+    return {
+      ...nodeResult,
+      usedExistingNvm: false
+    };
+  } catch (error) {
+    console.error('Error installing NVM and Node.js:', error);
+    throw error;
+  }
+}
+
+async function installNodeViaNvm() {
+  try {
+    console.log('🔄 Installing Node.js via NVM...');
+    const platform = process.platform;
+    const nvmPath = getNvmInstallPath();
+    
+    if (platform === 'win32') {
+      return await installNodeViaNvmWindows(nvmPath);
+    } else {
+      return await installNodeViaNvmUnix(nvmPath);
+    }
+  } catch (error) {
+    console.error('Error installing Node.js via NVM:', error);
+    throw error;
+  }
+}
+
+async function installNodeViaNvmWindows(nvmPath) {
+  try {
+    console.log('📦 Installing Node.js via NVM Windows...');
+    
+    const { spawn } = require('child_process');
+    const nvmExe = path.join(nvmPath, 'nvm.exe');
+    
+    return new Promise((resolve, reject) => {
+      // First install the specific version
+      const install = spawn(nvmExe, ['install', NODE_VERSION], {
+        stdio: 'pipe',
+        cwd: nvmPath,
+        env: { ...process.env }
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      install.stdout.on('data', (data) => {
+        const output = data.toString();
+        stdout += output;
+        console.log('NVM Windows Install:', output.trim());
+      });
+      
+      install.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderr += output;
+        console.log('NVM Windows Error:', output.trim());
+      });
+      
+      install.on('close', (code) => {
+        if (code === 0) {
+          console.log('✅ Node.js v' + NODE_VERSION + ' installed via NVM Windows');
+          
+          // Set the installed version as current
+          const use = spawn(nvmExe, ['use', NODE_VERSION], {
+            stdio: 'pipe',
+            cwd: nvmPath,
+            env: { ...process.env }
+          });
+          
+          let useStdout = '';
+          let useStderr = '';
+          
+          use.stdout.on('data', (data) => {
+            const output = data.toString();
+            useStdout += output;
+            console.log('NVM Windows Use:', output.trim());
+          });
+          
+          use.stderr.on('data', (data) => {
+            const output = data.toString();
+            useStderr += output;
+            console.log('NVM Windows Use Error:', output.trim());
+          });
+          
+          use.on('close', (useCode) => {
+            if (useCode === 0) {
+              console.log('✅ Node.js v' + NODE_VERSION + ' set as current');
+              
+              // Try multiple possible paths for Windows
+              const possiblePaths = [
+                path.join(nvmPath, 'nodejs', `node-v${NODE_VERSION}-win-x64`, 'node.exe'),
+                path.join(nvmPath, 'nodejs', `node-v${NODE_VERSION}-win-x86`, 'node.exe'),
+                path.join(nvmPath, 'nodejs', `node-v${NODE_VERSION}`, 'node.exe')
+              ];
+              
+              let nodePath = null;
+              let npmPath = null;
+              
+              // Find the correct Node.js path
+              for (const possibleNodePath of possiblePaths) {
+                if (fs.existsSync(possibleNodePath)) {
+                  nodePath = possibleNodePath;
+                  npmPath = path.join(path.dirname(possibleNodePath), 'npm.cmd');
+                  
+                  // If npm.cmd doesn't exist, try npm.exe
+                  if (!fs.existsSync(npmPath)) {
+                    npmPath = path.join(path.dirname(possibleNodePath), 'npm.exe');
+                  }
+                  
+                  console.log(`📍 Found Node.js at: ${nodePath}`);
+                  console.log(`📍 Found npm at: ${npmPath}`);
+                  break;
+                }
+              }
+              
+              if (nodePath && npmPath && fs.existsSync(nodePath) && fs.existsSync(npmPath)) {
+                // Verify the version
+                const verify = spawn(nodePath, ['--version'], {
+                  stdio: 'pipe'
+                });
+                
+                let verifyStdout = '';
+                verify.stdout.on('data', (data) => {
+                  verifyStdout += data.toString();
+                });
+                
+                verify.on('close', (verifyCode) => {
+                  if (verifyCode === 0) {
+                    const installedVersion = verifyStdout.trim().replace('v', '');
+                    const expectedMajor = NODE_VERSION.split('.')[0];
+                    
+                    if (installedVersion.startsWith(expectedMajor)) {
+                      console.log(`✅ Verified Node.js v${installedVersion}`);
+                      
+                      customNodePath = nodePath;
+                      customNpmPath = npmPath;
+                      
+                      resolve({ 
+                        success: true, 
+                        nodePath: nodePath,
+                        npmPath: npmPath
+                      });
+                    } else {
+                      reject(new Error(`Version mismatch: expected v${expectedMajor}.x.x, got v${installedVersion}`));
+                    }
+                  } else {
+                    reject(new Error('Failed to verify installed Node.js version'));
+                  }
+                });
+              } else {
+                console.error('Could not find Node.js executables at expected paths:');
+                console.error('Tried paths:', possiblePaths);
+                reject(new Error('Could not locate Node.js executables after installation'));
+              }
+            } else {
+              console.error('Failed to set Node.js version. Code:', useCode);
+              console.error('STDERR:', useStderr);
+              reject(new Error('Failed to use Node.js version'));
+            }
+          });
+        } else {
+          console.error('Node.js installation failed. Code:', code);
+          console.error('STDERR:', stderr);
+          reject(new Error(`Failed to install Node.js via NVM Windows (exit code: ${code})`));
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error installing Node.js via NVM Windows:', error);
+    throw error;
+  }
+}
+
+async function installNodeViaNvmUnix(nvmPath) {
+  try {
+    console.log('📦 Installing Node.js via NVM Unix...');
+    
+    const { spawn } = require('child_process');
+    
+    return new Promise((resolve, reject) => {
+      const installScript = `
+        # Limpar ambiente para evitar conflitos
+        unset npm_config_prefix
+        unset NVM_BIN
+        unset NODE_PATH
+        export NVM_DIR="${nvmPath}"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        
+        # Clear any existing node/npm from PATH
+        export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "node" | tr '\n' ':' | sed 's/:$//')
+        
+        # Install and use specific version
+        nvm install ${NODE_VERSION}
+        nvm use ${NODE_VERSION}
+        nvm alias default ${NODE_VERSION}
+        
+        # Reload NVM to ensure NVM_BIN is set correctly
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+        
+        # Get the exact paths - use full paths
+        NODE_PATH=\$(which node)
+        NPM_PATH=\$(which npm)
+        
+        echo "NODE_PATH:\$NODE_PATH"
+        echo "NPM_PATH:\$NPM_PATH"
+        
+        # Verify versions
+        \$NODE_PATH --version
+        \$NPM_PATH --version
+      `;
+      
+      const install = spawn('bash', ['-c', installScript], {
+        stdio: 'pipe',
+        env: { 
+          ...process.env, 
+          NVM_DIR: nvmPath,
+          // Limpar variáveis conflitantes
+          npm_config_prefix: undefined,
+          NVM_BIN: undefined,
+          NODE_PATH: undefined,
+          PATH: process.env.PATH // Ensure original PATH is available
+        }
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      install.stdout.on('data', (data) => {
+        const output = data.toString();
+        stdout += output;
+        console.log('NVM Install Output:', output.trim());
+      });
+      
+      install.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderr += output;
+        console.log('NVM Install Error:', output.trim());
+      });
+      
+      install.on('close', (code) => {
+        if (code === 0) {
+          console.log('✅ Node.js installed via NVM Unix');
+          
+          const lines = stdout.split('\n');
+          const nodeLine = lines.find(line => line.startsWith('NODE_PATH:'));
+          const npmLine = lines.find(line => line.startsWith('NPM_PATH:'));
+          const versionLine = lines.find(line => line.includes('v' + NODE_VERSION.split('.')[0]));
+          
+          if (nodeLine && npmLine) {
+            const nodePath = nodeLine.replace('NODE_PATH:', '').trim();
+            const npmPath = npmLine.replace('NPM_PATH:', '').trim();
+            
+            console.log(`📍 Extracted paths:`);
+            console.log(`   Node: ${nodePath}`);
+            console.log(`   npm: ${npmPath}`);
+            
+            // Verify the paths exist
+            if (!require('fs').existsSync(nodePath)) {
+              reject(new Error(`Node.js executable not found at: ${nodePath}`));
+              return;
+            }
+            
+            if (!require('fs').existsSync(npmPath)) {
+              reject(new Error(`npm executable not found at: ${npmPath}`));
+              return;
+            }
+            
+            customNodePath = nodePath;
+            customNpmPath = npmPath;
+            
+            resolve({ 
+              success: true, 
+              nodePath: nodePath,
+              npmPath: npmPath
+            });
+          } else {
+            console.error('Could not find path markers in output');
+            console.error('STDOUT:', stdout);
+            reject(new Error('Could not determine Node.js/npm paths from installation output'));
+          }
+        } else {
+          console.error('Node.js installation failed with code:', code);
+          console.error('STDERR:', stderr);
+          reject(new Error(`Failed to install Node.js via NVM Unix (exit code: ${code})`));
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error installing Node.js via NVM Unix:', error);
+    throw error;
+  }
+}
+
+function configureNodePath() {
+  try {
+    console.log('🔧 Configuring Node.js paths...');
+    
+    if (customNodePath && customNpmPath) {
+      // Add to current process environment
+      const nodeDir = path.dirname(customNodePath);
+      
+      if (process.platform === 'win32') {
+        process.env.PATH = `${nodeDir};${process.env.PATH}`;
+      } else {
+        process.env.PATH = `${nodeDir}:${process.env.PATH}`;
+      }
+      
+      // Store paths for future use
+      process.env.CUSTOM_NODE_PATH = customNodePath;
+      process.env.CUSTOM_NPM_PATH = customNpmPath;
+      
+      // Also set as default for this session
+      process.env.NODE_PATH = customNodePath;
+      process.env.NPM_PATH = customNpmPath;
+      
+      console.log(`✅ Node.js paths configured:`);
+      console.log(`   Node: ${customNodePath}`);
+      console.log(`   npm: ${customNpmPath}`);
+      console.log(`   PATH: ${nodeDir}`);
+      
+      return true;
+    }
+    
+    console.log('⚠️ No custom Node.js paths to configure');
+    return false;
+  } catch (error) {
+    console.error('Error configuring Node.js paths:', error);
+    return false;
+  }
+}
+
+async function verifyNodeInstallation() {
+  try {
+    console.log('🔍 Verifying Node.js installation...');
+    
+    if (!customNodePath || !customNpmPath) {
+      throw new Error('Custom Node.js paths not available for verification');
+    }
+    
+    const { spawn } = require('child_process');
+    
+    // Check Node.js version with custom path
+    const nodeVersion = await new Promise((resolve) => {
+      const nodeProcess = spawn(customNodePath, ['--version'], {
+        stdio: 'pipe',
+        env: { ...process.env, PATH: path.dirname(customNodePath) + ':' + process.env.PATH }
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      nodeProcess.stdout.on('data', (data) => stdout += data.toString());
+      nodeProcess.stderr.on('data', (data) => stderr += data.toString());
+      nodeProcess.on('close', (code) => {
+        if (code === 0 && stdout) {
+          resolve(stdout.trim());
+        } else {
+          console.error('Node.js verification error:', stderr);
+          resolve(null);
+        }
+      });
+    });
+    
+    // Check npm version with custom path
+    const npmVersion = await new Promise((resolve) => {
+      const npmProcess = spawn(customNpmPath, ['--version'], {
+        stdio: 'pipe',
+        env: { ...process.env, PATH: path.dirname(customNpmPath) + ':' + process.env.PATH }
+      });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      npmProcess.stdout.on('data', (data) => stdout += data.toString());
+      npmProcess.stderr.on('data', (data) => stderr += data.toString());
+      npmProcess.on('close', (code) => {
+        if (code === 0 && stdout) {
+          resolve(stdout.trim());
+        } else {
+          console.error('npm verification error:', stderr);
+          resolve(null);
+        }
+      });
+    });
+    
+    if (nodeVersion && npmVersion) {
+      const nodeVersionClean = nodeVersion.replace('v', '');
+      const expectedMajorVersion = NODE_VERSION.split('.')[0]; // 22
+      
+      // Verify that the installed version matches what we expected
+      if (!nodeVersionClean.startsWith(expectedMajorVersion)) {
+        throw new Error(`Expected Node.js v${expectedMajorVersion}.x.x, but found v${nodeVersionClean}`);
+      }
+      
+      console.log(`✅ Node.js ${nodeVersion} and npm ${npmVersion} verified`);
+      console.log(`✅ Version validation: v${nodeVersionClean} matches expected v${expectedMajorVersion}.x.x`);
+      
+      return {
+        success: true,
+        nodeVersion: nodeVersionClean,
+        npmVersion: npmVersion,
+        nodePath: customNodePath,
+        npmPath: customNpmPath
+      };
+    } else {
+      throw new Error('Node.js or npm verification failed - no version output received');
+    }
+  } catch (error) {
+    console.error('Error verifying Node.js installation:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+function getNpmPath() {
+  // Always prefer custom npm path if available
+  if (customNpmPath) {
+    console.log(`📍 Using custom npm path: ${customNpmPath}`);
+    return customNpmPath;
+  }
+  console.log('📍 Using system npm');
+  return 'npm';
+}
+
+function getNodePath() {
+  // Always prefer custom node path if available
+  if (customNodePath) {
+    console.log(`📍 Using custom node path: ${customNodePath}`);
+    return customNodePath;
+  }
+  console.log('📍 Using system node');
+  return 'node';
+}
+
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
@@ -1307,6 +2451,104 @@ app.whenReady().then(() => {
       console.error('Error completing welcome setup:', error);
       return { success: false, error: error.message };
     }
+  });
+
+  // Node.js detection and installation handlers
+  ipcMain.handle('checkNodeInstallation', async () => {
+    try {
+      const detectionResult = await detectNodeInstallation();
+      return detectionResult;
+    } catch (error) {
+      console.error('Error checking Node.js installation:', error);
+      return { 
+        status: 'error',
+        message: `Erro na detecção: ${error.message}`,
+        needsInstallation: true,
+        error: error.message
+      };
+    }
+  });
+
+  ipcMain.handle('installNodeDependencies', async (event, options = {}) => {
+    try {
+      console.log('🚀 Starting intelligent Node.js installation process...');
+      console.log(`📋 Target version: ${NODE_VERSION}`);
+      console.log(`📋 Platform: ${process.platform}`);
+      console.log(`📋 User data path: ${app.getPath('userData')}`);
+      
+      // Clear any existing custom paths to start fresh
+      customNodePath = null;
+      customNpmPath = null;
+      
+      // Step 1: Intelligent installation (detect existing NVM or install new)
+      console.log('🔧 Step 1: Intelligent Node.js installation...');
+      const nodeResult = await installNodeJsIntelligently();
+      if (!nodeResult.success) {
+        throw new Error('Failed to install Node.js: ' + (nodeResult.error || 'Unknown error'));
+      }
+      console.log('✅ Node.js installation completed');
+      console.log(`📍 Node.js path: ${nodeResult.nodePath}`);
+      console.log(`📍 npm path: ${nodeResult.npmPath}`);
+      console.log(`🔄 Used existing NVM: ${nodeResult.usedExistingNvm ? 'Yes' : 'No'}`);
+      
+      // Step 2: Configure paths
+      console.log('⚙️ Step 2: Configuring environment paths...');
+      const pathConfigured = configureNodePath();
+      if (!pathConfigured) {
+        console.warn('⚠️ Could not configure Node.js paths');
+        throw new Error('Failed to configure Node.js environment paths');
+      }
+      console.log('✅ Environment paths configured');
+      
+      // Step 3: Verify installation
+      console.log('🔍 Step 3: Verifying installation...');
+      const verification = await verifyNodeInstallation();
+      if (!verification.success) {
+        throw new Error('Node.js installation verification failed: ' + verification.error);
+      }
+      console.log('✅ Installation verification completed');
+      
+      // Step 4: Final detection to confirm everything works
+      console.log('🔍 Step 4: Final detection test...');
+      const finalDetection = await detectNodeVersion();
+      if (!finalDetection.installed || !finalDetection.valid) {
+        throw new Error(`Final detection failed: installed=${finalDetection.installed}, valid=${finalDetection.valid}`);
+      }
+      
+      console.log('🎉 Intelligent Node.js installation completed successfully!');
+      console.log(`📊 Final status: v${finalDetection.version} (${finalDetection.isCustom ? 'custom' : 'system'})`);
+      
+      return {
+        success: true,
+        nodeVersion: verification.nodeVersion,
+        npmVersion: verification.npmVersion,
+        nodePath: verification.nodePath,
+        npmPath: verification.npmPath,
+        isCustom: finalDetection.isCustom,
+        usedExistingNvm: nodeResult.usedExistingNvm || false
+      };
+    } catch (error) {
+      console.error('❌ Error in intelligent Node.js installation:', error);
+      console.error('📋 Error details:', {
+        message: error.message,
+        stack: error.stack,
+        customNodePath: customNodePath,
+        customNpmPath: customNpmPath
+      });
+      return { 
+        success: false, 
+        error: error.message 
+      };
+    }
+  });
+
+  ipcMain.handle('getNodeInstallationProgress', async () => {
+    // This can be implemented later for real-time progress updates
+    return {
+      stage: 'ready',
+      progress: 0,
+      message: 'Ready to start installation'
+    };
   });
 
   ipcMain.handle('get-project-details', async (event, projectId) => {
@@ -1584,7 +2826,7 @@ app.whenReady().then(() => {
         }
       };
 
-      const devProcess = spawn('npm', ['run', 'dev'], { cwd: repoDirPath });
+      const devProcess = spawn(getNpmPath(), ['run', 'dev'], { cwd: repoDirPath });
       activeProcesses[`dev-reopen-${projectId}`] = devProcess;
 
       // Track this as a Documental process
@@ -1864,7 +3106,7 @@ app.whenReady().then(() => {
         }
       };
 
-      const devProcess = spawn('npm', ['run', 'dev'], { cwd: repoDirPath });
+      const devProcess = spawn(getNpmPath(), ['run', 'dev'], { cwd: repoDirPath });
       activeProcesses[`dev-${projectId}`] = devProcess;
 
       // Track this as a Documental process
