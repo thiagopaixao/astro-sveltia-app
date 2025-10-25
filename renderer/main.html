@@ -818,7 +818,14 @@ clearingCache: false,
         if (!this.serverOutput && !this.consoleOutput) {
             const projectId = sessionStorage.getItem('currentProjectId');
             if (projectId) {
-                const savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${projectId}`));
+                // First try to load from projectCreationState (for create.html flow)
+                let savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${projectId}`));
+                
+                // If not found, try to load from projectOpenState (for open.html flow)
+                if (!savedState) {
+                    savedState = JSON.parse(sessionStorage.getItem(`projectOpenState-${projectId}`));
+                }
+                
                 if (savedState && savedState.steps) {
                     savedState.steps.forEach(step => {
                         if (step.log) {
