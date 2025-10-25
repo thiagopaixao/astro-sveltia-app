@@ -630,6 +630,125 @@ async function configureGitForUser(dir) {
   }
 }
 
+// Branch management functions
+async function gitListBranches(dir) {
+  try {
+    console.log(`📋 Listing branches in ${dir}`);
+    
+    // Get all branches (local and remote)
+    const branches = await git.listBranches({ fs, dir });
+    
+    // Get current branch
+    const currentBranch = await git.currentBranch({ fs, dir });
+    
+    // Separate local and remote branches
+    const localBranches = branches.filter(branch => !branch.includes('origin/'));
+    const remoteBranches = branches.filter(branch => branch.includes('origin/'))
+      .map(branch => branch.replace('origin/', ''));
+    
+    // Remove duplicates (branches that exist both locally and remotely)
+    const uniqueBranches = [...new Set([...localBranches, ...remoteBranches])];
+    
+    console.log(`✅ Found ${uniqueBranches.length} branches, current: ${currentBranch}`);
+    
+    return {
+      branches: uniqueBranches,
+      currentBranch,
+      localBranches,
+      remoteBranches
+    };
+  } catch (error) {
+    console.error('❌ Error listing branches:', error);
+    throw error;
+  }
+}
+
+async function gitCreateBranch(dir, branchName) {
+  try {
+    console.log(`🌿 Creating new branch '${branchName}' in ${dir}`);
+    
+    // Validate branch name
+    if (!branchName || !/^[a-zA-Z0-9._-]+$/.test(branchName)) {
+      throw new Error('Invalid branch name. Only alphanumeric characters, dots, hyphens and underscores are allowed.');
+    }
+    
+    // Check if branch already exists
+    const existingBranches = await git.listBranches({ fs, dir });
+    if (existingBranches.includes(branchName)) {
+      throw new Error(`Branch '${branchName}' already exists.`);
+    }
+    
+    // Create the branch
+    await git.branch({
+      fs,
+      dir,
+      ref: branchName
+    });
+    
+    // Checkout the new branch
+    await git.checkout({
+      fs,
+      dir,
+      ref: branchName
+    });
+    
+    console.log(`✅ Created and checked out branch '${branchName}' successfully`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error creating branch '${branchName}':`, error);
+    throw error;
+  }
+}
+
+async function gitCheckoutBranch(dir, branchName) {
+  try {
+    console.log(`🔄 Checking out branch '${branchName}' in ${dir}`);
+    
+    // Check if branch exists
+    const branches = await git.listBranches({ fs, dir });
+    const localBranch = branches.find(b => b === branchName);
+    const remoteBranch = branches.find(b => b === `origin/${branchName}`);
+    
+    if (!localBranch && !remoteBranch) {
+      throw new Error(`Branch '${branchName}' not found.`);
+    }
+    
+    // If only remote branch exists, create local tracking branch
+    if (!localBranch && remoteBranch) {
+      console.log(`📥 Creating local branch '${branchName}' to track remote branch`);
+      await git.branch({
+        fs,
+        dir,
+        ref: branchName,
+        checkout: true
+      });
+    } else {
+      // Checkout existing local branch
+      await git.checkout({
+        fs,
+        dir,
+        ref: branchName
+      });
+    }
+    
+    console.log(`✅ Checked out branch '${branchName}' successfully`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error checking out branch '${branchName}':`, error);
+    throw error;
+  }
+}
+
+async function gitGetCurrentBranch(dir) {
+  try {
+    const currentBranch = await git.currentBranch({ fs, dir });
+    return currentBranch;
+  } catch (error) {
+    console.error('❌ Error getting current branch:', error);
+    throw error;
+  }
+}
+
 // Device Flow: Authorization code extraction is no longer needed
 // The Device Flow handles authorization through polling instead of code extraction
 
@@ -3906,6 +4025,150 @@ ipcMain.handle('get-dev-server-url-from-main', () => {
           return { success: true };
         } catch (error) {
           console.error('Error creating new window:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      // Branch management IPC handlers
+      ipcMain.handle('git:list-branches', async (event, projectId) => {
+        try {
+          const project = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          // Debug: Log project data to identify undefined values
+          console.log('🔍 DEBUG: Project data:', {
+            id: project.id,
+            projectName: project.projectName,
+            projectPath: project.projectPath,
+            repoFolderName: project.repoFolderName
+          });
+
+          // Validate required fields
+          if (!project.projectPath || !project.repoFolderName) {
+            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
+          }
+
+          const projectPath = path.join(project.projectPath, project.repoFolderName);
+          console.log('🔍 DEBUG: Full project path:', projectPath);
+          
+          const result = await gitListBranches(projectPath);
+          
+          return { success: true, ...result };
+        } catch (error) {
+          console.error('Error listing branches:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      ipcMain.handle('git:create-branch', async (event, projectId, branchName) => {
+        try {
+          const project = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          // Debug: Log project data
+          console.log('🔍 DEBUG: Project data for create branch:', {
+            id: project.id,
+            projectPath: project.projectPath,
+            repoFolderName: project.repoFolderName
+          });
+
+          // Validate required fields
+          if (!project.projectPath || !project.repoFolderName) {
+            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
+          }
+
+          const projectPath = path.join(project.projectPath, project.repoFolderName);
+          await gitCreateBranch(projectPath, branchName);
+          
+          return { success: true, branchName };
+        } catch (error) {
+          console.error('Error creating branch:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      ipcMain.handle('git:checkout-branch', async (event, projectId, branchName) => {
+        try {
+          const project = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          // Debug: Log project data
+          console.log('🔍 DEBUG: Project data for checkout branch:', {
+            id: project.id,
+            projectPath: project.projectPath,
+            repoFolderName: project.repoFolderName
+          });
+
+          // Validate required fields
+          if (!project.projectPath || !project.repoFolderName) {
+            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
+          }
+
+          const projectPath = path.join(project.projectPath, project.repoFolderName);
+          await gitCheckoutBranch(projectPath, branchName);
+          
+          return { success: true, branchName };
+        } catch (error) {
+          console.error('Error checking out branch:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      ipcMain.handle('git:get-current-branch', async (event, projectId) => {
+        try {
+          const project = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          // Debug: Log project data
+          console.log('🔍 DEBUG: Project data for get current branch:', {
+            id: project.id,
+            projectPath: project.projectPath,
+            repoFolderName: project.repoFolderName
+          });
+
+          // Validate required fields
+          if (!project.projectPath || !project.repoFolderName) {
+            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
+          }
+
+          const projectPath = path.join(project.projectPath, project.repoFolderName);
+          const currentBranch = await gitGetCurrentBranch(projectPath);
+          
+          return { success: true, currentBranch };
+        } catch (error) {
+          console.error('Error getting current branch:', error);
           return { success: false, error: error.message };
         }
       });

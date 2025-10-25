@@ -141,6 +141,8 @@ clearingCache: false,
     newBranchName: '',
     currentBranch: 'stage',
     branchAction: 'change',
+    branches: [],
+    branchLoading: false,
     copySuccess: false,
      initialLoading: true,
      contentLoading: false,
@@ -403,6 +405,87 @@ clearingCache: false,
         const minutes = String(date.getMinutes()).padStart(2, '0');
         return `working_user_${year}${month}${day}-${hours}${minutes}_`;
     },
+    async loadBranches() {
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            console.warn('No project ID found, cannot load branches');
+            return;
+        }
+        
+        this.branchLoading = true;
+        try {
+            const result = await window.electronAPI.listBranches(projectId);
+            if (result.success) {
+                this.branches = result.branches;
+                this.currentBranch = result.currentBranch;
+                this.selectedBranch = result.currentBranch;
+                console.log('✅ Branches loaded:', { branches: this.branches, current: this.currentBranch });
+            } else {
+                console.error('❌ Error loading branches:', result.error);
+                alert('Erro ao carregar branches: ' + result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error loading branches:', error);
+            alert('Erro ao carregar branches: ' + error.message);
+        } finally {
+            this.branchLoading = false;
+        }
+    },
+    async changeBranch() {
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId || !this.selectedBranch) {
+            return;
+        }
+        
+        if (this.selectedBranch === this.currentBranch) {
+            console.log('Already on selected branch, no action needed');
+            return;
+        }
+        
+        try {
+            const result = await window.electronAPI.checkoutBranch(projectId, this.selectedBranch);
+            if (result.success) {
+                this.currentBranch = this.selectedBranch;
+                console.log('✅ Changed to branch:', this.currentBranch);
+                // Optionally reload branches to update state
+                await this.loadBranches();
+            } else {
+                console.error('❌ Error changing branch:', result.error);
+                alert('Erro ao mudar de branch: ' + result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error changing branch:', error);
+            alert('Erro ao mudar de branch: ' + error.message);
+        }
+    },
+    async createBranch() {
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId || !this.newBranchName.trim()) {
+            alert('Por favor, informe um nome para a nova branch');
+            return;
+        }
+        
+        const fullName = this.getWorkingBranchName() + this.newBranchName.trim();
+        
+        try {
+            const result = await window.electronAPI.createBranch(projectId, fullName);
+            if (result.success) {
+                this.currentBranch = fullName;
+                this.selectedBranch = fullName;
+                this.newBranchName = '';
+                this.branchAction = 'change'; // Switch back to change mode
+                console.log('✅ Created and switched to branch:', this.currentBranch);
+                // Reload branches to update the list
+                await this.loadBranches();
+            } else {
+                console.error('❌ Error creating branch:', result.error);
+                alert('Erro ao criar branch: ' + result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error creating branch:', error);
+            alert('Erro ao criar branch: ' + error.message);
+        }
+    },
     async init() { // Make init an async function
         console.log('🚀 INIT STARTED - Renderer initialization beginning');
         console.log('📊 Initial Alpine.js state:', {
@@ -586,6 +669,13 @@ clearingCache: false,
             this.handleOverlayChange(isOpen);
         });
 
+        // Watch for branch modal opening to reload branches
+        this.$watch('branchModalOpen', (isOpen) => {
+            if (isOpen) {
+                this.loadBranches();
+            }
+        });
+
         window.addEventListener('resize', () => {
             this.updateBrowserViewBounds();
         });
@@ -666,6 +756,9 @@ clearingCache: false,
                 }
             }
         }
+
+        // Load branches for the current project
+        await this.loadBranches();
     },
     applyWindowState(windowState) {
         console.log('Applying window state:', windowState);
@@ -1283,10 +1376,16 @@ clearingCache: false,
 </div>
 <div x-show="branchAction === 'change'">
 <label class="text-sm font-medium text-text-dark">Mudar para branch</label>
-<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch">
-<option value="main">main</option>
-<option value="stage">stage</option>
+<div class="mt-1 relative">
+<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch" :disabled="branchLoading">
+<template x-for="branch in branches" :key="branch">
+<option :value="branch" x-text="branch"></option>
+</template>
 </select>
+<div x-show="branchLoading" class="absolute inset-0 flex items-center justify-center bg-background-dark bg-opacity-75">
+<div class="w-4 h-4 border-2 border-gray-600 border-t-primary rounded-full animate-spin"></div>
+</div>
+</div>
 </div>
 <div x-show="branchAction === 'create'">
 <label class="block text-sm font-medium text-text-dark" for="new-branch-name">Nome da nova branch</label>
@@ -1298,8 +1397,8 @@ clearingCache: false,
 </div>
 <div class="mt-6 flex justify-end space-x-2">
 <button @click="branchModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
-<button @click="branchModalOpen = false; if(branchAction === 'change') currentBranch = selectedBranch;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" x-show="branchAction === 'change'">Mudar Branch</button>
-<button @click="branchModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" x-show="branchAction === 'create'">Criar Branch</button>
+<button @click="changeBranch(); branchModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" x-show="branchAction === 'change'" :disabled="branchLoading || selectedBranch === currentBranch">Mudar Branch</button>
+<button @click="createBranch(); branchModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" x-show="branchAction === 'create'" :disabled="branchLoading || !newBranchName.trim()">Criar Branch</button>
 </div>
 </div>
 </div>
