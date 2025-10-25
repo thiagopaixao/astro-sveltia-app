@@ -168,8 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openRecentProject(projectId) {
     try {
       sessionStorage.setItem('currentProjectId', projectId);
-      sessionStorage.setItem('reopenMode', 'true');
-      window.electronAPI.navigateTo('create.html');
+      window.electronAPI.navigateTo('open.html');
     } catch (error) {
       console.error('Error opening recent project:', error);
       alert('Erro ao abrir projeto: ' + error);
@@ -309,8 +308,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (projectExists.exists) {
           // Project exists, open it
           sessionStorage.setItem('currentProjectId', projectExists.projectId);
-          sessionStorage.setItem('reopenMode', 'true');
-          window.electronAPI.navigateTo('create.html');
+          window.electronAPI.navigateTo('open.html');
         } else {
           // Project doesn't exist, show modal
           showFolderModal(folderPath, projectExists.folderInfo);

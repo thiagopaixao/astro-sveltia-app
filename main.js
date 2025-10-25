@@ -2705,6 +2705,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('reopen-project', async (event, projectId, projectPath, githubUrl, repoFolderName) => {
+    console.log('🔧 DEBUG: reopen-project called for project:', projectId);
+    return 'reopen-project-executed';
     const sendOutput = (output) => {
       // Send to all windows for synchronization
       BrowserWindow.getAllWindows().forEach(window => {
@@ -2769,7 +2771,7 @@ app.whenReady().then(() => {
       }
 
       // Step 4: npm run build
-      sendOutput('Construindo projeto...\n');
+      sendOutput('🔧 DEBUG: reopen-project - Construindo projeto...\n');
       await executeCommand('npm', ['run', 'build'], repoDirPath, `reopen-${projectId}`);
       sendOutput('Projeto construído.\n');
       sendStatus('success');
@@ -2871,6 +2873,181 @@ app.whenReady().then(() => {
       sendOutput('Servidor de desenvolvimento iniciado em segundo plano. Aguardando sinal de prontidão...\n');
     } catch (error) {
       sendOutput(`Erro durante a reabertura do projeto: ${error}\n`);
+      sendStatus('failure');
+    }
+  });
+
+  ipcMain.handle('open-project-only-preview-and-server', async (event, projectId, projectPath, githubUrl, repoFolderName) => {
+    console.log('🔧 DEBUG: open-project-only-preview-and-server called for project:', projectId);
+    const sendOutput = (output) => {
+      console.log('🔧 DEBUG: sendOutput called with:', output);
+      // Send to all windows for synchronization
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('command-output', output);
+        }
+      });
+    };
+
+    const sendStatus = (status) => {
+      console.log('🔧 DEBUG: sendStatus called with:', status);
+      // Send to all windows for synchronization
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('command-status', status);
+        }
+      });
+    };
+
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    const executeCommand = (command, args, cwd, processId) => {
+      return new Promise((resolve, reject) => {
+        const child = spawn(command, args, { cwd });
+        activeProcesses[processId] = child;
+
+        child.stdout.on('data', (data) => {
+          sendOutput(data.toString());
+        });
+
+        child.stderr.on('data', (data) => {
+          sendOutput(data.toString());
+        });
+
+        child.on('close', (code) => {
+          delete activeProcesses[processId];
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(`Command failed with code ${code}`);
+          }
+        });
+
+        child.on('error', (err) => {
+          delete activeProcesses[processId];
+          reject(`Failed to start command: ${err.message}`);
+        });
+      });
+    };
+
+    try {
+      // For empty folders that were cloned directly, repoFolderName might be the folder name itself
+      let repoDirPath;
+      if (repoFolderName && fs.existsSync(path.join(projectPath, repoFolderName))) {
+        repoDirPath = path.join(projectPath, repoFolderName);
+      } else {
+        // Check if projectPath itself is the repo (for empty folder case)
+        if (fs.existsSync(path.join(projectPath, '.git'))) {
+          repoDirPath = projectPath;
+        } else {
+          throw new Error('Repository folder not found');
+        }
+      }
+
+      // Step 1: git checkout preview (always execute for reopen)
+      sendOutput('🔧 DEBUG: open-project-only-preview-and-server - Verificando branch preview...\n');
+      try {
+        await gitCheckout(repoDirPath, 'preview');
+        sendOutput('Branch preview verificada com sucesso.\n');
+        sendStatus('success');
+      } catch (error) {
+        sendOutput(`Erro ao verificar branch preview: ${error.message}\n`);
+        // Don't throw error for checkout failure, continue with server
+        sendStatus('success');
+      }
+      await delay(3000);
+
+      // Step 2: npm run dev (keep in background)
+      sendOutput('Executando servidor do modo dev...\n');
+      let serverReady = false;
+      const checkServerReady = (data) => {
+        if (!serverReady && (data.includes('ready') || data.includes('compiled successfully') || data.includes('listening on'))) {
+          serverReady = true;
+          sendOutput('Servidor de desenvolvimento está pronto.\n');
+          sendStatus('success');
+        }
+      };
+
+      let devServerUrl = null;
+      const urlRegex = /http:\/\/localhost:\d+\//;
+
+      const processOutput = (data) => {
+        const output = data.toString();
+        sendOutput(output);
+        checkServerReady(output);
+
+        if (!devServerUrl) {
+          const match = output.match(urlRegex);
+          if (match) {
+            devServerUrl = match[0];
+            globalDevServerUrl = devServerUrl;
+            
+            // Extract port and update the tracked Documental process
+            const port = extractPortFromUrl(devServerUrl);
+            if (port && devProcess.pid) {
+              // Update the process with port information
+              if (activeDocumentalProcesses[devProcess.pid]) {
+                activeDocumentalProcesses[devProcess.pid].port = port;
+                saveDocumentalProcesses();
+                console.log(`📝 Updated Documental process ${devProcess.pid} with port ${port}`);
+              }
+            }
+            
+            console.log(`URL do servidor de desenvolvimento: ${devServerUrl}`);
+            // Send to all windows for synchronization
+            const allWindows = BrowserWindow.getAllWindows();
+            console.log(`📡 Sending dev-server-url to ${allWindows.length} windows`);
+            BrowserWindow.getAllWindows().forEach(window => {
+              if (!window.isDestroyed()) {
+                console.log(`📡 Sending to window: ${window.id}`);
+                window.webContents.send('dev-server-url', devServerUrl);
+              }
+            });
+          }
+        }
+      };
+
+      const devProcess = spawn(getNpmPath(), ['run', 'dev'], { cwd: repoDirPath });
+      activeProcesses[`dev-open-${projectId}`] = devProcess;
+
+      // Track this as a Documental process
+      if (devProcess.pid) {
+        addDocumentalProcess(devProcess.pid, {
+          port: null, // Will be updated when URL is detected
+          projectId: projectId,
+          command: 'npm run dev',
+          cwd: repoDirPath
+        });
+      }
+
+      devProcess.stdout.on('data', processOutput);
+      devProcess.stderr.on('data', processOutput);
+
+      devProcess.on('close', (code) => {
+        delete activeProcesses[`dev-open-${projectId}`];
+        if (devProcess.pid) {
+          removeDocumentalProcess(devProcess.pid);
+        }
+        if (code !== 0) {
+          sendOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
+          sendStatus('failure');
+        }
+      });
+
+      devProcess.on('error', (err) => {
+        delete activeProcesses[`dev-open-${projectId}`];
+        if (devProcess.pid) {
+          removeDocumentalProcess(devProcess.pid);
+        }
+        sendOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
+        sendStatus('failure');
+      });
+
+      sendOutput('Servidor de desenvolvimento iniciado em segundo plano. Aguardando sinal de prontidão...\n');
+      console.log('🔧 DEBUG: open-project-only-preview-and-server completed successfully');
+    } catch (error) {
+      console.log('🔧 DEBUG: Error in open-project-only-preview-and-server:', error);
+      sendOutput(`Erro durante a abertura do projeto: ${error}\n`);
       sendStatus('failure');
     }
   });
@@ -3042,7 +3219,7 @@ app.whenReady().then(() => {
       }
 
       // Step 3: npm install
-      sendOutput('Installing dependencies...\n');
+      sendOutput('🔧 DEBUG: reopen-project - Installing dependencies...\n');
       await executeCommand('npm', ['install'], repoDirPath, projectId);
       sendOutput('Dependencies installed.\n');
       sendStatus('success');

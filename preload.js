@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getFolderInfo: (folderPath) => ipcRenderer.invoke('getFolderInfo', folderPath),
   startProjectCreation: (projectId, projectPath, githubUrl) => ipcRenderer.invoke('start-project-creation', projectId, projectPath, githubUrl),
   reopenProject: (projectId, projectPath, githubUrl, repoFolderName) => ipcRenderer.invoke('reopen-project', projectId, projectPath, githubUrl, repoFolderName),
+  openProjectOnlyPreviewAndServer: (projectId, projectPath, githubUrl, repoFolderName) => ipcRenderer.invoke('open-project-only-preview-and-server', projectId, projectPath, githubUrl, repoFolderName),
   cancelProjectCreation: (projectId, projectPath, repoFolderName) => ipcRenderer.invoke('cancel-project-creation', projectId, projectPath, repoFolderName),
   onCommandOutput: (callback) => ipcRenderer.on('command-output', (event, ...args) => callback(...args)),
   onCommandStatus: (callback) => ipcRenderer.on('command-status', (event, ...args) => callback(...args)),
