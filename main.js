@@ -749,6 +749,73 @@ async function gitGetCurrentBranch(dir) {
   }
 }
 
+// New functions for repository information
+async function gitGetRepositoryInfo(dir) {
+  try {
+    console.log(`📋 Getting repository information from ${dir}`);
+    
+    // Get remote URL
+    let remoteUrl = '';
+    try {
+      remoteUrl = await git.getConfig({
+        fs,
+        dir,
+        path: 'remote.origin.url'
+      });
+    } catch (error) {
+      console.warn('⚠️ Could not get remote URL:', error.message);
+    }
+    
+    // Get last commit information
+    let lastCommit = {
+      hash: '',
+      message: '',
+      date: null
+    };
+    
+    try {
+      // Get the current branch
+      const currentBranch = await git.currentBranch({ fs, dir });
+      
+      // Get the commit OID for the current branch HEAD
+      const commitOid = await git.resolveRef({
+        fs,
+        dir,
+        ref: currentBranch
+      });
+      
+      if (commitOid) {
+        // Get commit details
+        const commit = await git.readCommit({
+          fs,
+          dir,
+          oid: commitOid
+        });
+        
+        if (commit && commit.commit) {
+          lastCommit.hash = commitOid.substring(0, 7); // Short hash (7 characters)
+          lastCommit.message = commit.commit.message.split('\n')[0]; // First line only
+          lastCommit.date = new Date(commit.commit.author.timestamp * 1000);
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not get last commit info:', error.message);
+    }
+    
+    const result = {
+      workingDirectory: dir,
+      remoteUrl: remoteUrl || '',
+      lastCommit: lastCommit
+    };
+    
+    console.log(`✅ Repository info retrieved:`, result);
+    return result;
+  } catch (error) {
+    console.error('❌ Error getting repository info:', error);
+    throw error;
+  }
+}
+
 // Device Flow: Authorization code extraction is no longer needed
 // The Device Flow handles authorization through polling instead of code extraction
 
@@ -4169,6 +4236,51 @@ ipcMain.handle('get-dev-server-url-from-main', () => {
           return { success: true, currentBranch };
         } catch (error) {
           console.error('Error getting current branch:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      ipcMain.handle('git:get-repository-info', async (event, projectId) => {
+        try {
+          const project = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          // Debug: Log project data
+          console.log('🔍 DEBUG: Project data for repository info:', {
+            id: project.id,
+            projectPath: project.projectPath,
+            repoFolderName: project.repoFolderName
+          });
+
+          // Validate required fields
+          if (!project.projectPath || !project.repoFolderName) {
+            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
+          }
+
+          const projectPath = path.join(project.projectPath, project.repoFolderName);
+          const repoInfo = await gitGetRepositoryInfo(projectPath);
+          
+          return { success: true, ...repoInfo };
+        } catch (error) {
+          console.error('Error getting repository info:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      ipcMain.handle('open-file-explorer', async (event, dirPath) => {
+        try {
+          await shell.showItemInFolder(dirPath);
+          return { success: true };
+        } catch (error) {
+          console.error('Error opening file explorer:', error);
           return { success: false, error: error.message };
         }
       });
