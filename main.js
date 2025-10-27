@@ -816,6 +816,152 @@ async function gitGetRepositoryInfo(dir) {
   }
 }
 
+// Git pull and push functions
+async function gitPullFromPreview(dir) {
+  try {
+    console.log(`🔄 Pulling from preview branch in ${dir}`);
+    
+    // Get current branch
+    const currentBranch = await git.currentBranch({ fs, dir });
+    console.log(`📍 Current branch: ${currentBranch}`);
+    
+    // Get GitHub token for authentication
+    const token = await getGitHubToken();
+    const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+    
+    // Fetch from origin preview
+    console.log('📥 Fetching from origin preview...');
+    await git.fetch({
+      fs,
+      http,
+      dir,
+      url: await gitGetRemoteUrl(dir),
+      ref: 'preview',
+      auth,
+      singleBranch: false
+    });
+    
+    // Merge origin/preview into current branch
+    console.log(`🔀 Merging origin/preview into ${currentBranch}...`);
+    await git.merge({
+      fs,
+      dir,
+      theirs: 'origin/preview',
+      ours: currentBranch,
+      message: `Merge preview into ${currentBranch}`
+    });
+    
+    console.log(`✅ Successfully pulled from preview to ${currentBranch}`);
+    return { 
+      success: true, 
+      message: `Atualizações da branch 'preview' foram mescladas na branch '${currentBranch}' com sucesso.` 
+    };
+  } catch (error) {
+    console.error('❌ Error pulling from preview:', error);
+    throw error;
+  }
+}
+
+async function gitPushToBranch(dir, targetBranch) {
+  try {
+    console.log(`🚀 Pushing from ${dir} to branch ${targetBranch}`);
+    
+    // Get current branch
+    const currentBranch = await git.currentBranch({ fs, dir });
+    console.log(`📍 Current branch: ${currentBranch}`);
+    console.log(`🎯 Target branch: ${targetBranch}`);
+    
+    // Get GitHub token for authentication
+    const token = await getGitHubToken();
+    const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+    
+    // Get remote URL
+    const remoteUrl = await gitGetRemoteUrl(dir);
+    if (!remoteUrl) {
+      throw new Error('Remote URL not found. Please ensure the repository has a remote origin.');
+    }
+    
+    // Push current branch to target branch
+    console.log(`📤 Pushing ${currentBranch} to origin/${targetBranch}...`);
+    await git.push({
+      fs,
+      http,
+      dir,
+      url: remoteUrl,
+      ref: `${currentBranch}:${targetBranch}`,
+      auth,
+      force: false
+    });
+    
+    console.log(`✅ Successfully pushed ${currentBranch} to ${targetBranch}`);
+    return { 
+      success: true, 
+      message: `Branch '${currentBranch}' foi publicada com sucesso para '${targetBranch}'.` 
+    };
+  } catch (error) {
+    console.error('❌ Error pushing to branch:', error);
+    throw error;
+  }
+}
+
+async function gitListRemoteBranches(dir) {
+  try {
+    console.log(`📋 Listing remote branches in ${dir}`);
+    
+    // Get GitHub token for authentication
+    const token = await getGitHubToken();
+    const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+    
+    // Get remote URL
+    const remoteUrl = await gitGetRemoteUrl(dir);
+    if (!remoteUrl) {
+      throw new Error('Remote URL not found');
+    }
+    
+    // Fetch remote references
+    const refs = await git.listServerRefs({
+      http,
+      url: remoteUrl,
+      auth,
+      prefix: 'refs/heads/'
+    });
+    
+    // Extract branch names from refs
+    const remoteBranches = refs
+      .filter(ref => ref.ref.startsWith('refs/heads/'))
+      .map(ref => ref.ref.replace('refs/heads/', ''))
+      .filter(branch => branch && !branch.includes('^{}')); // Filter out peel references
+    
+    console.log(`✅ Found ${remoteBranches.length} remote branches:`, remoteBranches);
+    
+    // Ensure preview is included and is first in the list
+    const sortedBranches = [...new Set(remoteBranches)]; // Remove duplicates
+    const previewIndex = sortedBranches.indexOf('preview');
+    if (previewIndex > 0) {
+      // Move preview to the beginning
+      sortedBranches.splice(previewIndex, 1);
+      sortedBranches.unshift('preview');
+    } else if (previewIndex === -1) {
+      // Add preview at the beginning if not present
+      sortedBranches.unshift('preview');
+    }
+    
+    return {
+      branches: sortedBranches,
+      defaultBranch: 'preview'
+    };
+  } catch (error) {
+    console.error('❌ Error listing remote branches:', error);
+    // Fallback to common branches if remote listing fails
+    const fallbackBranches = ['preview', 'main', 'stage'];
+    console.log('⚠️ Using fallback branches:', fallbackBranches);
+    return {
+      branches: fallbackBranches,
+      defaultBranch: 'preview'
+    };
+  }
+}
+
 // Device Flow: Authorization code extraction is no longer needed
 // The Device Flow handles authorization through polling instead of code extraction
 
@@ -4271,6 +4417,90 @@ ipcMain.handle('get-dev-server-url-from-main', () => {
           return { success: true, ...repoInfo };
         } catch (error) {
           console.error('Error getting repository info:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      ipcMain.handle('git:pull-from-preview', async (event, projectId) => {
+        try {
+          const project = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          // Validate required fields
+          if (!project.projectPath || !project.repoFolderName) {
+            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
+          }
+
+          const projectPath = path.join(project.projectPath, project.repoFolderName);
+          const result = await gitPullFromPreview(projectPath);
+          
+          return { success: true, ...result };
+        } catch (error) {
+          console.error('Error pulling from preview:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      ipcMain.handle('git:push-to-branch', async (event, projectId, targetBranch) => {
+        try {
+          const project = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          // Validate required fields
+          if (!project.projectPath || !project.repoFolderName) {
+            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
+          }
+
+          const projectPath = path.join(project.projectPath, project.repoFolderName);
+          const result = await gitPushToBranch(projectPath, targetBranch);
+          
+          return { success: true, ...result };
+        } catch (error) {
+          console.error('Error pushing to branch:', error);
+          return { success: false, error: error.message };
+        }
+      });
+
+      ipcMain.handle('git:list-remote-branches', async (event, projectId) => {
+        try {
+          const project = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+
+          if (!project) {
+            throw new Error('Project not found');
+          }
+
+          // Validate required fields
+          if (!project.projectPath || !project.repoFolderName) {
+            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
+          }
+
+          const projectPath = path.join(project.projectPath, project.repoFolderName);
+          const result = await gitListRemoteBranches(projectPath);
+          
+          return { success: true, ...result };
+        } catch (error) {
+          console.error('Error listing remote branches:', error);
           return { success: false, error: error.message };
         }
       });

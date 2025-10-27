@@ -142,8 +142,13 @@ clearingCache: false,
     currentBranch: 'stage',
     branchAction: 'change',
     branches: [],
-    branchLoading: false,
-    copySuccess: false,
+     branchLoading: false,
+     copySuccess: false,
+     // Pull and push functionality
+     remoteBranches: [],
+     selectedPublishBranch: 'preview',
+     pullLoading: false,
+     pushLoading: false,
      initialLoading: true,
      contentLoading: false,
      contentReady: false,
@@ -562,6 +567,91 @@ clearingCache: false,
             alert('Erro ao criar branch: ' + error.message);
         }
     },
+    async loadRemoteBranches() {
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            console.warn('No project ID found, cannot load remote branches');
+            return;
+        }
+        
+        try {
+            const result = await window.electronAPI.listRemoteBranches(projectId);
+            if (result.success) {
+                this.remoteBranches = result.branches;
+                this.selectedPublishBranch = result.defaultBranch || 'preview';
+                console.log('✅ Remote branches loaded:', { branches: this.remoteBranches, default: this.selectedPublishBranch });
+            } else {
+                console.error('❌ Error loading remote branches:', result.error);
+                alert('Erro ao carregar branches remotas: ' + result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error loading remote branches:', error);
+            alert('Erro ao carregar branches remotas: ' + error.message);
+        }
+    },
+    async pullFromPreview() {
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            console.warn('No project ID found, cannot pull from preview');
+            return;
+        }
+        
+        this.pullLoading = true;
+        this.updateModalOpen = false;
+        
+        try {
+            const result = await window.electronAPI.pullFromPreview(projectId);
+            if (result.success) {
+                console.log('✅ Pull from preview successful:', result.message);
+                alert('✅ ' + result.message);
+                // Refresh repository info after pull
+                await this.loadRepositoryInfo();
+                // Reload branches to update state
+                await this.loadBranches();
+            } else {
+                console.error('❌ Error pulling from preview:', result.error);
+                alert('❌ Erro ao atualizar: ' + result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error pulling from preview:', error);
+            alert('❌ Erro ao atualizar: ' + error.message);
+        } finally {
+            this.pullLoading = false;
+        }
+    },
+    async pushToBranch() {
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) {
+            console.warn('No project ID found, cannot push to branch');
+            return;
+        }
+        
+        if (!this.selectedPublishBranch) {
+            alert('Por favor, selecione uma branch para publicar.');
+            return;
+        }
+        
+        this.pushLoading = true;
+        this.publishModalOpen = false;
+        
+        try {
+            const result = await window.electronAPI.pushToBranch(projectId, this.selectedPublishBranch);
+            if (result.success) {
+                console.log('✅ Push to branch successful:', result.message);
+                alert('✅ ' + result.message);
+                // Refresh repository info after push
+                await this.loadRepositoryInfo();
+            } else {
+                console.error('❌ Error pushing to branch:', result.error);
+                alert('❌ Erro ao publicar: ' + result.error);
+            }
+        } catch (error) {
+            console.error('❌ Error pushing to branch:', error);
+            alert('❌ Erro ao publicar: ' + error.message);
+        } finally {
+            this.pushLoading = false;
+        }
+    },
     async init() { // Make init an async function
         console.log('🚀 INIT STARTED - Renderer initialization beginning');
         console.log('📊 Initial Alpine.js state:', {
@@ -749,6 +839,13 @@ clearingCache: false,
         this.$watch('branchModalOpen', (isOpen) => {
             if (isOpen) {
                 this.loadBranches();
+            }
+        });
+
+        // Watch for publish modal opening to load remote branches
+        this.$watch('publishModalOpen', (isOpen) => {
+            if (isOpen) {
+                this.loadRemoteBranches();
             }
         });
 
@@ -1193,11 +1290,19 @@ clearingCache: false,
 </div>
 </div>
 <div class="flex items-center space-x-2">
-<button @click="updateModalOpen = true" class="px-4 py-2 text-sm font-semibold text-white bg-accent-orange rounded-md hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange">
-                Atualizar
+<button @click="updateModalOpen = true" class="px-4 py-2 text-sm font-semibold text-white bg-accent-orange rounded-md hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange" :disabled="pullLoading">
+                <span x-show="!pullLoading">Atualizar</span>
+                <span x-show="pullLoading" class="flex items-center">
+                    <div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Atualizando...
+                </span>
             </button>
-<button @click="publishModalOpen = true" class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-md hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-primary">
-                Publicar
+<button @click="publishModalOpen = true" class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-md hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-primary" :disabled="pushLoading">
+                <span x-show="!pushLoading">Publicar</span>
+                <span x-show="pushLoading" class="flex items-center">
+                    <div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Publicando...
+                </span>
             </button>
 <div class="relative">
 <button @click="menuOpen = !menuOpen" class="p-2 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary">
@@ -1426,10 +1531,16 @@ clearingCache: false,
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="updateModalOpen">
 <div @click.outside="updateModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
 <h3 class="text-lg font-medium text-text-dark">Confirmar Atualização</h3>
-<p class="mt-2 text-sm text-muted-dark">Você tem certeza que deseja atualizar a branch '<span class="font-bold text-primary" x-text="currentBranch"></span>'? Isso executará um `git pull`.</p>
+<p class="mt-2 text-sm text-muted-dark">Você tem certeza que deseja atualizar a branch '<span class="font-bold text-primary" x-text="currentBranch"></span>'? Isso buscará atualizações da branch remota 'preview' e mesclará na branch atual.</p>
 <div class="mt-4 flex justify-end space-x-2">
-<button @click="updateModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
-<button @click="updateModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-orange-500">Confirmar</button>
+<button @click="updateModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" :disabled="pullLoading">Cancelar</button>
+<button @click="pullFromPreview()" class="px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-orange-500" :disabled="pullLoading">
+<span x-show="!pullLoading">Atualizar</span>
+<span x-show="pullLoading" class="flex items-center">
+<div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+Atualizando...
+</span>
+</button>
 </div>
 </div>
 </div>
@@ -1439,16 +1550,30 @@ clearingCache: false,
 <p class="mt-2 text-sm text-muted-dark">Selecione a branch para publicar.</p>
 <div class="mt-4 space-y-4">
 <div>
-<label class="text-sm font-medium text-text-dark">Selecionar branch existente</label>
-<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch">
-<option value="main">main</option>
-<option value="stage">stage</option>
+<label class="text-sm font-medium text-text-dark">Selecionar branch remota</label>
+<div class="mt-1 relative">
+<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedPublishBranch" :disabled="pushLoading || remoteBranches.length === 0">
+<template x-for="branch in remoteBranches" :key="branch">
+<option :value="branch" x-text="branch" :selected="branch === selectedPublishBranch"></option>
+</template>
 </select>
+<div x-show="pushLoading || remoteBranches.length === 0" class="absolute inset-0 flex items-center justify-center bg-background-dark bg-opacity-75">
+<div x-show="pushLoading" class="w-4 h-4 border-2 border-gray-600 border-t-primary rounded-full animate-spin"></div>
+<span x-show="!pushLoading && remoteBranches.length === 0" class="text-xs text-muted-dark">Carregando branches...</span>
+</div>
+</div>
+<p class="mt-1 text-xs text-muted-dark">A branch '<span class="font-bold text-primary" x-text="currentBranch"></span>' será publicada para a branch selecionada.</p>
 </div>
 </div>
 <div class="mt-6 flex justify-end space-x-2">
-<button @click="publishModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
-<button @click="publishModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500">Publicar</button>
+<button @click="publishModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" :disabled="pushLoading">Cancelar</button>
+<button @click="pushToBranch()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" :disabled="pushLoading || !selectedPublishBranch">
+<span x-show="!pushLoading">Publicar</span>
+<span x-show="pushLoading" class="flex items-center">
+<div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+Publicando...
+</span>
+</button>
 </div>
 </div>
 </div>

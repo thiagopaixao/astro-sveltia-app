@@ -48,5 +48,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCurrentBranch: (projectId) => ipcRenderer.invoke('git:get-current-branch', projectId),
   // Repository information functions
   getRepositoryInfo: (projectId) => ipcRenderer.invoke('git:get-repository-info', projectId),
+  // Git pull and push functions
+  pullFromPreview: (projectId) => ipcRenderer.invoke('git:pull-from-preview', projectId),
+  pushToBranch: (projectId, targetBranch) => ipcRenderer.invoke('git:push-to-branch', projectId, targetBranch),
+  listRemoteBranches: (projectId) => ipcRenderer.invoke('git:list-remote-branches', projectId),
   openInFileExplorer: (path) => ipcRenderer.invoke('open-file-explorer', path)
 });
