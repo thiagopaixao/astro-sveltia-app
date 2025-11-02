@@ -19,6 +19,66 @@ let viewerView;
 let globalDevServerUrl = null; // Global variable to store dev server URL
 let activeProcesses = {}; // To keep track of running child processes
 
+// App logging system
+let appLogBuffer = [];
+const MAX_LOG_BUFFER_SIZE = 10000;
+
+// Override console methods to capture app logs
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+const originalConsoleInfo = console.info;
+
+function addToAppLog(level, ...args) {
+  const timestamp = new Date().toISOString();
+  const message = args.map(arg => 
+    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+  ).join(' ');
+  
+  const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+  appLogBuffer.push(logEntry);
+  
+  // Keep buffer size manageable
+  if (appLogBuffer.length > MAX_LOG_BUFFER_SIZE) {
+    appLogBuffer = appLogBuffer.slice(-MAX_LOG_BUFFER_SIZE);
+  }
+  
+  // Send to all windows
+  const allWindows = BrowserWindow.getAllWindows();
+  allWindows.forEach(window => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('app-log-output', logEntry);
+    }
+  });
+  
+  // Call original console method
+  originalConsoleLog(...args);
+}
+
+console.log = function(...args) {
+  addToAppLog('info', ...args);
+};
+
+console.error = function(...args) {
+  addToAppLog('error', ...args);
+  originalConsoleError(...args);
+};
+
+console.warn = function(...args) {
+  addToAppLog('warn', ...args);
+  originalConsoleWarn(...args);
+};
+
+console.info = function(...args) {
+  addToAppLog('info', ...args);
+  originalConsoleInfo(...args);
+};
+
+// Function to get initial app logs
+function getAppLogs() {
+  return appLogBuffer.join('');
+}
+
 // GitHub authentication variables
 
 
@@ -75,6 +135,34 @@ function removeDocumentalProcess(pid) {
     saveDocumentalProcesses();
     console.log(`➖ Removed Documental process from tracking: PID ${pid}`);
   }
+}
+
+// Global output functions for console communication
+function sendCommandOutput(output) {
+  // Send to all windows for synchronization
+  BrowserWindow.getAllWindows().forEach(window => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('command-output', output);
+    }
+  });
+}
+
+function sendServerOutput(output) {
+  // Send to all windows for synchronization
+  BrowserWindow.getAllWindows().forEach(window => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('server-output', output);
+    }
+  });
+}
+
+function sendCommandStatus(status) {
+  // Send to all windows for synchronization
+  BrowserWindow.getAllWindows().forEach(window => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('command-status', status);
+    }
+  });
 }
 
 // Reset cleanup flag when app starts
@@ -633,13 +721,15 @@ async function configureGitForUser(dir) {
 // Branch management functions
 async function gitListBranches(dir) {
   try {
-    console.log(`📋 Listing branches in ${dir}`);
+    sendCommandOutput(`📋 Listando branches em ${dir}...\n`);
     
     // Get all branches (local and remote)
     const branches = await git.listBranches({ fs, dir });
+    sendCommandOutput(`🔍 Encontradas ${branches.length} branches no repositório\n`);
     
     // Get current branch
     const currentBranch = await git.currentBranch({ fs, dir });
+    sendCommandOutput(`📍 Branch atual: ${currentBranch}\n`);
     
     // Separate local and remote branches
     const localBranches = branches.filter(branch => !branch.includes('origin/'));
@@ -648,6 +738,10 @@ async function gitListBranches(dir) {
     
     // Remove duplicates (branches that exist both locally and remotely)
     const uniqueBranches = [...new Set([...localBranches, ...remoteBranches])];
+    
+    sendCommandOutput(`📂 Branches locais: ${localBranches.length}\n`);
+    sendCommandOutput(`🌐 Branches remotas: ${remoteBranches.length}\n`);
+    sendCommandOutput(`✅ Total de ${uniqueBranches.length} branches únicas\n`);
     
     console.log(`✅ Found ${uniqueBranches.length} branches, current: ${currentBranch}`);
     
@@ -658,6 +752,8 @@ async function gitListBranches(dir) {
       remoteBranches
     };
   } catch (error) {
+    const errorMsg = `❌ Erro ao listar branches: ${error.message}\n`;
+    sendCommandOutput(errorMsg);
     console.error('❌ Error listing branches:', error);
     throw error;
   }
@@ -665,36 +761,43 @@ async function gitListBranches(dir) {
 
 async function gitCreateBranch(dir, branchName) {
   try {
-    console.log(`🌿 Creating new branch '${branchName}' in ${dir}`);
+    sendCommandOutput(`🌿 Criando nova branch '${branchName}' em ${dir}...\n`);
     
     // Validate branch name
     if (!branchName || !/^[a-zA-Z0-9._-]+$/.test(branchName)) {
       throw new Error('Invalid branch name. Only alphanumeric characters, dots, hyphens and underscores are allowed.');
-    }
-    
-    // Check if branch already exists
+}
+    sendCommandOutput(`🔍 Verificando se branch já existe...\n`);
     const existingBranches = await git.listBranches({ fs, dir });
     if (existingBranches.includes(branchName)) {
+      const errorMsg = `❌ Branch '${branchName}' já existe.\n`;
+      sendCommandOutput(errorMsg);
       throw new Error(`Branch '${branchName}' already exists.`);
     }
     
-    // Create the branch
+    sendCommandOutput(`📝 Criando branch '${branchName}'...\n`);
+    // Create branch
     await git.branch({
       fs,
       dir,
       ref: branchName
     });
+    sendCommandOutput(`✅ Branch '${branchName}' criada com sucesso\n`);
     
-    // Checkout the new branch
+    sendCommandOutput(`🔄 Mudando para nova branch '${branchName}'...\n`);
+    // Checkout new branch
     await git.checkout({
       fs,
       dir,
       ref: branchName
     });
+    sendCommandOutput(`✅ Branch '${branchName}' criada e selecionada com sucesso\n`);
     
     console.log(`✅ Created and checked out branch '${branchName}' successfully`);
     return true;
   } catch (error) {
+    const errorMsg = `❌ Erro ao criar branch '${branchName}': ${error.message}\n`;
+    sendCommandOutput(errorMsg);
     console.error(`❌ Error creating branch '${branchName}':`, error);
     throw error;
   }
@@ -702,38 +805,46 @@ async function gitCreateBranch(dir, branchName) {
 
 async function gitCheckoutBranch(dir, branchName) {
   try {
-    console.log(`🔄 Checking out branch '${branchName}' in ${dir}`);
+    sendCommandOutput(`🔄 Mudando para branch '${branchName}' em ${dir}...\n`);
     
     // Check if branch exists
+    sendCommandOutput(`🔍 Verificando se branch existe...\n`);
     const branches = await git.listBranches({ fs, dir });
     const localBranch = branches.find(b => b === branchName);
     const remoteBranch = branches.find(b => b === `origin/${branchName}`);
     
     if (!localBranch && !remoteBranch) {
+      const errorMsg = `❌ Branch '${branchName}' não encontrada.\n`;
+      sendCommandOutput(errorMsg);
       throw new Error(`Branch '${branchName}' not found.`);
     }
     
     // If only remote branch exists, create local tracking branch
     if (!localBranch && remoteBranch) {
-      console.log(`📥 Creating local branch '${branchName}' to track remote branch`);
+      sendCommandOutput(`📥 Criando branch local '${branchName}' para rastrear branch remota\n`);
       await git.branch({
         fs,
         dir,
         ref: branchName,
         checkout: true
       });
+      sendCommandOutput(`✅ Branch local '${branchName}' criada e selecionada\n`);
     } else {
       // Checkout existing local branch
+      sendCommandOutput(`📂 Selecionando branch local existente '${branchName}'\n`);
       await git.checkout({
         fs,
         dir,
         ref: branchName
       });
+      sendCommandOutput(`✅ Branch '${branchName}' selecionada com sucesso\n`);
     }
     
     console.log(`✅ Checked out branch '${branchName}' successfully`);
     return true;
   } catch (error) {
+    const errorMsg = `❌ Erro ao mudar para branch '${branchName}': ${error.message}\n`;
+    sendCommandOutput(errorMsg);
     console.error(`❌ Error checking out branch '${branchName}':`, error);
     throw error;
   }
@@ -819,18 +930,21 @@ async function gitGetRepositoryInfo(dir) {
 // Git pull and push functions
 async function gitPullFromPreview(dir) {
   try {
-    console.log(`🔄 Pulling from preview branch in ${dir}`);
+    sendCommandOutput(`🔄 Buscando atualizações da branch preview em ${dir}...\n`);
     
     // Get current branch
+    sendCommandOutput(`🔍 Identificando branch atual...\n`);
     const currentBranch = await git.currentBranch({ fs, dir });
-    console.log(`📍 Current branch: ${currentBranch}`);
+    sendCommandOutput(`📍 Branch atual: ${currentBranch}\n`);
     
     // Get GitHub token for authentication
+    sendCommandOutput(`🔐 Configurando autenticação GitHub...\n`);
     const token = await getGitHubToken();
     const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+    sendCommandOutput(`✅ Autenticação configurada\n`);
     
     // Fetch from origin preview
-    console.log('📥 Fetching from origin preview...');
+    sendCommandOutput(`📥 Buscando dados da branch remota 'preview'...\n`);
     await git.fetch({
       fs,
       http,
@@ -840,9 +954,10 @@ async function gitPullFromPreview(dir) {
       auth,
       singleBranch: false
     });
+    sendCommandOutput(`✅ Dados da branch 'preview' recebidos\n`);
     
     // Merge origin/preview into current branch
-    console.log(`🔀 Merging origin/preview into ${currentBranch}...`);
+    sendCommandOutput(`🔀 Mesclando origin/preview na branch ${currentBranch}...\n`);
     await git.merge({
       fs,
       dir,
@@ -850,6 +965,7 @@ async function gitPullFromPreview(dir) {
       ours: currentBranch,
       message: `Merge preview into ${currentBranch}`
     });
+    sendCommandOutput(`✅ Branch 'preview' mesclada com sucesso em ${currentBranch}\n`);
     
     console.log(`✅ Successfully pulled from preview to ${currentBranch}`);
     return { 
@@ -857,6 +973,8 @@ async function gitPullFromPreview(dir) {
       message: `Atualizações da branch 'preview' foram mescladas na branch '${currentBranch}' com sucesso.` 
     };
   } catch (error) {
+    const errorMsg = `❌ Erro ao buscar atualizações: ${error.message}\n`;
+    sendCommandOutput(errorMsg);
     console.error('❌ Error pulling from preview:', error);
     throw error;
   }
@@ -864,25 +982,32 @@ async function gitPullFromPreview(dir) {
 
 async function gitPushToBranch(dir, targetBranch) {
   try {
-    console.log(`🚀 Pushing from ${dir} to branch ${targetBranch}`);
+    sendCommandOutput(`🚀 Publicando de ${dir} para branch ${targetBranch}...\n`);
     
     // Get current branch
+    sendCommandOutput(`🔍 Identificando branch atual...\n`);
     const currentBranch = await git.currentBranch({ fs, dir });
-    console.log(`📍 Current branch: ${currentBranch}`);
-    console.log(`🎯 Target branch: ${targetBranch}`);
+    sendCommandOutput(`📍 Branch atual: ${currentBranch}\n`);
+    sendCommandOutput(`🎯 Branch de destino: ${targetBranch}\n`);
     
     // Get GitHub token for authentication
+    sendCommandOutput(`🔐 Configurando autenticação GitHub...\n`);
     const token = await getGitHubToken();
     const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+    sendCommandOutput(`✅ Autenticação configurada\n`);
     
     // Get remote URL
+    sendCommandOutput(`🔍 Verificando URL remota...\n`);
     const remoteUrl = await gitGetRemoteUrl(dir);
     if (!remoteUrl) {
+      const errorMsg = `❌ URL remota não encontrada. Verifique se o repositório possui um remote origin.\n`;
+      sendCommandOutput(errorMsg);
       throw new Error('Remote URL not found. Please ensure the repository has a remote origin.');
     }
+    sendCommandOutput(`✅ URL remota encontrada: ${remoteUrl}\n`);
     
     // Push current branch to target branch
-    console.log(`📤 Pushing ${currentBranch} to origin/${targetBranch}...`);
+    sendCommandOutput(`📤 Publicando ${currentBranch} para origin/${targetBranch}...\n`);
     await git.push({
       fs,
       http,
@@ -892,6 +1017,7 @@ async function gitPushToBranch(dir, targetBranch) {
       auth,
       force: false
     });
+    sendCommandOutput(`✅ Branch ${currentBranch} publicada com sucesso para ${targetBranch}\n`);
     
     console.log(`✅ Successfully pushed ${currentBranch} to ${targetBranch}`);
     return { 
@@ -899,6 +1025,8 @@ async function gitPushToBranch(dir, targetBranch) {
       message: `Branch '${currentBranch}' foi publicada com sucesso para '${targetBranch}'.` 
     };
   } catch (error) {
+    const errorMsg = `❌ Erro ao publicar branch: ${error.message}\n`;
+    sendCommandOutput(errorMsg);
     console.error('❌ Error pushing to branch:', error);
     throw error;
   }
@@ -906,19 +1034,26 @@ async function gitPushToBranch(dir, targetBranch) {
 
 async function gitListRemoteBranches(dir) {
   try {
-    console.log(`📋 Listing remote branches in ${dir}`);
+    sendCommandOutput(`📋 Listando branches remotas em ${dir}...\n`);
     
     // Get GitHub token for authentication
+    sendCommandOutput(`🔐 Configurando autenticação GitHub...\n`);
     const token = await getGitHubToken();
     const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+    sendCommandOutput(`✅ Autenticação configurada\n`);
     
     // Get remote URL
+    sendCommandOutput(`🔍 Verificando URL remota...\n`);
     const remoteUrl = await gitGetRemoteUrl(dir);
     if (!remoteUrl) {
+      const errorMsg = `❌ URL remota não encontrada\n`;
+      sendCommandOutput(errorMsg);
       throw new Error('Remote URL not found');
     }
+    sendCommandOutput(`✅ URL remota encontrada: ${remoteUrl}\n`);
     
     // Fetch remote references
+    sendCommandOutput(`📥 Buscando referências remotas...\n`);
     const refs = await git.listServerRefs({
       http,
       url: remoteUrl,
@@ -932,7 +1067,10 @@ async function gitListRemoteBranches(dir) {
       .map(ref => ref.ref.replace('refs/heads/', ''))
       .filter(branch => branch && !branch.includes('^{}')); // Filter out peel references
     
-    console.log(`✅ Found ${remoteBranches.length} remote branches:`, remoteBranches);
+    sendCommandOutput(`✅ Encontradas ${remoteBranches.length} branches remotas\n`);
+    remoteBranches.forEach(branch => {
+      sendCommandOutput(`   📂 ${branch}\n`);
+    });
     
     // Ensure preview is included and is first in the list
     const sortedBranches = [...new Set(remoteBranches)]; // Remove duplicates
@@ -946,15 +1084,17 @@ async function gitListRemoteBranches(dir) {
       sortedBranches.unshift('preview');
     }
     
+    sendCommandOutput(`📋 Branch 'preview' definida como padrão\n`);
     return {
       branches: sortedBranches,
       defaultBranch: 'preview'
     };
   } catch (error) {
-    console.error('❌ Error listing remote branches:', error);
+    const errorMsg = `❌ Erro ao listar branches remotas: ${error.message}\n`;
+    sendCommandOutput(errorMsg);
     // Fallback to common branches if remote listing fails
     const fallbackBranches = ['preview', 'main', 'stage'];
-    console.log('⚠️ Using fallback branches:', fallbackBranches);
+    sendCommandOutput(`⚠️ Usando branches padrão: ${fallbackBranches.join(', ')}\n`);
     return {
       branches: fallbackBranches,
       defaultBranch: 'preview'
@@ -3048,6 +3188,15 @@ app.whenReady().then(() => {
       });
     };
 
+    const sendServerOutput = (output) => {
+      // Send to all windows for synchronization
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('server-output', output);
+        }
+      });
+    };
+
     const sendStatus = (status) => {
       // Send to all windows for synchronization
       BrowserWindow.getAllWindows().forEach(window => {
@@ -3110,13 +3259,13 @@ app.whenReady().then(() => {
       await delay(3000);
 
       // Step 5: npm run dev (keep in background)
-      sendOutput('Iniciando servidor de desenvolvimento...\n');
+      sendServerOutput('Iniciando servidor de desenvolvimento...\n');
 
       let serverReady = false;
       const checkServerReady = (data) => {
         if (!serverReady && (data.includes('ready') || data.includes('compiled successfully') || data.includes('listening on'))) {
           serverReady = true;
-          sendOutput('Servidor de desenvolvimento está pronto.\n');
+          sendServerOutput('Servidor de desenvolvimento está pronto.\n');
           sendStatus('success');
         }
       };
@@ -3126,7 +3275,7 @@ app.whenReady().then(() => {
 
       const processOutput = (data) => {
         const output = data.toString();
-        sendOutput(output);
+        sendServerOutput(output);
         checkServerReady(output);
 
         if (!devServerUrl) {
@@ -3177,32 +3326,26 @@ app.whenReady().then(() => {
       devProcess.stderr.on('data', processOutput);
 
       devProcess.on('close', (code) => {
-        delete activeProcesses[`dev-reopen-${projectId}`];
+        delete activeProcesses[`dev-open-${projectId}`];
         if (devProcess.pid) {
           removeDocumentalProcess(devProcess.pid);
         }
         if (code !== 0) {
-          sendOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
+          sendServerOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
           sendStatus('failure');
         }
       });
 
       devProcess.on('error', (err) => {
-        delete activeProcesses[`dev-reopen-${projectId}`];
+        delete activeProcesses[`dev-open-${projectId}`];
         if (devProcess.pid) {
           removeDocumentalProcess(devProcess.pid);
         }
-        sendOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
+        sendServerOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
         sendStatus('failure');
       });
 
-      devProcess.on('error', (err) => {
-        delete activeProcesses[`dev-reopen-${projectId}`];
-        sendOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
-        sendStatus('failure');
-      });
-
-      sendOutput('Servidor de desenvolvimento iniciado em segundo plano. Aguardando sinal de prontidão...\n');
+      sendServerOutput('Servidor de desenvolvimento iniciado em segundo plano. Aguardando sinal de prontidão...\n');
     } catch (error) {
       sendOutput(`Erro durante a reabertura do projeto: ${error}\n`);
       sendStatus('failure');
@@ -3217,6 +3360,15 @@ app.whenReady().then(() => {
       BrowserWindow.getAllWindows().forEach(window => {
         if (!window.isDestroyed()) {
           window.webContents.send('command-output', output);
+        }
+      });
+    };
+
+    const sendServerOutput = (output) => {
+      // Send to all windows for synchronization
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('server-output', output);
         }
       });
     };
@@ -3290,12 +3442,12 @@ app.whenReady().then(() => {
       await delay(3000);
 
       // Step 2: npm run dev (keep in background)
-      sendOutput('Executando servidor do modo dev...\n');
+      sendServerOutput('Executando servidor do modo dev...\n');
       let serverReady = false;
       const checkServerReady = (data) => {
         if (!serverReady && (data.includes('ready') || data.includes('compiled successfully') || data.includes('listening on'))) {
           serverReady = true;
-          sendOutput('Servidor de desenvolvimento está pronto.\n');
+          sendServerOutput('Servidor de desenvolvimento está pronto.\n');
           sendStatus('success');
         }
       };
@@ -3305,7 +3457,7 @@ app.whenReady().then(() => {
 
       const processOutput = (data) => {
         const output = data.toString();
-        sendOutput(output);
+        sendServerOutput(output);
         checkServerReady(output);
 
         if (!devServerUrl) {
@@ -3356,26 +3508,35 @@ app.whenReady().then(() => {
       devProcess.stderr.on('data', processOutput);
 
       devProcess.on('close', (code) => {
-        delete activeProcesses[`dev-open-${projectId}`];
+        delete activeProcesses[`dev-reopen-${projectId}`];
         if (devProcess.pid) {
           removeDocumentalProcess(devProcess.pid);
         }
         if (code !== 0) {
-          sendOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
+          sendServerOutput(`Servidor de desenvolvimento encerrado com código ${code}\n`);
           sendStatus('failure');
         }
       });
 
       devProcess.on('error', (err) => {
-        delete activeProcesses[`dev-open-${projectId}`];
+        delete activeProcesses[`dev-reopen-${projectId}`];
         if (devProcess.pid) {
           removeDocumentalProcess(devProcess.pid);
         }
-        sendOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
+        sendServerOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
         sendStatus('failure');
       });
 
-      sendOutput('Servidor de desenvolvimento iniciado em segundo plano. Aguardando sinal de prontidão...\n');
+      devProcess.on('error', (err) => {
+        delete activeProcesses[`dev-reopen-${projectId}`];
+        if (devProcess.pid) {
+          removeDocumentalProcess(devProcess.pid);
+        }
+        sendServerOutput(`Falha ao iniciar servidor de desenvolvimento: ${err.message}\n`);
+        sendStatus('failure');
+      });
+
+      sendServerOutput('Servidor de desenvolvimento iniciado em segundo plano. Aguardando sinal de prontidão...\n');
       console.log('🔧 DEBUG: open-project-only-preview-and-server completed successfully');
     } catch (error) {
       console.log('🔧 DEBUG: Error in open-project-only-preview-and-server:', error);
@@ -3390,6 +3551,15 @@ app.whenReady().then(() => {
       BrowserWindow.getAllWindows().forEach(window => {
         if (!window.isDestroyed()) {
           window.webContents.send('command-output', output);
+        }
+      });
+    };
+
+    const sendServerOutput = (output) => {
+      // Send to all windows for synchronization
+      BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('server-output', output);
         }
       });
     };
@@ -3565,13 +3735,13 @@ app.whenReady().then(() => {
       await delay(3000);
 
       // Step 5: npm run dev (keep in background)
-      sendOutput('Starting development server...\n');
+      sendServerOutput('Starting development server...\n');
 
       let serverReady = false;
       const checkServerReady = (data) => {
         if (!serverReady && (data.includes('ready') || data.includes('compiled successfully') || data.includes('listening on'))) {
           serverReady = true;
-          sendOutput('Development server is ready.\n');
+          sendServerOutput('Development server is ready.\n');
           sendStatus('success'); // Mark as success only when server is truly ready
         }
       };
@@ -3581,7 +3751,7 @@ app.whenReady().then(() => {
 
       const processOutput = (data) => {
         const output = data.toString();
-        sendOutput(output);
+        sendServerOutput(output);
         checkServerReady(output);
 
         if (!devServerUrl) {
@@ -3637,7 +3807,7 @@ app.whenReady().then(() => {
           removeDocumentalProcess(devProcess.pid);
         }
         if (code !== 0) {
-          sendOutput(`Development server exited with code ${code}\n`);
+          sendServerOutput(`Development server exited with code ${code}\n`);
           sendStatus('failure');
         }
       });
@@ -3647,11 +3817,11 @@ app.whenReady().then(() => {
         if (devProcess.pid) {
           removeDocumentalProcess(devProcess.pid);
         }
-        sendOutput(`Failed to start development server: ${err.message}\n`);
+        sendServerOutput(`Failed to start development server: ${err.message}\n`);
         sendStatus('failure');
       });
 
-      sendOutput('Development server started in background. Waiting for readiness signal...\n');
+      sendServerOutput('Development server started in background. Waiting for readiness signal...\n');
       // Do NOT sendStatus('success') here. It will be sent when 'ready' string is detected.
     } catch (error) {
       sendOutput(`Error during project creation: ${error}\n`);
@@ -3767,6 +3937,34 @@ ipcMain.handle('cancel-project-creation', async (event, projectId, projectPath, 
         });
       });
     });
+  });
+
+  // Handler to get initial app logs
+  ipcMain.handle('get-app-logs', async () => {
+    return getAppLogs();
+  });
+
+  // Handler to clear console output
+  ipcMain.on('clear-console-output', (event, type) => {
+    console.log(`🧹 Clearing console output for type: ${type}`);
+    
+    switch (type) {
+      case 'log':
+        // Clear app log buffer
+        appLogBuffer = [];
+        console.log('✅ App log buffer cleared');
+        break;
+      case 'server':
+        // Server output is handled per window, no central buffer to clear
+        console.log('✅ Server output clear requested');
+        break;
+      case 'commands':
+        // Command output is handled per window, no central buffer to clear
+        console.log('✅ Command output clear requested');
+        break;
+      default:
+        console.warn(`⚠️ Unknown console type to clear: ${type}`);
+    }
   });
 
   app.on('activate', () => {

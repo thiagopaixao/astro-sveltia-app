@@ -117,11 +117,16 @@
     editorWidth: 50,
     mainHeight: 70,
     consoleOpen: false,
-    consoleTabs: [{id: 1, name: 'Server', type: 'server'}, {id: 2, name: 'Console', type: 'console'}],
+    consoleTabs: [
+        {id: 1, name: 'Log', type: 'log'}, 
+        {id: 2, name: 'Servidor', type: 'server'}, 
+        {id: 3, name: 'Comandos', type: 'commands'}
+    ],
     activeConsoleTab: 1,
     nextTerminalId: 1,
-    serverOutput: '',
-    consoleOutput: '',
+    appLogOutput: sessionStorage.getItem('appLogOutput') || '',
+    serverOutput: sessionStorage.getItem('serverOutput') || '',
+    commandOutput: sessionStorage.getItem('commandOutput') || '',
     addressValue: 'https://documental.xyz/',
     baseURL: 'https://documental.xyz/',
     viewerUrl: null,
@@ -287,12 +292,15 @@ clearingCache: false,
             
             // Limit output size to prevent IPC issues (last 5000 characters each)
             const maxOutputLength = 5000;
+            const truncatedAppLogOutput = this.appLogOutput.length > maxOutputLength 
+                ? this.appLogOutput.slice(-maxOutputLength) 
+                : this.appLogOutput;
             const truncatedServerOutput = this.serverOutput.length > maxOutputLength 
                 ? this.serverOutput.slice(-maxOutputLength) 
                 : this.serverOutput;
-            const truncatedConsoleOutput = this.consoleOutput.length > maxOutputLength 
-                ? this.consoleOutput.slice(-maxOutputLength) 
-                : this.consoleOutput;
+            const truncatedCommandOutput = this.commandOutput.length > maxOutputLength 
+                ? this.commandOutput.slice(-maxOutputLength) 
+                : this.commandOutput;
             
             const windowState = {
                 editorUrl: editorUrl || `${this.getDevServerUrl()}admin/index.html`,
@@ -305,8 +313,9 @@ clearingCache: false,
                 mainHeight: this.mainHeight,
                 consoleOpen: this.consoleOpen,
                 currentBranch: this.currentBranch,
+                appLogOutput: truncatedAppLogOutput,
                 serverOutput: truncatedServerOutput,
-                consoleOutput: truncatedConsoleOutput,
+                commandOutput: truncatedCommandOutput,
                 consoleTabs: simplifiedConsoleTabs,
                 activeConsoleTab: this.activeConsoleTab,
                 nextTerminalId: this.nextTerminalId
@@ -330,9 +339,14 @@ clearingCache: false,
                     mainHeight: this.mainHeight,
                     consoleOpen: this.consoleOpen,
                     currentBranch: this.currentBranch,
-                    serverOutput: '',
-                    consoleOutput: '',
-                    consoleTabs: [{id: 1, name: 'Server', type: 'server'}, {id: 2, name: 'Console', type: 'console'}],
+                    appLogOutput: sessionStorage.getItem('appLogOutput') || '',
+                    serverOutput: sessionStorage.getItem('serverOutput') || '',
+                    commandOutput: sessionStorage.getItem('commandOutput') || '',
+                    consoleTabs: [
+                        {id: 1, name: 'Log', type: 'log'}, 
+                        {id: 2, name: 'Servidor', type: 'server'}, 
+                        {id: 3, name: 'Comandos', type: 'commands'}
+                    ],
                     activeConsoleTab: 1,
                     nextTerminalId: 1
                 };
@@ -399,6 +413,10 @@ clearingCache: false,
             this.consoleOpen = true;
             this.mainHeight = 70;
         }
+        // Scroll to bottom after adding tab
+        this.$nextTick(() => {
+            this.scrollToBottomOfActiveConsole();
+        });
     },
     closeConsoleTab(tabId, event) {
         event.stopPropagation();
@@ -409,6 +427,57 @@ clearingCache: false,
                  this.activeConsoleTab = this.consoleTabs[Math.max(0, index - 1)].id;
             } else if (this.consoleTabs.length === 0) {
                 this.consoleOpen = false;
+            }
+        }
+    },
+    clearActiveConsoleTab() {
+        const activeTab = this.consoleTabs.find(tab => tab.id === this.activeConsoleTab);
+        if (activeTab) {
+            switch (activeTab.type) {
+                case 'log':
+                    this.appLogOutput = '';
+                    sessionStorage.setItem('appLogOutput', '');
+                    // Also clear in main process
+                    if (window.electronAPI && window.electronAPI.clearConsoleOutput) {
+                        window.electronAPI.clearConsoleOutput('log');
+                    }
+                    break;
+                case 'server':
+                    this.serverOutput = '';
+                    sessionStorage.setItem('serverOutput', '');
+                    // Also clear in main process
+                    if (window.electronAPI && window.electronAPI.clearConsoleOutput) {
+                        window.electronAPI.clearConsoleOutput('server');
+                    }
+                    break;
+                case 'commands':
+                    this.commandOutput = '';
+                    sessionStorage.setItem('commandOutput', '');
+                    // Also clear in main process
+                    if (window.electronAPI && window.electronAPI.clearConsoleOutput) {
+                        window.electronAPI.clearConsoleOutput('commands');
+                    }
+                    break;
+            }
+            // Scroll to top after clearing
+            this.$nextTick(() => {
+                this.scrollToTopOfActiveConsole();
+            });
+        }
+    },
+    scrollToBottomOfActiveConsole() {
+        if (this.$refs.consoleContainer) {
+            const activeTabElement = this.$refs.consoleContainer.querySelector('.overflow-y-auto');
+            if (activeTabElement) {
+                activeTabElement.scrollTop = activeTabElement.scrollHeight;
+            }
+        }
+    },
+    scrollToTopOfActiveConsole() {
+        if (this.$refs.consoleContainer) {
+            const activeTabElement = this.$refs.consoleContainer.querySelector('.overflow-y-auto');
+            if (activeTabElement) {
+                activeTabElement.scrollTop = 0;
             }
         }
     },
@@ -711,6 +780,76 @@ clearingCache: false,
             }
         });
 
+        // Set up listeners for new console output channels
+        window.electronAPI.onAppLogOutput((output) => {
+            this.appLogOutput += output;
+            // Persist to sessionStorage
+            sessionStorage.setItem('appLogOutput', this.appLogOutput);
+            // Trigger UI update with auto-scroll if this tab is active
+            this.$nextTick(() => {
+                const activeTab = this.consoleTabs.find(tab => tab.id === this.activeConsoleTab);
+                if (activeTab && activeTab.type === 'log') {
+                    this.scrollToBottomOfActiveConsole();
+                }
+            });
+        });
+
+        window.electronAPI.onServerOutput((output) => {
+            this.serverOutput += output;
+            // Persist to sessionStorage
+            sessionStorage.setItem('serverOutput', this.serverOutput);
+            // Trigger UI update with auto-scroll if this tab is active
+            this.$nextTick(() => {
+                const activeTab = this.consoleTabs.find(tab => tab.id === this.activeConsoleTab);
+                if (activeTab && activeTab.type === 'server') {
+                    this.scrollToBottomOfActiveConsole();
+                }
+            });
+        });
+
+        window.electronAPI.onCommandOutput((output) => {
+            this.commandOutput += output;
+            // Persist to sessionStorage
+            sessionStorage.setItem('commandOutput', this.commandOutput);
+            // Trigger UI update with auto-scroll if this tab is active
+            this.$nextTick(() => {
+                const activeTab = this.consoleTabs.find(tab => tab.id === this.activeConsoleTab);
+                if (activeTab && activeTab.type === 'commands') {
+                    this.scrollToBottomOfActiveConsole();
+                }
+            });
+        });
+
+        // Load initial app logs and restore from sessionStorage
+        window.electronAPI.getAppLogs().then(initialLogs => {
+            if (initialLogs) {
+                this.appLogOutput = initialLogs;
+                // Update sessionStorage with the latest from main process
+                sessionStorage.setItem('appLogOutput', this.appLogOutput);
+            }
+        }).catch(error => {
+            console.error('Error loading initial app logs:', error);
+        });
+
+        // Always restore content from sessionStorage to ensure we have the latest data
+        const storedAppLogs = sessionStorage.getItem('appLogOutput') || '';
+        const storedServerOutput = sessionStorage.getItem('serverOutput') || '';
+        const storedCommandOutput = sessionStorage.getItem('commandOutput') || '';
+        
+        // Only update if stored content is longer (has more data)
+        if (storedAppLogs.length > this.appLogOutput.length) {
+            this.appLogOutput = storedAppLogs;
+            console.log('📦 Restored app logs from sessionStorage:', storedAppLogs.length, 'characters');
+        }
+        if (storedServerOutput.length > this.serverOutput.length) {
+            this.serverOutput = storedServerOutput;
+            console.log('📦 Restored server output from sessionStorage:', storedServerOutput.length, 'characters');
+        }
+        if (storedCommandOutput.length > this.commandOutput.length) {
+            this.commandOutput = storedCommandOutput;
+            console.log('📦 Restored command output from sessionStorage:', storedCommandOutput.length, 'characters');
+        }
+
         // Always try to get devServerUrl from main process first
         console.log('🔍 Checking devServerUrl - current value:', this.devServerUrl);
         console.log('📡 Calling getDevServerUrlFromMain...');
@@ -849,6 +988,13 @@ clearingCache: false,
             }
         });
 
+        // Watch for console tab changes to scroll to bottom when switching tabs
+        this.$watch('activeConsoleTab', () => {
+            this.$nextTick(() => {
+                this.scrollToBottomOfActiveConsole();
+            });
+        });
+
         window.addEventListener('resize', () => {
             this.updateBrowserViewBounds();
         });
@@ -911,28 +1057,45 @@ clearingCache: false,
             }
         });
 
-        // Only load project state if not already loaded from window state
-        if (!this.serverOutput && !this.consoleOutput) {
-            const projectId = sessionStorage.getItem('currentProjectId');
-            if (projectId) {
-                // First try to load from projectCreationState (for create.html flow)
-                let savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${projectId}`));
+        // Load project state from sessionStorage to restore command and server outputs
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (projectId) {
+            console.log('🔄 Loading project state for projectId:', projectId);
+            
+            // First try to load from projectCreationState (for create.html flow)
+            let savedState = JSON.parse(sessionStorage.getItem(`projectCreationState-${projectId}`));
+            
+            // If not found, try to load from projectOpenState (for open.html flow)
+            if (!savedState) {
+                savedState = JSON.parse(sessionStorage.getItem(`projectOpenState-${projectId}`));
+            }
+            
+            if (savedState && savedState.steps) {
+                console.log('📋 Processing', savedState.steps.length, 'steps from project state');
+                let serverOutputFromState = '';
+                let commandOutputFromState = '';
                 
-                // If not found, try to load from projectOpenState (for open.html flow)
-                if (!savedState) {
-                    savedState = JSON.parse(sessionStorage.getItem(`projectOpenState-${projectId}`));
+                savedState.steps.forEach(step => {
+                    if (step.log) {
+                        if (step.title.includes('Executando servidor do modo dev')) {
+                            serverOutputFromState += step.log + '\n';
+                        } else {
+                            commandOutputFromState += step.log + '\n';
+                        }
+                    }
+                });
+                
+                // Append to existing output if it's not already there
+                if (serverOutputFromState && !this.serverOutput.includes(serverOutputFromState.trim())) {
+                    this.serverOutput += serverOutputFromState;
+                    sessionStorage.setItem('serverOutput', this.serverOutput);
+                    console.log('📦 Restored server output from project state:', serverOutputFromState.length, 'characters');
                 }
                 
-                if (savedState && savedState.steps) {
-                    savedState.steps.forEach(step => {
-                        if (step.log) {
-                            if (step.title.includes('Executando servidor do modo dev')) {
-                                this.serverOutput += step.log + '\n';
-                            } else {
-                                this.consoleOutput += step.log + '\n';
-                            }
-                        }
-                    });
+                if (commandOutputFromState && !this.commandOutput.includes(commandOutputFromState.trim())) {
+                    this.commandOutput += commandOutputFromState;
+                    sessionStorage.setItem('commandOutput', this.commandOutput);
+                    console.log('📦 Restored command output from project state:', commandOutputFromState.length, 'characters');
                 }
             }
         }
@@ -975,8 +1138,9 @@ clearingCache: false,
         if (windowState.mainHeight) this.mainHeight = windowState.mainHeight;
         if (windowState.consoleOpen !== undefined) this.consoleOpen = windowState.consoleOpen;
         if (windowState.currentBranch) this.currentBranch = windowState.currentBranch;
+        if (windowState.appLogOutput) this.appLogOutput = windowState.appLogOutput;
         if (windowState.serverOutput) this.serverOutput = windowState.serverOutput;
-        if (windowState.consoleOutput) this.consoleOutput = windowState.consoleOutput;
+        if (windowState.commandOutput) this.commandOutput = windowState.commandOutput;
         if (windowState.consoleTabs) this.consoleTabs = windowState.consoleTabs;
         if (windowState.activeConsoleTab) this.activeConsoleTab = windowState.activeConsoleTab;
         if (windowState.nextTerminalId) this.nextTerminalId = windowState.nextTerminalId;
@@ -1414,25 +1578,31 @@ clearingCache: false,
 </template>
 </div>
 <div class="flex items-center space-x-2">
-<button @click="addTerminalTab()" class="p-1 rounded-full hover:bg-gray-700">
+<button @click="clearActiveConsoleTab()" class="p-1 rounded-full hover:bg-gray-700" title="Limpar aba atual">
+<span class="material-icons text-muted-dark text-base">clear</span>
+</button>
+<button @click="addTerminalTab()" class="p-1 rounded-full hover:bg-gray-700" title="Adicionar terminal">
 <span class="material-icons text-muted-dark text-base">add</span>
 </button>
-<button @click="consoleOpen = false" class="p-1 rounded-full hover:bg-gray-700">
+<button @click="consoleOpen = false" class="p-1 rounded-full hover:bg-gray-700" title="Fechar console">
 <span class="material-icons text-muted-dark text-base">close</span>
 </button>
 </div>
 </div>
-<div class="p-4 flex-1 overflow-y-auto font-mono text-sm text-muted-dark">
+<div class="p-4 flex-1 overflow-y-auto font-mono text-sm text-muted-dark" x-ref="consoleContentArea">
 <template :key="tab.id" x-for="tab in consoleTabs">
-<div x-show="activeConsoleTab === tab.id">
-<div x-show="tab.type === 'server'">
-<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="serverOutput"></pre>
+<div x-show="activeConsoleTab === tab.id" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+<div x-show="tab.type === 'log'">
+<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="appLogOutput || '(Sem logs de aplicativo)'"></pre>
 </div>
-<div x-show="tab.type === 'console'">
-<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="consoleOutput"></pre>
+<div x-show="tab.type === 'server'">
+<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="serverOutput || '(Sem saída do servidor)'"></pre>
+</div>
+<div x-show="tab.type === 'commands'">
+<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="commandOutput || '(Sem comandos executados)'"></pre>
 </div>
 <div x-show="tab.type === 'terminal'">
-<p class="text-green-400">user@documental:~$</p>
+<p class="text-green-400">user@documental:~$ <span class="text-gray-400">Terminal interativo (em desenvolvimento)</span></p>
 </div>
 </div>
 </template>
