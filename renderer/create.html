@@ -199,6 +199,18 @@
                 console.log('Dev server URL saved to session storage:', url);
             });
 
+            window.electronAPI.onServerOutput((output) => {
+                // Store server output in sessionStorage for persistence
+                const currentServerOutput = sessionStorage.getItem('serverOutput') || '';
+                sessionStorage.setItem('serverOutput', currentServerOutput + output);
+                
+                // Also add to the active step log if there's an active step
+                const activeStepIndex = this.steps.findIndex(s => s.status === 'active');
+                if (activeStepIndex !== -1) {
+                    this.steps[activeStepIndex].log += output;
+                }
+            });
+
             this.startCreationProcess();
             
             // Setup modal event listeners
