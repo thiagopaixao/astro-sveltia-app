@@ -430,41 +430,7 @@ clearingCache: false,
             }
         }
     },
-    clearActiveConsoleTab() {
-        const activeTab = this.consoleTabs.find(tab => tab.id === this.activeConsoleTab);
-        if (activeTab) {
-            switch (activeTab.type) {
-                case 'log':
-                    this.appLogOutput = '';
-                    sessionStorage.setItem('appLogOutput', '');
-                    // Also clear in main process
-                    if (window.electronAPI && window.electronAPI.clearConsoleOutput) {
-                        window.electronAPI.clearConsoleOutput('log');
-                    }
-                    break;
-                case 'server':
-                    this.serverOutput = '';
-                    sessionStorage.setItem('serverOutput', '');
-                    // Also clear in main process
-                    if (window.electronAPI && window.electronAPI.clearConsoleOutput) {
-                        window.electronAPI.clearConsoleOutput('server');
-                    }
-                    break;
-                case 'commands':
-                    this.commandOutput = '';
-                    sessionStorage.setItem('commandOutput', '');
-                    // Also clear in main process
-                    if (window.electronAPI && window.electronAPI.clearConsoleOutput) {
-                        window.electronAPI.clearConsoleOutput('commands');
-                    }
-                    break;
-            }
-            // Scroll to top after clearing
-            this.$nextTick(() => {
-                this.scrollToTopOfActiveConsole();
-            });
-        }
-    },
+
     scrollToBottomOfActiveConsole() {
         if (this.$refs.consoleContainer) {
             const activeTabElement = this.$refs.consoleContainer.querySelector('.overflow-y-auto');
@@ -1578,12 +1544,10 @@ clearingCache: false,
 </template>
 </div>
 <div class="flex items-center space-x-2">
-<button @click="clearActiveConsoleTab()" class="p-1 rounded-full hover:bg-gray-700" title="Limpar aba atual">
-<span class="material-icons text-muted-dark text-base">clear</span>
-</button>
-<button @click="addTerminalTab()" class="p-1 rounded-full hover:bg-gray-700" title="Adicionar terminal">
-<span class="material-icons text-muted-dark text-base">add</span>
-</button>
+
+ <button @click="addTerminalTab()" class="p-1 rounded-full hover:bg-gray-700" title="Adicionar terminal" style="display:none;">
+ <span class="material-icons text-muted-dark text-base">add</span>
+ </button>
 <button @click="consoleOpen = false" class="p-1 rounded-full hover:bg-gray-700" title="Fechar console">
 <span class="material-icons text-muted-dark text-base">close</span>
 </button>
@@ -1662,12 +1626,7 @@ clearingCache: false,
       <span>Nova Janela</span>
     </a>
   </li>
-  <li>
-    <a class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
-      <span class="material-icons mr-3">folder_open</span>
-      <span>Outro Projeto</span>
-    </a>
-  </li>
+
   <li class="border-t border-gray-700 my-2"></li>
   <li>
     <a class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#" data-navigate="config.html">
