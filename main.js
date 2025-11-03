@@ -860,6 +860,129 @@ async function gitGetCurrentBranch(dir) {
   }
 }
 
+async function gitEnsurePreviewBranch(dir) {
+  try {
+    sendCommandOutput(`🔍 Verificando branch 'preview' em ${dir}...\n`);
+    
+    // List all branches (local and remote)
+    const branches = await git.listBranches({ fs, dir });
+    const localBranches = branches.filter(branch => !branch.includes('origin/'));
+    const remoteBranches = branches.filter(branch => branch.includes('origin/'))
+      .map(branch => branch.replace('origin/', ''));
+    
+    sendCommandOutput(`📋 Branches locais encontradas: ${localBranches.join(', ') || 'nenhuma'}\n`);
+    sendCommandOutput(`📋 Branches remotas encontradas: ${remoteBranches.join(', ') || 'nenhuma'}\n`);
+    
+    const hasLocalPreview = localBranches.includes('preview');
+    const hasRemotePreview = remoteBranches.includes('preview');
+    
+    sendCommandOutput(`📂 Branch 'preview' local: ${hasLocalPreview ? '✅' : '❌'}\n`);
+    sendCommandOutput(`🌐 Branch 'preview' remota: ${hasRemotePreview ? '✅' : '❌'}\n`);
+    
+    if (hasLocalPreview || hasRemotePreview) {
+      // Branch exists, checkout it
+      sendCommandOutput(`📂 Branch 'preview' encontrada (${hasLocalPreview ? 'local' : 'remota'}), selecionando...\n`);
+      await gitCheckoutBranch(dir, 'preview');
+      sendCommandOutput(`✅ Branch 'preview' selecionada com sucesso\n`);
+      return { created: false, checkedOut: true, source: hasLocalPreview ? 'local' : 'remote' };
+    }
+    
+    // Branch doesn't exist locally or remotely, create it from main
+    sendCommandOutput(`❌ Branch 'preview' não encontrada localmente ou remotamente\n`);
+    sendCommandOutput(`🌿 Criando branch 'preview' a partir de 'main'...\n`);
+    
+    // First, try to checkout main (or master as fallback)
+    let baseBranch = 'main';
+    try {
+      sendCommandOutput(`🔍 Tentando selecionar branch 'main' como base...\n`);
+      await gitCheckoutBranch(dir, 'main');
+      sendCommandOutput(`✅ Branch 'main' selecionada como base\n`);
+    } catch (mainError) {
+      sendCommandOutput(`⚠️ Branch 'main' não encontrada: ${mainError.message}\n`);
+      try {
+        sendCommandOutput(`🔍 Tentando selecionar branch 'master' como base...\n`);
+        await gitCheckoutBranch(dir, 'master');
+        baseBranch = 'master';
+        sendCommandOutput(`✅ Branch 'master' selecionada como base (main não encontrada)\n`);
+      } catch (masterError) {
+        sendCommandOutput(`❌ Branch 'master' também não encontrada: ${masterError.message}\n`);
+        throw new Error('Nem branch "main" nem "master" encontrada para criar a branch "preview"');
+      }
+    }
+    
+    // Check if working directory is clean before creating branch
+    try {
+      const status = await git.status({ fs, dir });
+      if (status.files && status.files.length > 0) {
+        sendCommandOutput(`⚠️ Existem arquivos não commitados no diretório de trabalho\n`);
+        sendCommandOutput(`📋 Arquivos modificados: ${status.files.map(f => f.path).join(', ')}\n`);
+        sendCommandOutput(`💡 Criando branch 'preview' mesmo com arquivos pendentes\n`);
+      } else {
+        sendCommandOutput(`✅ Diretório de trabalho limpo, seguro para criar branch\n`);
+      }
+    } catch (statusError) {
+      sendCommandOutput(`⚠️ Não foi possível verificar status do diretório: ${statusError.message}\n`);
+    }
+    
+    // Create preview branch
+    sendCommandOutput(`🌿 Criando branch 'preview' a partir de '${baseBranch}'...\n`);
+    await gitCreateBranch(dir, 'preview');
+    sendCommandOutput(`✅ Branch 'preview' criada a partir de '${baseBranch}' com sucesso\n`);
+    
+    // Optionally push to remote if remote exists and user has authentication
+    try {
+      const remoteUrl = await gitGetRemoteUrl(dir);
+      if (remoteUrl) {
+        sendCommandOutput(`🌐 Repositório remoto encontrado: ${remoteUrl}\n`);
+        sendCommandOutput(`🚀 Tentando publicar branch 'preview' para o repositório remoto...\n`);
+        
+        const token = await getGitHubToken();
+        if (token) {
+          sendCommandOutput(`🔐 Autenticação GitHub configurada\n`);
+          const auth = { username: token, password: 'x-oauth-basic' };
+          
+          await git.push({
+            fs,
+            http,
+            dir,
+            url: remoteUrl,
+            ref: 'preview:preview',
+            auth,
+            force: false
+          });
+          sendCommandOutput(`✅ Branch 'preview' publicada com sucesso para o repositório remoto\n`);
+        } else {
+          sendCommandOutput(`⚠️ Autenticação GitHub não configurada\n`);
+          sendCommandOutput(`💡 Configure a autenticação GitHub para publicar automaticamente\n`);
+        }
+      } else {
+        sendCommandOutput(`ℹ️ Nenhum repositório remoto configurado\n`);
+      }
+    } catch (pushError) {
+      sendCommandOutput(`⚠️ Não foi possível publicar branch 'preview' para o repositório remoto: ${pushError.message}\n`);
+      sendCommandOutput(`💡 A branch 'preview' foi criada localmente e pode ser publicada manualmente depois\n`);
+      sendCommandOutput(`💡 Comando para publicar manualmente: git push -u origin preview\n`);
+    }
+    
+    return { created: true, checkedOut: true, baseBranch };
+  } catch (error) {
+    const errorMsg = `❌ Erro ao garantir branch 'preview': ${error.message}\n`;
+    sendCommandOutput(errorMsg);
+    console.error('❌ Error ensuring preview branch:', error);
+    
+    // Provide helpful suggestions based on error type
+    if (error.message.includes('main') || error.message.includes('master')) {
+      sendCommandOutput(`💡 Sugestão: Verifique se o repositório possui uma branch principal (main ou master)\n`);
+    } else if (error.message.includes('authentication') || error.message.includes('auth')) {
+      sendCommandOutput(`💡 Sugestão: Configure a autenticação GitHub nas configurações do aplicativo\n`);
+    } else if (error.message.includes('network') || error.message.includes('connection')) {
+      sendCommandOutput(`💡 Sugestão: Verifique sua conexão com a internet\n`);
+    }
+    
+    throw error;
+  }
+}
+
 // New functions for repository information
 async function gitGetRepositoryInfo(dir) {
   try {
@@ -3428,10 +3551,10 @@ app.whenReady().then(() => {
         }
       }
 
-      // Step 1: git checkout preview (always execute for reopen)
+      // Step 1: ensure preview branch exists and checkout it
       sendOutput('🔧 DEBUG: open-project-only-preview-and-server - Verificando branch preview...\n');
       try {
-        await gitCheckout(repoDirPath, 'preview');
+        await gitEnsurePreviewBranch(repoDirPath);
         sendOutput('Branch preview verificada com sucesso.\n');
         sendStatus('success');
       } catch (error) {
@@ -3692,11 +3815,11 @@ app.whenReady().then(() => {
         });
       }
 
-      // Step 2: git checkout preview (skip if existing git repo)
+      // Step 2: ensure preview branch exists and checkout it (skip if existing git repo)
       if (!isExistingGitRepo) {
         sendOutput('Checking out preview branch...\n');
         try {
-          await gitCheckout(repoDirPath, 'preview');
+          await gitEnsurePreviewBranch(repoDirPath);
           sendOutput('Checked out preview branch.\n');
           sendStatus('success');
         } catch (error) {
