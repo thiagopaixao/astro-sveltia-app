@@ -6,7 +6,10 @@
   "homepage": "https://github.com/documental/app-git-electron",
   "scripts": {
     "start": "electron .",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "test:ui": "vitest --ui",
     "build": "electron-builder",
     "build:linux": "electron-builder --linux",
     "build:linux:deb": "electron-builder --linux deb",
@@ -15,9 +18,19 @@
     "build:linux:appimage": "electron-builder --linux AppImage",
     "build:win": "electron-builder --win portable",
     "dist": "npm run build && node scripts/post-build.js",
-    "build:fixed": "npm run build:linux:appimage && node scripts/post-build.js",
-    "verify-build": "node scripts/verify-build.js",
-    "clean": "rimraf dist"
+    "build:fixed": "npm run build:linux:appimage && node project/scripts/post-build.js",
+    "verify-build": "node project/scripts/verify-build.js",
+    "clean": "rimraf dist",
+    "validate:all": "npm run validate:extensions && npm run validate:es2022 && npm run validate:jsdoc && npm run validate:hybrid",
+    "validate:extensions": "node project/scripts/validate-extensions.mjs",
+    "validate:es2022": "node project/scripts/validate-es2022.mjs",
+    "validate:jsdoc": "node project/scripts/validate-jsdoc.mjs",
+    "validate:hybrid": "node project/scripts/validate-hybrid.mjs",
+    "validate:phase-1": "npm run validate:extensions && npm run validate:es2022",
+    "validate:phase-2": "npm run validate:es2022 && npm run validate:jsdoc",
+    "validate:phase-3": "npm run validate:es2022 && npm run validate:hybrid",
+    "validate:phase-4": "npm run validate:es2022 && npm run validate:jsdoc",
+    "validate:phase-5": "npm run validate:all && npm run build && npm run test:coverage"
   },
   "keywords": [
     "documentation",
@@ -32,9 +45,12 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
+    "@vitest/ui": "^4.0.6",
     "asar": "^3.2.0",
     "electron": "^38.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "jsdom": "^27.1.0",
+    "vitest": "^4.0.6"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.0",
@@ -62,6 +78,7 @@
       "main.js",
       "preload.js",
       "renderer/**/*",
+      "src/**/*",
       "github-config.js",
       "package.json",
       "node_modules/**/*",
