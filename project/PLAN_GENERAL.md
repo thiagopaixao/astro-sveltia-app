@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-Este documento contém a visão estratégica e macro-planejamento para modularização do arquivo `main.js` monolítico (~4845 linhas) do Documental App. 
+Este documento contém a visão estratégica e macro-planejamento para modularização do arquivo `main.js` monolítico (~4845 linhas) do Documental App.
 
 **Recursos Compartilhados:**
 - **Metodologia TDD:** `docs/shared/methodology.md` - TDD com Vitest + ESM ES2022
@@ -15,6 +15,7 @@ Este documento contém a visão estratégica e macro-planejamento para modulariz
 Para detalhes de implementação, consulte os documentos específicos de cada fase em `project/phases/`.
 
 ## Estratégia de Implementação
+Após estudar os documentos de cada fase, e seguir os principios gerais, criar um plano de execução de implementação para cada etapa de cada fase, analisar código já implementado relacionado em main.js, implementar os novos módulos com base no código legado movido de main.js para o módulo, validar (lint e ESM ES2022), testar, corrigir até que passe nos testes e validação, integrar novos módulos criados na fase em um novo main.js (que será nomeado como main_new.cjs) e que chamará as funções ainda não modularizadas direto do main.js original para manter o app funcional até a finalização do migração. O resultado espera é que conforme a implementação avance, o main_new.cjs ficará cada vez mais completo via módulo e não dependa mais do main.js e seja completamente substituido, ficando no final com um tamanhão muito menor, já que a maior parte do código já estará modularizado e integrado. Não avance para proximas fases sem ter todos os módulos da fase implementados, validados, testados, e integrados ao main_new.cjs e funcionando.
 
 ### Abordagem Híbrida CJS/ESM com ES2022
 - **Fases 1-3**: Módulos maiores (200-300 linhas) para implementação rápida
@@ -449,7 +450,7 @@ find tests/ -name "*.test.mjs" | wc -l
 ## 📝 Notas Importantes
 
 ### Princípios Fundamentais
-1. **Preservação Total:** Nenhuma funcionalidade existente será alterada
+1. **Preservação Total:** Nenhuma funcionalidade existente será alterada, apenas migrada para módulos
 2. **Adição Apenas:** Novo código apenas adiciona capacidades
 3. **Compatibilidade Reversa:** APIs existentes mantêm comportamento idêntico
 4. **Logs Consistentes:** Saídas de terminal permanecem inalteradas
