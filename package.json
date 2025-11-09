@@ -6,6 +6,7 @@
   "homepage": "https://github.com/documental/app-git-electron",
   "scripts": {
     "start": "electron .",
+    "start:modular": "electron main-modular.js",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
