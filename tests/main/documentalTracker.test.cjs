@@ -1,7 +1,4 @@
-const { describe, it, beforeEach } = require('node:test');
-const assert = require('node:assert/strict');
-const { vi } = require('../setup/mini-vi.cjs');
-require('../setup/index.cjs');
+const { describe, it, expect, beforeEach, vi } = require('vitest');
 const { createDocumentalTracker } = require('../../src/main/processes/documentalTracker');
 
 describe('createDocumentalTracker', () => {
@@ -34,7 +31,7 @@ describe('createDocumentalTracker', () => {
 
     const processes = tracker.loadProcesses();
 
-    assert.deepStrictEqual(processes, storedProcesses);
+    expect(processes).toEqual(storedProcesses);
   });
 
   it('adds, updates and removes processes while persisting data to disk', () => {
@@ -51,21 +48,18 @@ describe('createDocumentalTracker', () => {
       cwd: '/projects/alpha'
     });
 
-    assert.strictEqual(fsMock.writeFileSync.mock.calls.length, 1);
+    expect(fsMock.writeFileSync).toHaveBeenCalledTimes(1);
 
     const addedProcess = tracker.getProcess(20);
-    assert.deepStrictEqual(
-      { pid: addedProcess.pid, projectId: addedProcess.projectId, command: addedProcess.command },
-      { pid: 20, projectId: 'alpha', command: 'npm run dev' }
-    );
+    expect(addedProcess).toMatchObject({ pid: 20, projectId: 'alpha', command: 'npm run dev' });
 
     tracker.updateProcess(20, { port: 4321 });
     const updatedProcess = tracker.getProcess(20);
-    assert.strictEqual(updatedProcess.port, 4321);
+    expect(updatedProcess.port).toBe(4321);
 
     tracker.removeProcess(20);
-    assert.strictEqual(tracker.getProcess(20), undefined);
-    assert.strictEqual(fsMock.writeFileSync.mock.calls.length, 3);
+    expect(tracker.getProcess(20)).toBeUndefined();
+    expect(fsMock.writeFileSync).toHaveBeenCalledTimes(3);
   });
 
   it('returns snapshots without exposing internal references', () => {
@@ -86,6 +80,6 @@ describe('createDocumentalTracker', () => {
     snapshot[30].projectId = 'mutated';
 
     const original = tracker.getProcess(30);
-    assert.strictEqual(original.projectId, 'beta');
+    expect(original.projectId).toBe('beta');
   });
 });

@@ -1,7 +1,4 @@
-const { describe, it, beforeEach, afterEach } = require('node:test');
-const assert = require('node:assert/strict');
-const { vi } = require('../setup/mini-vi.cjs');
-require('../setup/index.cjs');
+const { describe, it, expect, beforeEach, afterEach, vi } = require('vitest');
 const { createLogger, DEFAULT_MAX_LOG_BUFFER_SIZE } = require('../../src/main/logging/logger');
 
 describe('createLogger', () => {
@@ -29,8 +26,8 @@ describe('createLogger', () => {
 
     const logs = logger.getAppLogs();
 
-    assert.ok(logs.includes('logger-info'));
-    assert.ok(logs.includes('logger-error'));
+    expect(logs).toContain('logger-info');
+    expect(logs).toContain('logger-error');
   });
 
   it('enforces the maximum buffer size by trimming older entries', () => {
@@ -42,9 +39,9 @@ describe('createLogger', () => {
 
     const snapshot = logger.getLogBufferSnapshot();
 
-    assert.strictEqual(snapshot.length, 5);
-    assert.ok(snapshot[0].includes('entry-5'));
-    assert.ok(snapshot[4].includes('entry-9'));
+    expect(snapshot).toHaveLength(5);
+    expect(snapshot[0]).toContain('entry-5');
+    expect(snapshot[4]).toContain('entry-9');
   });
 
   it('broadcasts log entries to all BrowserWindow instances', () => {
@@ -63,18 +60,19 @@ describe('createLogger', () => {
 
     console.warn('broadcast-entry');
 
-    const [channelA, payloadA] = windowA.webContents.send.mock.calls[0];
-    assert.strictEqual(channelA, 'app-log-output');
-    assert.match(payloadA, /broadcast-entry/);
-
-    const [channelB, payloadB] = windowB.webContents.send.mock.calls[0];
-    assert.strictEqual(channelB, 'app-log-output');
-    assert.match(payloadB, /broadcast-entry/);
+    expect(windowA.webContents.send).toHaveBeenCalledWith(
+      'app-log-output',
+      expect.stringContaining('broadcast-entry')
+    );
+    expect(windowB.webContents.send).toHaveBeenCalledWith(
+      'app-log-output',
+      expect.stringContaining('broadcast-entry')
+    );
   });
 
   it('uses the default buffer size when none is provided', () => {
     logger = createLogger({ BrowserWindow });
 
-    assert.strictEqual(logger.maxBufferSize, DEFAULT_MAX_LOG_BUFFER_SIZE);
+    expect(logger.maxBufferSize).toBe(DEFAULT_MAX_LOG_BUFFER_SIZE);
   });
 });

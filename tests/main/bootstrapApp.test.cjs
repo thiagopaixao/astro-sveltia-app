@@ -1,17 +1,10 @@
-const { describe, it } = require('node:test');
-const assert = require('node:assert/strict');
-const { vi } = require('../setup/mini-vi.cjs');
-require('../setup/index.cjs');
+const { describe, it, expect, vi } = require('vitest');
 const { bootstrapApp } = require('../../src/main/bootstrap/app');
 
 describe('bootstrapApp', () => {
   it('wires the Electron lifecycle and delegates to the provided callbacks', async () => {
-    let resolveReady;
-    const readyPromise = new Promise((resolve) => {
-      resolveReady = resolve;
-    });
     const app = {
-      whenReady: vi.fn(() => readyPromise),
+      whenReady: vi.fn(() => Promise.resolve()),
       on: vi.fn()
     };
     const createWindow = vi.fn();
@@ -31,18 +24,16 @@ describe('bootstrapApp', () => {
       onWindowAllClosed
     });
 
-    resolveReady();
-    await readyPromise;
-    await new Promise((resolve) => setImmediate(resolve));
+    expect(app.whenReady).toHaveBeenCalledTimes(1);
 
-    assert.strictEqual(createWindow.mock.calls.length, 1);
-    assert.strictEqual(initializeDatabase.mock.calls.length, 1);
-    assert.strictEqual(registerHandlers.mock.calls.length, 1);
+    await Promise.resolve();
 
-    assert.deepStrictEqual(app.on.mock.calls, [
-      ['activate', onActivate],
-      ['before-quit', onBeforeQuit],
-      ['window-all-closed', onWindowAllClosed]
-    ]);
+    expect(createWindow).toHaveBeenCalledTimes(1);
+    expect(initializeDatabase).toHaveBeenCalledTimes(1);
+    expect(registerHandlers).toHaveBeenCalledTimes(1);
+
+    expect(app.on).toHaveBeenCalledWith('activate', onActivate);
+    expect(app.on).toHaveBeenCalledWith('before-quit', onBeforeQuit);
+    expect(app.on).toHaveBeenCalledWith('window-all-closed', onWindowAllClosed);
   });
 });
