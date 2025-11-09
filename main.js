@@ -5,6 +5,9 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const { rimraf } = require('rimraf');
 const { execSync } = require('child_process');
+const { createLogger } = require('./src/main/logging/logger');
+const { createDocumentalTracker } = require('./src/main/processes/documentalTracker');
+const { bootstrapApp } = require('./src/main/bootstrap/app');
 
 // New imports for GitHub authentication and git operations
 const keytar = require('keytar');
@@ -19,65 +22,7 @@ let viewerView;
 let globalDevServerUrl = null; // Global variable to store dev server URL
 let activeProcesses = {}; // To keep track of running child processes
 
-// App logging system
-let appLogBuffer = [];
-const MAX_LOG_BUFFER_SIZE = 10000;
-
-// Override console methods to capture app logs
-const originalConsoleLog = console.log;
-const originalConsoleError = console.error;
-const originalConsoleWarn = console.warn;
-const originalConsoleInfo = console.info;
-
-function addToAppLog(level, ...args) {
-  const timestamp = new Date().toISOString();
-  const message = args.map(arg => 
-    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-  ).join(' ');
-  
-  const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
-  appLogBuffer.push(logEntry);
-  
-  // Keep buffer size manageable
-  if (appLogBuffer.length > MAX_LOG_BUFFER_SIZE) {
-    appLogBuffer = appLogBuffer.slice(-MAX_LOG_BUFFER_SIZE);
-  }
-  
-  // Send to all windows
-  const allWindows = BrowserWindow.getAllWindows();
-  allWindows.forEach(window => {
-    if (!window.isDestroyed()) {
-      window.webContents.send('app-log-output', logEntry);
-    }
-  });
-  
-  // Call original console method
-  originalConsoleLog(...args);
-}
-
-console.log = function(...args) {
-  addToAppLog('info', ...args);
-};
-
-console.error = function(...args) {
-  addToAppLog('error', ...args);
-  originalConsoleError(...args);
-};
-
-console.warn = function(...args) {
-  addToAppLog('warn', ...args);
-  originalConsoleWarn(...args);
-};
-
-console.info = function(...args) {
-  addToAppLog('info', ...args);
-  originalConsoleInfo(...args);
-};
-
-// Function to get initial app logs
-function getAppLogs() {
-  return appLogBuffer.join('');
-}
+const { getAppLogs } = createLogger({ BrowserWindow });
 
 // GitHub authentication variables
 
@@ -88,53 +33,26 @@ const windowBrowserViews = new Map(); // windowId -> { editorView, viewerView }
 // Flag to prevent multiple cleanup attempts
 let isCleaningUp = false;
 
-// Secure process tracking for Documental only
-let activeDocumentalProcesses = {}; // { pid: { pid, port, projectId, startTime, command, cwd } }
-const PROCESSES_FILE = path.join(app.getPath('userData'), 'documental-processes.json');
-
-// Functions to persist Documental processes
-function loadDocumentalProcesses() {
-  try {
-    if (fs.existsSync(PROCESSES_FILE)) {
-      const data = fs.readFileSync(PROCESSES_FILE, 'utf8');
-      const processes = JSON.parse(data);
-      console.log('📂 Loaded Documental processes from file:', Object.keys(processes));
-      return processes;
-    }
-  } catch (error) {
-    console.error('Error loading Documental processes:', error);
-  }
-  return {};
-}
-
-function saveDocumentalProcesses() {
-  try {
-    fs.writeFileSync(PROCESSES_FILE, JSON.stringify(activeDocumentalProcesses, null, 2));
-    console.log('💾 Saved Documental processes to file');
-  } catch (error) {
-    console.error('Error saving Documental processes:', error);
-  }
-}
+const documentalTracker = createDocumentalTracker({
+  fs,
+  path,
+  processesFilePath: path.join(app.getPath('userData'), 'documental-processes.json')
+});
 
 function addDocumentalProcess(pid, processInfo) {
-  activeDocumentalProcesses[pid] = {
-    pid,
-    port: processInfo.port,
-    projectId: processInfo.projectId,
-    startTime: Date.now(),
-    command: processInfo.command,
-    cwd: processInfo.cwd
-  };
-  saveDocumentalProcesses();
-  console.log(`➕ Added Documental process to tracking: PID ${pid}, Port ${processInfo.port}`);
+  documentalTracker.addProcess(pid, processInfo);
 }
 
 function removeDocumentalProcess(pid) {
-  if (activeDocumentalProcesses[pid]) {
-    delete activeDocumentalProcesses[pid];
-    saveDocumentalProcesses();
-    console.log(`➖ Removed Documental process from tracking: PID ${pid}`);
-  }
+  documentalTracker.removeProcess(pid);
+}
+
+function updateDocumentalProcess(pid, updates) {
+  documentalTracker.updateProcess(pid, updates);
+}
+
+function hasDocumentalProcess(pid) {
+  return documentalTracker.hasProcess(pid);
 }
 
 // Global output functions for console communication
@@ -169,10 +87,10 @@ function sendCommandStatus(status) {
 app.on('ready', async () => {
   isCleaningUp = false;
   console.log('🚀 App ready - cleanup flag reset');
-  
+
   // Load previously tracked Documental processes
-  activeDocumentalProcesses = loadDocumentalProcesses();
-  
+  documentalTracker.loadProcesses();
+
   // Clean up only Documental orphaned processes from previous runs
   await cleanupDocumentalOrphanedProcesses();
 });
@@ -270,7 +188,7 @@ async function isDocumentalProcess(pid, expectedPort = null) {
 async function cleanupDocumentalOrphanedProcesses() {
   console.log('🧹 Checking for Documental orphaned processes from previous runs...');
   
-  const trackedProcesses = Object.values(activeDocumentalProcesses);
+  const trackedProcesses = documentalTracker.getProcessList();
   if (trackedProcesses.length === 0) {
     console.log('📂 No previously tracked Documental processes found');
     return;
@@ -595,7 +513,7 @@ async function killAllActiveProcesses() {
   }
   
   // Then, clean up any remaining tracked Documental processes
-  const trackedProcesses = Object.values(activeDocumentalProcesses);
+  const trackedProcesses = documentalTracker.getProcessList();
   if (trackedProcesses.length > 0) {
     console.log(`🔄 Cleaning up ${trackedProcesses.length} tracked Documental processes...`);
     
@@ -2971,10 +2889,7 @@ function initializeDatabase() {
   });
 }
 
-app.whenReady().then(() => {
-  createWindow();
-  initializeDatabase();
-
+function registerMainEventHandlers() {
   ipcMain.handle('get-home-directory', () => {
     return app.getPath('home');
   });
@@ -3411,11 +3326,10 @@ app.whenReady().then(() => {
             const port = extractPortFromUrl(devServerUrl);
             if (port && devProcess.pid) {
               // Update the process with port information
-              if (activeDocumentalProcesses[devProcess.pid]) {
-                activeDocumentalProcesses[devProcess.pid].port = port;
-                saveDocumentalProcesses();
-                console.log(`📝 Updated Documental process ${devProcess.pid} with port ${port}`);
-              }
+            if (hasDocumentalProcess(devProcess.pid)) {
+              updateDocumentalProcess(devProcess.pid, { port });
+              console.log(`📝 Updated Documental process ${devProcess.pid} with port ${port}`);
+            }
             }
             
             console.log(`URL do servidor de desenvolvimento: ${devServerUrl}`);
@@ -3593,11 +3507,10 @@ app.whenReady().then(() => {
             const port = extractPortFromUrl(devServerUrl);
             if (port && devProcess.pid) {
               // Update the process with port information
-              if (activeDocumentalProcesses[devProcess.pid]) {
-                activeDocumentalProcesses[devProcess.pid].port = port;
-                saveDocumentalProcesses();
-                console.log(`📝 Updated Documental process ${devProcess.pid} with port ${port}`);
-              }
+            if (hasDocumentalProcess(devProcess.pid)) {
+              updateDocumentalProcess(devProcess.pid, { port });
+              console.log(`📝 Updated Documental process ${devProcess.pid} with port ${port}`);
+            }
             }
             
             console.log(`URL do servidor de desenvolvimento: ${devServerUrl}`);
@@ -3887,11 +3800,10 @@ app.whenReady().then(() => {
             const port = extractPortFromUrl(devServerUrl);
             if (port && devProcess.pid) {
               // Update the process with port information
-              if (activeDocumentalProcesses[devProcess.pid]) {
-                activeDocumentalProcesses[devProcess.pid].port = port;
-                saveDocumentalProcesses();
-                console.log(`📝 Updated Documental process ${devProcess.pid} with port ${port}`);
-              }
+            if (hasDocumentalProcess(devProcess.pid)) {
+              updateDocumentalProcess(devProcess.pid, { port });
+              console.log(`📝 Updated Documental process ${devProcess.pid} with port ${port}`);
+            }
             }
             
             console.log(`Development server URL: ${devServerUrl}`);
@@ -4090,15 +4002,16 @@ ipcMain.handle('cancel-project-creation', async (event, projectId, projectPath, 
     }
   });
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
+}
+
+function handleActivate() {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+}
 
 // Handle app quit event - kill all processes before quitting
-app.on('before-quit', async (event) => {
+async function handleBeforeQuit() {
   console.log('🚪 App is quitting - killing all processes...');
   try {
     await killAllActiveProcesses();
@@ -4106,14 +4019,24 @@ app.on('before-quit', async (event) => {
   } catch (error) {
     console.error('❌ Error killing processes:', error);
   }
-});
+}
 
-app.on('window-all-closed', () => {
+function handleWindowAllClosed() {
   // Clean up BrowserViews when all windows are closed
   windowBrowserViews.clear();
   if (process.platform !== 'darwin') {
     app.quit();
   }
+}
+
+bootstrapApp({
+  app,
+  createWindow,
+  initializeDatabase,
+  registerHandlers: registerMainEventHandlers,
+  onActivate: handleActivate,
+  onBeforeQuit: handleBeforeQuit,
+  onWindowAllClosed: handleWindowAllClosed
 });
 
 // Clean up BrowserViews when individual windows are closed
