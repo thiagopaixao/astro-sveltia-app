@@ -1,10 +1,32 @@
 const path = require('path');
-const { beforeEach, afterEach, vi } = require('vitest');
-const { electronMock, fsMock, childProcessMock, resetAllMocks } = require('./mocks.cjs');
+const { beforeEach, afterEach } = require('node:test');
+const { vi } = require('./mini-vi.cjs');
+const {
+  electronMock,
+  fsMock,
+  childProcessMock,
+  sqlite3Mock,
+  keytarMock,
+  gitMock,
+  gitHttpMock,
+  octokitModuleMock,
+  rimrafModuleMock,
+  resetAllMocks
+} = require('./mocks.cjs');
 
-vi.mock('electron', () => electronMock);
-vi.mock('fs', () => fsMock);
-vi.mock('child_process', () => childProcessMock);
+function applyBaseMocks() {
+  vi.mock('electron', () => electronMock, { parentModule: module });
+  vi.mock('fs', () => fsMock, { parentModule: module });
+  vi.mock('child_process', () => childProcessMock, { parentModule: module });
+  vi.mock('sqlite3', () => sqlite3Mock, { parentModule: module });
+  vi.mock('keytar', () => keytarMock, { parentModule: module });
+  vi.mock('isomorphic-git', () => gitMock, { parentModule: module });
+  vi.mock('isomorphic-git/http/node', () => gitHttpMock, { parentModule: module });
+  vi.mock('@octokit/rest', () => octokitModuleMock, { parentModule: module });
+  vi.mock('rimraf', () => rimrafModuleMock, { parentModule: module });
+}
+
+applyBaseMocks();
 
 const originalConsole = {
   log: console.log,
@@ -25,4 +47,7 @@ afterEach(() => {
   console.error = originalConsole.error;
   console.warn = originalConsole.warn;
   console.info = originalConsole.info;
+
+  vi.restoreAllMocks();
+  applyBaseMocks();
 });

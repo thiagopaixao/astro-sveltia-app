@@ -1,63 +1,80 @@
-const { describe, it, expect } = require('vitest');
-const {
-  loadMainProcess,
-  getIpcHandler,
-  electronMock,
-  createWindowMock
-} = require('../setup/helpers.cjs');
+const { describe, it, beforeEach, afterEach } = require('node:test');
+const assert = require('node:assert/strict');
+const { vi } = require('../setup/mini-vi.cjs');
+require('../setup/index.cjs');
+const { createLogger, DEFAULT_MAX_LOG_BUFFER_SIZE } = require('../../src/main/logging/logger');
 
-describe('main process logger', () => {
-  it('buffers log entries and exposes them through the get-app-logs handler', async () => {
-    loadMainProcess();
+describe('createLogger', () => {
+  let logger;
+  let BrowserWindow;
 
-    const getLogsHandler = getIpcHandler('get-app-logs');
-    expect(getLogsHandler).toBeTypeOf('function');
-
-    console.log('first message');
-    console.error('second message');
-
-    const logs = await getLogsHandler();
-
-    expect(logs).toContain('first message');
-    expect(logs).toContain('second message');
+  beforeEach(() => {
+    BrowserWindow = {
+      getAllWindows: vi.fn(() => [])
+    };
   });
 
-  it('keeps only the most recent messages within the buffer limit', async () => {
-    loadMainProcess();
+  afterEach(() => {
+    if (logger) {
+      logger.restoreConsole();
+      logger = undefined;
+    }
+  });
 
-    const getLogsHandler = getIpcHandler('get-app-logs');
-    expect(getLogsHandler).toBeTypeOf('function');
+  it('captures console output and exposes it through getAppLogs', () => {
+    logger = createLogger({ BrowserWindow });
 
-    const totalEntries = 10005;
-    for (let index = 0; index < totalEntries; index += 1) {
-      console.log(`buffer-entry-${index}`);
+    console.log('logger-info');
+    console.error('logger-error');
+
+    const logs = logger.getAppLogs();
+
+    assert.ok(logs.includes('logger-info'));
+    assert.ok(logs.includes('logger-error'));
+  });
+
+  it('enforces the maximum buffer size by trimming older entries', () => {
+    logger = createLogger({ BrowserWindow, maxBufferSize: 5 });
+
+    for (let index = 0; index < 10; index += 1) {
+      console.log(`entry-${index}`);
     }
 
-    const logs = await getLogsHandler();
-    const entries = logs.trim().split('\n');
+    const snapshot = logger.getLogBufferSnapshot();
 
-    expect(entries.length).toBeLessThanOrEqual(10000);
-    expect(entries[0]).toContain('buffer-entry-5');
-    expect(entries[entries.length - 1]).toContain('buffer-entry-10004');
+    assert.strictEqual(snapshot.length, 5);
+    assert.ok(snapshot[0].includes('entry-5'));
+    assert.ok(snapshot[4].includes('entry-9'));
   });
 
-  it('broadcasts each log entry to every available BrowserWindow', () => {
-    loadMainProcess();
+  it('broadcasts log entries to all BrowserWindow instances', () => {
+    const windowA = {
+      isDestroyed: vi.fn(() => false),
+      webContents: { send: vi.fn() }
+    };
+    const windowB = {
+      isDestroyed: vi.fn(() => false),
+      webContents: { send: vi.fn() }
+    };
 
-    const windowA = createWindowMock();
-    const windowB = createWindowMock();
+    BrowserWindow.getAllWindows.mockReturnValue([windowA, windowB]);
 
-    electronMock.BrowserWindow.getAllWindows.mockReturnValue([windowA, windowB]);
+    logger = createLogger({ BrowserWindow });
 
-    console.log('broadcast-test');
+    console.warn('broadcast-entry');
 
-    expect(windowA.webContents.send).toHaveBeenCalledWith(
-      'app-log-output',
-      expect.stringContaining('broadcast-test')
-    );
-    expect(windowB.webContents.send).toHaveBeenCalledWith(
-      'app-log-output',
-      expect.stringContaining('broadcast-test')
-    );
+    const [channelA, payloadA] = windowA.webContents.send.mock.calls[0];
+    assert.strictEqual(channelA, 'app-log-output');
+    assert.match(payloadA, /broadcast-entry/);
+
+    const [channelB, payloadB] = windowB.webContents.send.mock.calls[0];
+    assert.strictEqual(channelB, 'app-log-output');
+    assert.match(payloadB, /broadcast-entry/);
+  });
+
+  it('uses the default buffer size when none is provided', () => {
+    logger = createLogger({ BrowserWindow });
+
+    assert.strictEqual(logger.maxBufferSize, DEFAULT_MAX_LOG_BUFFER_SIZE);
   });
 });
