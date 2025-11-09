@@ -1,12 +1,16 @@
-const { vi } = require('vitest');
+const { vi } = require('./mini-vi.cjs');
 const actualFs = require('fs');
 
 const resetters = [];
 
-function createMockFn(defaultImpl) {
+function createTrackedMock(defaultImpl) {
   const fn = defaultImpl ? vi.fn(defaultImpl) : vi.fn();
   resetters.push(() => {
-    fn.mockReset();
+    if (typeof fn.mockReset === 'function') {
+      fn.mockReset();
+    } else if (typeof fn.mockClear === 'function') {
+      fn.mockClear();
+    }
     if (defaultImpl) {
       fn.mockImplementation(defaultImpl);
     }
@@ -16,111 +20,111 @@ function createMockFn(defaultImpl) {
 
 function createStreamMock() {
   return {
-    on: createMockFn(),
-    once: createMockFn(),
-    emit: createMockFn(),
-    end: createMockFn(),
-    destroy: createMockFn(),
-    close: createMockFn(),
-    pipe: createMockFn()
+    on: createTrackedMock(),
+    once: createTrackedMock(),
+    emit: createTrackedMock(),
+    end: createTrackedMock(),
+    destroy: createTrackedMock(),
+    close: createTrackedMock(),
+    pipe: createTrackedMock()
   };
 }
 
 function createElectronMock() {
-  const browserWindowConstructor = createMockFn(() => {
+  const browserWindowConstructor = createTrackedMock(() => {
     return {
-      loadURL: createMockFn(),
-      loadFile: createMockFn(),
-      on: createMockFn(),
-      once: createMockFn(),
-      show: createMockFn(),
-      hide: createMockFn(),
-      close: createMockFn(),
-      focus: createMockFn(),
-      setBrowserView: createMockFn(),
-      removeBrowserView: createMockFn(),
-      setBounds: createMockFn(),
-      setMenuBarVisibility: createMockFn(),
+      loadURL: createTrackedMock(),
+      loadFile: createTrackedMock(),
+      on: createTrackedMock(),
+      once: createTrackedMock(),
+      show: createTrackedMock(),
+      hide: createTrackedMock(),
+      close: createTrackedMock(),
+      focus: createTrackedMock(),
+      setBrowserView: createTrackedMock(),
+      removeBrowserView: createTrackedMock(),
+      setBounds: createTrackedMock(),
+      setMenuBarVisibility: createTrackedMock(),
       webContents: {
-        send: createMockFn(),
-        on: createMockFn(),
-        once: createMockFn(),
-        openDevTools: createMockFn(),
-        close: createMockFn()
+        send: createTrackedMock(),
+        on: createTrackedMock(),
+        once: createTrackedMock(),
+        openDevTools: createTrackedMock(),
+        close: createTrackedMock()
       },
-      isDestroyed: createMockFn(() => false)
+      isDestroyed: createTrackedMock(() => false)
     };
   });
 
-  browserWindowConstructor.getAllWindows = createMockFn(() => []);
-  browserWindowConstructor.fromWebContents = createMockFn(() => null);
+  browserWindowConstructor.getAllWindows = createTrackedMock(() => []);
+  browserWindowConstructor.fromWebContents = createTrackedMock(() => null);
 
   return {
     app: {
-      getPath: createMockFn(() => '/tmp/documental'),
-      on: createMockFn(),
-      once: createMockFn(),
-      whenReady: createMockFn(() => Promise.resolve()),
-      isReady: createMockFn(() => false),
-      quit: createMockFn(),
-      removeListener: createMockFn(),
-      removeAllListeners: createMockFn()
+      getPath: createTrackedMock(() => '/tmp/documental'),
+      on: createTrackedMock(),
+      once: createTrackedMock(),
+      whenReady: createTrackedMock(() => Promise.resolve()),
+      isReady: createTrackedMock(() => false),
+      quit: createTrackedMock(),
+      removeListener: createTrackedMock(),
+      removeAllListeners: createTrackedMock()
     },
     BrowserWindow: browserWindowConstructor,
-    BrowserView: createMockFn(() => ({
-      setBounds: createMockFn(),
-      setAutoResize: createMockFn(),
+    BrowserView: createTrackedMock(() => ({
+      setBounds: createTrackedMock(),
+      setAutoResize: createTrackedMock(),
       webContents: {
-        loadURL: createMockFn(),
-        on: createMockFn(),
-        once: createMockFn(),
-        send: createMockFn(),
-        openDevTools: createMockFn(),
-        close: createMockFn()
+        loadURL: createTrackedMock(),
+        on: createTrackedMock(),
+        once: createTrackedMock(),
+        send: createTrackedMock(),
+        openDevTools: createTrackedMock(),
+        close: createTrackedMock()
       }
     })),
     ipcMain: {
-      handle: createMockFn(),
-      handleOnce: createMockFn(),
-      on: createMockFn(),
-      once: createMockFn(),
-      removeHandler: createMockFn(),
-      removeListener: createMockFn(),
-      removeAllListeners: createMockFn()
+      handle: createTrackedMock(),
+      handleOnce: createTrackedMock(),
+      on: createTrackedMock(),
+      once: createTrackedMock(),
+      removeHandler: createTrackedMock(),
+      removeListener: createTrackedMock(),
+      removeAllListeners: createTrackedMock()
     },
     Menu: {
-      setApplicationMenu: createMockFn(),
-      buildFromTemplate: createMockFn()
+      setApplicationMenu: createTrackedMock(),
+      buildFromTemplate: createTrackedMock()
     },
     dialog: {
-      showOpenDialog: createMockFn(async () => ({ canceled: true, filePaths: [] })),
-      showMessageBox: createMockFn(async () => ({ response: 0 })),
-      showErrorBox: createMockFn()
+      showOpenDialog: createTrackedMock(async () => ({ canceled: true, filePaths: [] })),
+      showMessageBox: createTrackedMock(async () => ({ response: 0 })),
+      showErrorBox: createTrackedMock()
     },
     shell: {
-      openExternal: createMockFn(),
-      openPath: createMockFn()
+      openExternal: createTrackedMock(),
+      openPath: createTrackedMock()
     }
   };
 }
 
 function createFsMock() {
   const stubs = {
-    existsSync: createMockFn(() => false),
-    readFileSync: createMockFn(() => ''),
-    writeFileSync: createMockFn(),
-    mkdirSync: createMockFn(),
-    rmSync: createMockFn(),
-    readdirSync: createMockFn(() => []),
-    statSync: createMockFn(() => ({
+    existsSync: createTrackedMock(() => false),
+    readFileSync: createTrackedMock(() => ''),
+    writeFileSync: createTrackedMock(),
+    mkdirSync: createTrackedMock(),
+    rmSync: createTrackedMock(),
+    readdirSync: createTrackedMock(() => []),
+    statSync: createTrackedMock(() => ({
       isDirectory: () => false,
       isFile: () => true
     })),
-    readlinkSync: createMockFn(() => ''),
-    createWriteStream: createMockFn(() => createStreamMock()),
-    createReadStream: createMockFn(() => createStreamMock()),
-    renameSync: createMockFn(),
-    copyFileSync: createMockFn()
+    readlinkSync: createTrackedMock(() => ''),
+    createWriteStream: createTrackedMock(() => createStreamMock()),
+    createReadStream: createTrackedMock(() => createStreamMock()),
+    renameSync: createTrackedMock(),
+    copyFileSync: createTrackedMock()
   };
 
   return new Proxy({}, {
@@ -135,31 +139,94 @@ function createFsMock() {
 
 function createChildProcessMock() {
   return {
-    spawn: createMockFn(() => ({
+    spawn: createTrackedMock(() => ({
       stdout: {
-        on: createMockFn()
+        on: createTrackedMock()
       },
       stderr: {
-        on: createMockFn()
+        on: createTrackedMock()
       },
-      on: createMockFn()
+      on: createTrackedMock()
     })),
-    execSync: createMockFn(() => '')
+    execSync: createTrackedMock(() => '')
   };
 }
 
 function createWindowMock() {
   return {
-    isDestroyed: createMockFn(() => false),
+    isDestroyed: createTrackedMock(() => false),
     webContents: {
-      send: createMockFn(),
-      on: createMockFn(),
-      once: createMockFn(),
-      openDevTools: createMockFn(),
-      close: createMockFn()
+      send: createTrackedMock(),
+      on: createTrackedMock(),
+      once: createTrackedMock(),
+      openDevTools: createTrackedMock(),
+      close: createTrackedMock()
     }
   };
 }
+
+function createDatabaseMock() {
+  return {
+    serialize: createTrackedMock((callback) => {
+      if (typeof callback === 'function') {
+        callback();
+      }
+    }),
+    run: createTrackedMock((_, __, callback) => {
+      if (typeof callback === 'function') {
+        callback(null);
+      }
+    }),
+    all: createTrackedMock((_, __, callback) => {
+      if (typeof callback === 'function') {
+        callback(null, []);
+      }
+    }),
+    close: createTrackedMock()
+  };
+}
+
+const sqlite3Mock = {
+  verbose: () => ({
+    Database: function Database() {
+      return createDatabaseMock();
+    }
+  })
+};
+
+const keytarMock = {
+  getPassword: createTrackedMock(async () => null),
+  setPassword: createTrackedMock(async () => undefined)
+};
+
+const gitMethodMocks = new Map();
+const gitMock = new Proxy({}, {
+  get(_, prop) {
+    if (!gitMethodMocks.has(prop)) {
+      const fn = createTrackedMock(async () => undefined);
+      gitMethodMocks.set(prop, fn);
+    }
+    return gitMethodMocks.get(prop);
+  }
+});
+
+const gitHttpMock = {};
+
+class OctokitMock {
+  constructor() {
+    this.rest = {
+      users: {
+        getAuthenticated: createTrackedMock(async () => ({ data: { login: 'mock-user' } }))
+      }
+    };
+  }
+}
+
+const octokitModuleMock = { Octokit: OctokitMock };
+
+const rimrafModuleMock = {
+  rimraf: createTrackedMock(async () => undefined)
+};
 
 function resetAllMocks() {
   vi.clearAllMocks();
@@ -175,5 +242,11 @@ module.exports = {
   fsMock,
   childProcessMock,
   createWindowMock,
+  sqlite3Mock,
+  keytarMock,
+  gitMock,
+  gitHttpMock,
+  octokitModuleMock,
+  rimrafModuleMock,
   resetAllMocks
 };
