@@ -8,6 +8,12 @@ const { execSync } = require('child_process');
 const { createLogger } = require('./src/main/logging/logger');
 const { createDocumentalTracker } = require('./src/main/processes/documentalTracker');
 const { bootstrapApp } = require('./src/main/bootstrap/app');
+const { createProjectService } = require('./src/application/projectService');
+const { createGitWorkflowService } = require('./src/application/gitWorkflowService');
+const { createNodeEnvironmentService } = require('./src/application/nodeEnvironmentService');
+const { createSqliteProjectRepository } = require('./src/infrastructure/database/sqliteProjectRepository');
+const { createIsomorphicGitAdapter } = require('./src/infrastructure/git/isomorphicGitAdapter');
+const { createNodeCommandAdapter } = require('./src/infrastructure/node/nodeCommandAdapter');
 
 // New imports for GitHub authentication and git operations
 const keytar = require('keytar');
@@ -21,6 +27,13 @@ let editorView;
 let viewerView;
 let globalDevServerUrl = null; // Global variable to store dev server URL
 let activeProcesses = {}; // To keep track of running child processes
+
+let projectRepository;
+let projectService;
+let gitAdapter;
+let gitWorkflowService;
+let nodeAdapter;
+let nodeEnvironmentService;
 
 const { getAppLogs } = createLogger({ BrowserWindow });
 
@@ -38,6 +51,106 @@ const documentalTracker = createDocumentalTracker({
   path,
   processesFilePath: path.join(app.getPath('userData'), 'documental-processes.json')
 });
+
+gitAdapter = createIsomorphicGitAdapter({
+  git,
+  http,
+  fs,
+  getGitHubToken,
+  sendCommandOutput
+});
+
+nodeAdapter = createNodeCommandAdapter({ spawn });
+
+function ensureGitAdapterReady() {
+  if (!gitAdapter) {
+    throw new Error('Git adapter not initialized');
+  }
+}
+
+async function gitClone(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.clone(...args);
+}
+
+async function gitCheckout(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.checkout(...args);
+}
+
+async function gitGetRemoteUrl(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.getRemoteUrl(...args);
+}
+
+async function gitSetUserConfig(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.setUserConfig(...args);
+}
+
+async function gitListBranches(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.listBranches(...args);
+}
+
+async function gitCreateBranch(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.createBranch(...args);
+}
+
+async function gitCheckoutBranch(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.checkoutBranch(...args);
+}
+
+async function gitGetCurrentBranch(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.getCurrentBranch(...args);
+}
+
+async function gitEnsurePreviewBranch(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.ensurePreviewBranch(...args);
+}
+
+async function gitGetRepositoryInfo(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.getRepositoryInfo(...args);
+}
+
+async function gitPullFromPreview(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.pullFromPreview(...args);
+}
+
+async function gitPushToBranch(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.pushToBranch(...args);
+}
+
+async function gitListRemoteBranches(...args) {
+  ensureGitAdapterReady();
+  return gitAdapter.listRemoteBranches(...args);
+}
+
+async function configureGitForUser(dir) {
+  try {
+    const userInfo = await getGitHubUserInfo();
+    if (!userInfo) {
+      console.warn('⚠️ No GitHub user info available, skipping git config');
+      return false;
+    }
+
+    const name = userInfo.name || userInfo.login;
+    const email = userInfo.email || `${userInfo.login}@users.noreply.github.com`;
+
+    await gitSetUserConfig(dir, name, email);
+    return true;
+  } catch (error) {
+    console.error('Error configuring git for user:', error);
+    return false;
+  }
+}
 
 function addDocumentalProcess(pid, processInfo) {
   documentalTracker.addProcess(pid, processInfo);
@@ -535,613 +648,7 @@ async function killAllActiveProcesses() {
 }
 
 // Git operations using isomorphic-git
-async function gitClone(url, dir, options = {}) {
-  try {
-    console.log(`🔄 Cloning repository from ${url} to ${dir}`);
-    
-    const token = await getGitHubToken();
-    const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
-    
-    await git.clone({
-      fs,
-      http,
-      dir,
-      url,
-      auth,
-      ...options
-    });
-    
-    console.log(`✅ Repository cloned successfully to ${dir}`);
-    return true;
-  } catch (error) {
-    console.error(`❌ Error cloning repository:`, error);
-    throw error;
-  }
-}
 
-async function gitCheckout(dir, branch) {
-  try {
-    console.log(`🔄 Checking out branch ${branch} in ${dir}`);
-    
-    await git.checkout({
-      fs,
-      dir,
-      ref: branch
-    });
-    
-    console.log(`✅ Checked out branch ${branch} successfully`);
-    return true;
-  } catch (error) {
-    console.error(`❌ Error checking out branch:`, error);
-    throw error;
-  }
-}
-
-async function gitGetRemoteUrl(dir) {
-  try {
-    const url = await git.getConfig({
-      fs,
-      dir,
-      path: 'remote.origin.url'
-    });
-    return url;
-  } catch (error) {
-    console.error('Error getting remote URL:', error);
-    return null;
-  }
-}
-
-async function gitSetUserConfig(dir, name, email) {
-  try {
-    console.log(`🔄 Setting git user config: ${name} <${email}>`);
-    
-    await git.setConfig({
-      fs,
-      dir,
-      path: 'user.name',
-      value: name
-    });
-    
-    await git.setConfig({
-      fs,
-      dir,
-      path: 'user.email',
-      value: email
-    });
-    
-    console.log(`✅ Git user config set successfully`);
-    return true;
-  } catch (error) {
-    console.error(`❌ Error setting git user config:`, error);
-    throw error;
-  }
-}
-
-async function configureGitForUser(dir) {
-  try {
-    const userInfo = await getGitHubUserInfo();
-    if (!userInfo) {
-      console.warn('⚠️ No GitHub user info available, skipping git config');
-      return false;
-    }
-    
-    const name = userInfo.name || userInfo.login;
-    const email = userInfo.email || `${userInfo.login}@users.noreply.github.com`;
-    
-    await gitSetUserConfig(dir, name, email);
-    return true;
-  } catch (error) {
-    console.error('Error configuring git for user:', error);
-    return false;
-  }
-}
-
-// Branch management functions
-async function gitListBranches(dir) {
-  try {
-    sendCommandOutput(`📋 Listando branches em ${dir}...\n`);
-    
-    // Get all branches (local and remote)
-    const branches = await git.listBranches({ fs, dir });
-    sendCommandOutput(`🔍 Encontradas ${branches.length} branches no repositório\n`);
-    
-    // Get current branch
-    const currentBranch = await git.currentBranch({ fs, dir });
-    sendCommandOutput(`📍 Branch atual: ${currentBranch}\n`);
-    
-    // Separate local and remote branches
-    const localBranches = branches.filter(branch => !branch.includes('origin/'));
-    const remoteBranches = branches.filter(branch => branch.includes('origin/'))
-      .map(branch => branch.replace('origin/', ''));
-    
-    // Remove duplicates (branches that exist both locally and remotely)
-    const uniqueBranches = [...new Set([...localBranches, ...remoteBranches])];
-    
-    sendCommandOutput(`📂 Branches locais: ${localBranches.length}\n`);
-    sendCommandOutput(`🌐 Branches remotas: ${remoteBranches.length}\n`);
-    sendCommandOutput(`✅ Total de ${uniqueBranches.length} branches únicas\n`);
-    
-    console.log(`✅ Found ${uniqueBranches.length} branches, current: ${currentBranch}`);
-    
-    return {
-      branches: uniqueBranches,
-      currentBranch,
-      localBranches,
-      remoteBranches
-    };
-  } catch (error) {
-    const errorMsg = `❌ Erro ao listar branches: ${error.message}\n`;
-    sendCommandOutput(errorMsg);
-    console.error('❌ Error listing branches:', error);
-    throw error;
-  }
-}
-
-async function gitCreateBranch(dir, branchName) {
-  try {
-    sendCommandOutput(`🌿 Criando nova branch '${branchName}' em ${dir}...\n`);
-    
-    // Validate branch name
-    if (!branchName || !/^[a-zA-Z0-9._-]+$/.test(branchName)) {
-      throw new Error('Invalid branch name. Only alphanumeric characters, dots, hyphens and underscores are allowed.');
-}
-    sendCommandOutput(`🔍 Verificando se branch já existe...\n`);
-    const existingBranches = await git.listBranches({ fs, dir });
-    if (existingBranches.includes(branchName)) {
-      const errorMsg = `❌ Branch '${branchName}' já existe.\n`;
-      sendCommandOutput(errorMsg);
-      throw new Error(`Branch '${branchName}' already exists.`);
-    }
-    
-    sendCommandOutput(`📝 Criando branch '${branchName}'...\n`);
-    // Create branch
-    await git.branch({
-      fs,
-      dir,
-      ref: branchName
-    });
-    sendCommandOutput(`✅ Branch '${branchName}' criada com sucesso\n`);
-    
-    sendCommandOutput(`🔄 Mudando para nova branch '${branchName}'...\n`);
-    // Checkout new branch
-    await git.checkout({
-      fs,
-      dir,
-      ref: branchName
-    });
-    sendCommandOutput(`✅ Branch '${branchName}' criada e selecionada com sucesso\n`);
-    
-    console.log(`✅ Created and checked out branch '${branchName}' successfully`);
-    return true;
-  } catch (error) {
-    const errorMsg = `❌ Erro ao criar branch '${branchName}': ${error.message}\n`;
-    sendCommandOutput(errorMsg);
-    console.error(`❌ Error creating branch '${branchName}':`, error);
-    throw error;
-  }
-}
-
-async function gitCheckoutBranch(dir, branchName) {
-  try {
-    sendCommandOutput(`🔄 Mudando para branch '${branchName}' em ${dir}...\n`);
-    
-    // Check if branch exists
-    sendCommandOutput(`🔍 Verificando se branch existe...\n`);
-    const branches = await git.listBranches({ fs, dir });
-    const localBranch = branches.find(b => b === branchName);
-    const remoteBranch = branches.find(b => b === `origin/${branchName}`);
-    
-    if (!localBranch && !remoteBranch) {
-      const errorMsg = `❌ Branch '${branchName}' não encontrada.\n`;
-      sendCommandOutput(errorMsg);
-      throw new Error(`Branch '${branchName}' not found.`);
-    }
-    
-    // If only remote branch exists, create local tracking branch
-    if (!localBranch && remoteBranch) {
-      sendCommandOutput(`📥 Criando branch local '${branchName}' para rastrear branch remota\n`);
-      await git.branch({
-        fs,
-        dir,
-        ref: branchName,
-        checkout: true
-      });
-      sendCommandOutput(`✅ Branch local '${branchName}' criada e selecionada\n`);
-    } else {
-      // Checkout existing local branch
-      sendCommandOutput(`📂 Selecionando branch local existente '${branchName}'\n`);
-      await git.checkout({
-        fs,
-        dir,
-        ref: branchName
-      });
-      sendCommandOutput(`✅ Branch '${branchName}' selecionada com sucesso\n`);
-    }
-    
-    console.log(`✅ Checked out branch '${branchName}' successfully`);
-    return true;
-  } catch (error) {
-    const errorMsg = `❌ Erro ao mudar para branch '${branchName}': ${error.message}\n`;
-    sendCommandOutput(errorMsg);
-    console.error(`❌ Error checking out branch '${branchName}':`, error);
-    throw error;
-  }
-}
-
-async function gitGetCurrentBranch(dir) {
-  try {
-    const currentBranch = await git.currentBranch({ fs, dir });
-    return currentBranch;
-  } catch (error) {
-    console.error('❌ Error getting current branch:', error);
-    throw error;
-  }
-}
-
-async function gitEnsurePreviewBranch(dir) {
-  try {
-    sendCommandOutput(`🔍 Verificando branch 'preview' em ${dir}...\n`);
-    
-    // List all branches (local and remote)
-    const branches = await git.listBranches({ fs, dir });
-    const localBranches = branches.filter(branch => !branch.includes('origin/'));
-    const remoteBranches = branches.filter(branch => branch.includes('origin/'))
-      .map(branch => branch.replace('origin/', ''));
-    
-    sendCommandOutput(`📋 Branches locais encontradas: ${localBranches.join(', ') || 'nenhuma'}\n`);
-    sendCommandOutput(`📋 Branches remotas encontradas: ${remoteBranches.join(', ') || 'nenhuma'}\n`);
-    
-    const hasLocalPreview = localBranches.includes('preview');
-    const hasRemotePreview = remoteBranches.includes('preview');
-    
-    sendCommandOutput(`📂 Branch 'preview' local: ${hasLocalPreview ? '✅' : '❌'}\n`);
-    sendCommandOutput(`🌐 Branch 'preview' remota: ${hasRemotePreview ? '✅' : '❌'}\n`);
-    
-    if (hasLocalPreview || hasRemotePreview) {
-      // Branch exists, checkout it
-      sendCommandOutput(`📂 Branch 'preview' encontrada (${hasLocalPreview ? 'local' : 'remota'}), selecionando...\n`);
-      await gitCheckoutBranch(dir, 'preview');
-      sendCommandOutput(`✅ Branch 'preview' selecionada com sucesso\n`);
-      return { created: false, checkedOut: true, source: hasLocalPreview ? 'local' : 'remote' };
-    }
-    
-    // Branch doesn't exist locally or remotely, create it from main
-    sendCommandOutput(`❌ Branch 'preview' não encontrada localmente ou remotamente\n`);
-    sendCommandOutput(`🌿 Criando branch 'preview' a partir de 'main'...\n`);
-    
-    // First, try to checkout main (or master as fallback)
-    let baseBranch = 'main';
-    try {
-      sendCommandOutput(`🔍 Tentando selecionar branch 'main' como base...\n`);
-      await gitCheckoutBranch(dir, 'main');
-      sendCommandOutput(`✅ Branch 'main' selecionada como base\n`);
-    } catch (mainError) {
-      sendCommandOutput(`⚠️ Branch 'main' não encontrada: ${mainError.message}\n`);
-      try {
-        sendCommandOutput(`🔍 Tentando selecionar branch 'master' como base...\n`);
-        await gitCheckoutBranch(dir, 'master');
-        baseBranch = 'master';
-        sendCommandOutput(`✅ Branch 'master' selecionada como base (main não encontrada)\n`);
-      } catch (masterError) {
-        sendCommandOutput(`❌ Branch 'master' também não encontrada: ${masterError.message}\n`);
-        throw new Error('Nem branch "main" nem "master" encontrada para criar a branch "preview"');
-      }
-    }
-    
-    // Check if working directory is clean before creating branch
-    try {
-      const status = await git.status({ fs, dir });
-      if (status.files && status.files.length > 0) {
-        sendCommandOutput(`⚠️ Existem arquivos não commitados no diretório de trabalho\n`);
-        sendCommandOutput(`📋 Arquivos modificados: ${status.files.map(f => f.path).join(', ')}\n`);
-        sendCommandOutput(`💡 Criando branch 'preview' mesmo com arquivos pendentes\n`);
-      } else {
-        sendCommandOutput(`✅ Diretório de trabalho limpo, seguro para criar branch\n`);
-      }
-    } catch (statusError) {
-      sendCommandOutput(`⚠️ Não foi possível verificar status do diretório: ${statusError.message}\n`);
-    }
-    
-    // Create preview branch
-    sendCommandOutput(`🌿 Criando branch 'preview' a partir de '${baseBranch}'...\n`);
-    await gitCreateBranch(dir, 'preview');
-    sendCommandOutput(`✅ Branch 'preview' criada a partir de '${baseBranch}' com sucesso\n`);
-    
-    // Optionally push to remote if remote exists and user has authentication
-    try {
-      const remoteUrl = await gitGetRemoteUrl(dir);
-      if (remoteUrl) {
-        sendCommandOutput(`🌐 Repositório remoto encontrado: ${remoteUrl}\n`);
-        sendCommandOutput(`🚀 Tentando publicar branch 'preview' para o repositório remoto...\n`);
-        
-        const token = await getGitHubToken();
-        if (token) {
-          sendCommandOutput(`🔐 Autenticação GitHub configurada\n`);
-          const auth = { username: token, password: 'x-oauth-basic' };
-          
-          await git.push({
-            fs,
-            http,
-            dir,
-            url: remoteUrl,
-            ref: 'preview:preview',
-            auth,
-            force: false
-          });
-          sendCommandOutput(`✅ Branch 'preview' publicada com sucesso para o repositório remoto\n`);
-        } else {
-          sendCommandOutput(`⚠️ Autenticação GitHub não configurada\n`);
-          sendCommandOutput(`💡 Configure a autenticação GitHub para publicar automaticamente\n`);
-        }
-      } else {
-        sendCommandOutput(`ℹ️ Nenhum repositório remoto configurado\n`);
-      }
-    } catch (pushError) {
-      sendCommandOutput(`⚠️ Não foi possível publicar branch 'preview' para o repositório remoto: ${pushError.message}\n`);
-      sendCommandOutput(`💡 A branch 'preview' foi criada localmente e pode ser publicada manualmente depois\n`);
-      sendCommandOutput(`💡 Comando para publicar manualmente: git push -u origin preview\n`);
-    }
-    
-    return { created: true, checkedOut: true, baseBranch };
-  } catch (error) {
-    const errorMsg = `❌ Erro ao garantir branch 'preview': ${error.message}\n`;
-    sendCommandOutput(errorMsg);
-    console.error('❌ Error ensuring preview branch:', error);
-    
-    // Provide helpful suggestions based on error type
-    if (error.message.includes('main') || error.message.includes('master')) {
-      sendCommandOutput(`💡 Sugestão: Verifique se o repositório possui uma branch principal (main ou master)\n`);
-    } else if (error.message.includes('authentication') || error.message.includes('auth')) {
-      sendCommandOutput(`💡 Sugestão: Configure a autenticação GitHub nas configurações do aplicativo\n`);
-    } else if (error.message.includes('network') || error.message.includes('connection')) {
-      sendCommandOutput(`💡 Sugestão: Verifique sua conexão com a internet\n`);
-    }
-    
-    throw error;
-  }
-}
-
-// New functions for repository information
-async function gitGetRepositoryInfo(dir) {
-  try {
-    console.log(`📋 Getting repository information from ${dir}`);
-    
-    // Get remote URL
-    let remoteUrl = '';
-    try {
-      remoteUrl = await git.getConfig({
-        fs,
-        dir,
-        path: 'remote.origin.url'
-      });
-    } catch (error) {
-      console.warn('⚠️ Could not get remote URL:', error.message);
-    }
-    
-    // Get last commit information
-    let lastCommit = {
-      hash: '',
-      message: '',
-      date: null
-    };
-    
-    try {
-      // Get the current branch
-      const currentBranch = await git.currentBranch({ fs, dir });
-      
-      // Get the commit OID for the current branch HEAD
-      const commitOid = await git.resolveRef({
-        fs,
-        dir,
-        ref: currentBranch
-      });
-      
-      if (commitOid) {
-        // Get commit details
-        const commit = await git.readCommit({
-          fs,
-          dir,
-          oid: commitOid
-        });
-        
-        if (commit && commit.commit) {
-          lastCommit.hash = commitOid.substring(0, 7); // Short hash (7 characters)
-          lastCommit.message = commit.commit.message.split('\n')[0]; // First line only
-          lastCommit.date = new Date(commit.commit.author.timestamp * 1000);
-        }
-      }
-    } catch (error) {
-      console.warn('⚠️ Could not get last commit info:', error.message);
-    }
-    
-    const result = {
-      workingDirectory: dir,
-      remoteUrl: remoteUrl || '',
-      lastCommit: lastCommit
-    };
-    
-    console.log(`✅ Repository info retrieved:`, result);
-    return result;
-  } catch (error) {
-    console.error('❌ Error getting repository info:', error);
-    throw error;
-  }
-}
-
-// Git pull and push functions
-async function gitPullFromPreview(dir) {
-  try {
-    sendCommandOutput(`🔄 Buscando atualizações da branch preview em ${dir}...\n`);
-    
-    // Get current branch
-    sendCommandOutput(`🔍 Identificando branch atual...\n`);
-    const currentBranch = await git.currentBranch({ fs, dir });
-    sendCommandOutput(`📍 Branch atual: ${currentBranch}\n`);
-    
-    // Get GitHub token for authentication
-    sendCommandOutput(`🔐 Configurando autenticação GitHub...\n`);
-    const token = await getGitHubToken();
-    const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
-    sendCommandOutput(`✅ Autenticação configurada\n`);
-    
-    // Fetch from origin preview
-    sendCommandOutput(`📥 Buscando dados da branch remota 'preview'...\n`);
-    await git.fetch({
-      fs,
-      http,
-      dir,
-      url: await gitGetRemoteUrl(dir),
-      ref: 'preview',
-      auth,
-      singleBranch: false
-    });
-    sendCommandOutput(`✅ Dados da branch 'preview' recebidos\n`);
-    
-    // Merge origin/preview into current branch
-    sendCommandOutput(`🔀 Mesclando origin/preview na branch ${currentBranch}...\n`);
-    await git.merge({
-      fs,
-      dir,
-      theirs: 'origin/preview',
-      ours: currentBranch,
-      message: `Merge preview into ${currentBranch}`
-    });
-    sendCommandOutput(`✅ Branch 'preview' mesclada com sucesso em ${currentBranch}\n`);
-    
-    console.log(`✅ Successfully pulled from preview to ${currentBranch}`);
-    return { 
-      success: true, 
-      message: `Atualizações da branch 'preview' foram mescladas na branch '${currentBranch}' com sucesso.` 
-    };
-  } catch (error) {
-    const errorMsg = `❌ Erro ao buscar atualizações: ${error.message}\n`;
-    sendCommandOutput(errorMsg);
-    console.error('❌ Error pulling from preview:', error);
-    throw error;
-  }
-}
-
-async function gitPushToBranch(dir, targetBranch) {
-  try {
-    sendCommandOutput(`🚀 Publicando de ${dir} para branch ${targetBranch}...\n`);
-    
-    // Get current branch
-    sendCommandOutput(`🔍 Identificando branch atual...\n`);
-    const currentBranch = await git.currentBranch({ fs, dir });
-    sendCommandOutput(`📍 Branch atual: ${currentBranch}\n`);
-    sendCommandOutput(`🎯 Branch de destino: ${targetBranch}\n`);
-    
-    // Get GitHub token for authentication
-    sendCommandOutput(`🔐 Configurando autenticação GitHub...\n`);
-    const token = await getGitHubToken();
-    const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
-    sendCommandOutput(`✅ Autenticação configurada\n`);
-    
-    // Get remote URL
-    sendCommandOutput(`🔍 Verificando URL remota...\n`);
-    const remoteUrl = await gitGetRemoteUrl(dir);
-    if (!remoteUrl) {
-      const errorMsg = `❌ URL remota não encontrada. Verifique se o repositório possui um remote origin.\n`;
-      sendCommandOutput(errorMsg);
-      throw new Error('Remote URL not found. Please ensure the repository has a remote origin.');
-    }
-    sendCommandOutput(`✅ URL remota encontrada: ${remoteUrl}\n`);
-    
-    // Push current branch to target branch
-    sendCommandOutput(`📤 Publicando ${currentBranch} para origin/${targetBranch}...\n`);
-    await git.push({
-      fs,
-      http,
-      dir,
-      url: remoteUrl,
-      ref: `${currentBranch}:${targetBranch}`,
-      auth,
-      force: false
-    });
-    sendCommandOutput(`✅ Branch ${currentBranch} publicada com sucesso para ${targetBranch}\n`);
-    
-    console.log(`✅ Successfully pushed ${currentBranch} to ${targetBranch}`);
-    return { 
-      success: true, 
-      message: `Branch '${currentBranch}' foi publicada com sucesso para '${targetBranch}'.` 
-    };
-  } catch (error) {
-    const errorMsg = `❌ Erro ao publicar branch: ${error.message}\n`;
-    sendCommandOutput(errorMsg);
-    console.error('❌ Error pushing to branch:', error);
-    throw error;
-  }
-}
-
-async function gitListRemoteBranches(dir) {
-  try {
-    sendCommandOutput(`📋 Listando branches remotas em ${dir}...\n`);
-    
-    // Get GitHub token for authentication
-    sendCommandOutput(`🔐 Configurando autenticação GitHub...\n`);
-    const token = await getGitHubToken();
-    const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
-    sendCommandOutput(`✅ Autenticação configurada\n`);
-    
-    // Get remote URL
-    sendCommandOutput(`🔍 Verificando URL remota...\n`);
-    const remoteUrl = await gitGetRemoteUrl(dir);
-    if (!remoteUrl) {
-      const errorMsg = `❌ URL remota não encontrada\n`;
-      sendCommandOutput(errorMsg);
-      throw new Error('Remote URL not found');
-    }
-    sendCommandOutput(`✅ URL remota encontrada: ${remoteUrl}\n`);
-    
-    // Fetch remote references
-    sendCommandOutput(`📥 Buscando referências remotas...\n`);
-    const refs = await git.listServerRefs({
-      http,
-      url: remoteUrl,
-      auth,
-      prefix: 'refs/heads/'
-    });
-    
-    // Extract branch names from refs
-    const remoteBranches = refs
-      .filter(ref => ref.ref.startsWith('refs/heads/'))
-      .map(ref => ref.ref.replace('refs/heads/', ''))
-      .filter(branch => branch && !branch.includes('^{}')); // Filter out peel references
-    
-    sendCommandOutput(`✅ Encontradas ${remoteBranches.length} branches remotas\n`);
-    remoteBranches.forEach(branch => {
-      sendCommandOutput(`   📂 ${branch}\n`);
-    });
-    
-    // Ensure preview is included and is first in the list
-    const sortedBranches = [...new Set(remoteBranches)]; // Remove duplicates
-    const previewIndex = sortedBranches.indexOf('preview');
-    if (previewIndex > 0) {
-      // Move preview to the beginning
-      sortedBranches.splice(previewIndex, 1);
-      sortedBranches.unshift('preview');
-    } else if (previewIndex === -1) {
-      // Add preview at the beginning if not present
-      sortedBranches.unshift('preview');
-    }
-    
-    sendCommandOutput(`📋 Branch 'preview' definida como padrão\n`);
-    return {
-      branches: sortedBranches,
-      defaultBranch: 'preview'
-    };
-  } catch (error) {
-    const errorMsg = `❌ Erro ao listar branches remotas: ${error.message}\n`;
-    sendCommandOutput(errorMsg);
-    // Fallback to common branches if remote listing fails
-    const fallbackBranches = ['preview', 'main', 'stage'];
-    sendCommandOutput(`⚠️ Usando branches padrão: ${fallbackBranches.join(', ')}\n`);
-    return {
-      branches: fallbackBranches,
-      defaultBranch: 'preview'
-    };
-  }
-}
 
 // Device Flow: Authorization code extraction is no longer needed
 // The Device Flow handles authorization through polling instead of code extraction
@@ -2846,46 +2353,59 @@ function initializeDatabase() {
   const userDataPath = app.getPath('userData');
   const dbPath = path.join(userDataPath, 'documental.db');
 
-  db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-      console.error('Error opening database:', err.message);
-    } else {
+  return new Promise((resolve, reject) => {
+    db = new sqlite3.Database(dbPath, (err) => {
+      if (err) {
+        console.error('Error opening database:', err.message);
+        reject(err);
+        return;
+      }
+
       console.log('Connected to the SQLite database.');
-      
-      // Create projects table
-      db.run(`CREATE TABLE IF NOT EXISTS projects (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        projectName TEXT NOT NULL,
-        githubUrl TEXT NOT NULL,
-        projectPath TEXT NOT NULL,
-        repoFolderName TEXT,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`, (err) => {
-        if (err) {
-          console.error('Error creating projects table:', err.message);
-        } else {
-          console.log('Projects table ensured.');
-        }
-      });
-      
-      // Create users table for GitHub authentication
-      db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        githubId INTEGER UNIQUE NOT NULL,
-        login TEXT NOT NULL,
-        name TEXT,
-        email TEXT,
-        avatarUrl TEXT,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`, (err) => {
-        if (err) {
-          console.error('Error creating users table:', err.message);
-        } else {
-          console.log('Users table ensured.');
-        }
-      });
-    }
+
+      try {
+        projectRepository = createSqliteProjectRepository({ db });
+      } catch (creationError) {
+        reject(creationError);
+        return;
+      }
+
+      projectRepository.initialize()
+        .then(() => ensureUsersTable(db))
+        .then(() => {
+          projectService = createProjectService({ projectRepository, pathUtils: path });
+          gitWorkflowService = createGitWorkflowService({ gitAdapter, projectService });
+          nodeEnvironmentService = createNodeEnvironmentService({ nodeAdapter, projectService });
+          resolve();
+        })
+        .catch((initializationError) => {
+          console.error('Error initializing database tables:', initializationError);
+          reject(initializationError);
+        });
+    });
+  });
+}
+
+function ensureUsersTable(database) {
+  return new Promise((resolve, reject) => {
+    database.run(`CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      githubId INTEGER UNIQUE NOT NULL,
+      login TEXT NOT NULL,
+      name TEXT,
+      email TEXT,
+      avatarUrl TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`, (err) => {
+      if (err) {
+        console.error('Error creating users table:', err.message);
+        reject(err);
+      } else {
+        console.log('Users table ensured.');
+        resolve();
+      }
+    });
   });
 }
 
@@ -3061,89 +2581,64 @@ function registerMainEventHandlers() {
     };
   });
 
-  ipcMain.handle('get-project-details', async (event, projectId) => {
-    return new Promise((resolve, reject) => {
-      db.get(`SELECT projectName, githubUrl, projectPath, repoFolderName FROM projects WHERE id = ?`, [projectId], (err, row) => {
-        if (err) {
-          console.error('Error getting project details:', err.message);
-          reject(err.message);
-        } else if (row) {
-          resolve(row);
-        } else {
-          reject('Project not found');
-        }
-      });
-    });
+  const toProjectResponse = (project) => ({
+    id: project.id,
+    projectName: project.name,
+    githubUrl: project.githubUrl,
+    projectPath: project.projectPath,
+    repoFolderName: project.repoFolderName,
+    createdAt: project.createdAt
+  });
+
+  ipcMain.handle('get-project-details', async (_event, projectId) => {
+    try {
+      const project = await projectService.getProjectDetails(projectId);
+      return {
+        projectName: project.name,
+        githubUrl: project.githubUrl,
+        projectPath: project.projectPath,
+        repoFolderName: project.repoFolderName
+      };
+    } catch (error) {
+      console.error('Error getting project details:', error);
+      throw error.message || error;
+    }
   });
 
   ipcMain.handle('get-recent-projects', async () => {
-    return new Promise((resolve, reject) => {
-      db.all(`SELECT id, projectName, projectPath, repoFolderName FROM projects ORDER BY createdAt DESC LIMIT 3`, (err, rows) => {
-        if (err) {
-          console.error('Error getting recent projects:', err.message);
-          reject(err.message);
-        } else {
-          resolve(rows);
-        }
-      });
-    });
+    try {
+      const projects = await projectService.listRecentProjects(3);
+      return projects.map(toProjectResponse);
+    } catch (error) {
+      console.error('Error getting recent projects:', error);
+      throw error.message || error;
+    }
   });
 
   ipcMain.handle('getAllProjects', async () => {
-    return new Promise((resolve, reject) => {
+    try {
       console.log('Getting all projects from database...');
-      db.all(`SELECT id, projectName, projectPath, repoFolderName, createdAt FROM projects ORDER BY createdAt DESC`, (err, rows) => {
-        if (err) {
-          console.error('Error getting all projects:', err.message);
-          reject(err.message);
-        } else {
-          console.log(`Found ${rows.length} projects`);
-          resolve(rows);
-        }
-      });
-    });
+      const projects = await projectService.listAllProjects();
+      console.log(`Found ${projects.length} projects`);
+      return projects.map(toProjectResponse);
+    } catch (error) {
+      console.error('Error getting all projects:', error);
+      throw error.message || error;
+    }
   });
 
-  ipcMain.handle('checkProjectExists', async (event, folderPath) => {
-    try {
-      // Check if folder exists
-      if (!fs.existsSync(folderPath)) {
-        throw new Error('Pasta não encontrada');
-      }
-
-      // Check if this path matches any existing project
-      return new Promise((resolve, reject) => {
-        db.all(`SELECT id, projectName, projectPath, repoFolderName FROM projects`, async (err, rows) => {
-          if (err) {
-            reject(err.message);
-            return;
-          }
-
-          let matchingProject = null;
-          for (const project of rows) {
-            const fullProjectPath = path.join(project.projectPath, project.repoFolderName || '');
-            if (fullProjectPath === folderPath) {
-              matchingProject = project;
-              break;
-            }
-          }
-
-          if (matchingProject) {
-            resolve({ exists: true, projectId: matchingProject.id });
-          } else {
-            // Get folder info
-            try {
-              const folderInfo = await getFolderInfo(folderPath);
-              resolve({ exists: false, folderInfo });
-            } catch (error) {
-              reject(error.message);
-            }
-          }
-        });
-      });
-    } catch (error) {
-      throw error;
+  ipcMain.handle('checkProjectExists', async (_event, folderPath) => {
+    if (!fs.existsSync(folderPath)) {
+      throw new Error('Pasta não encontrada');
     }
+
+    const project = await projectService.findProjectByAbsolutePath(folderPath);
+    if (project) {
+      return { exists: true, projectId: project.id };
+    }
+
+    const folderInfo = await getFolderInfo(folderPath);
+    return { exists: false, folderInfo };
   });
 
   ipcMain.handle('getFolderInfo', async (event, folderPath) => {
@@ -3196,22 +2691,15 @@ function registerMainEventHandlers() {
     }
   }
 
-  ipcMain.handle('save-project', async (event, projectData) => {
-    return new Promise((resolve, reject) => {
-      const { projectName, githubUrl, projectPath } = projectData;
-      db.run(`INSERT INTO projects (projectName, githubUrl, projectPath, repoFolderName) VALUES (?, ?, ?, ?)`,
-        [projectName, githubUrl, projectPath, null], // repoFolderName is null initially
-        function (err) {
-          if (err) {
-            console.error('Error saving project:', err.message);
-            reject(err.message);
-          } else {
-            console.log(`A row has been inserted with rowid ${this.lastID}`);
-            resolve(this.lastID);
-          }
-        }
-      );
-    });
+  ipcMain.handle('save-project', async (_event, projectData) => {
+    try {
+      const project = await projectService.registerProject(projectData);
+      console.log(`A project has been inserted with id ${project.id}`);
+      return project.id;
+    } catch (error) {
+      console.error('Error saving project:', error);
+      throw error.message || error;
+    }
   });
 
   ipcMain.handle('reopen-project', async (event, projectId, projectPath, githubUrl, repoFolderName) => {
@@ -3649,17 +3137,7 @@ function registerMainEventHandlers() {
         const folderName = path.basename(projectPath);
         
         // Update repoFolderName in DB
-        await new Promise((resolve, reject) => {
-          db.run(`UPDATE projects SET repoFolderName = ? WHERE id = ?`, [folderName, projectId], (err) => {
-            if (err) {
-              console.error('Error updating repoFolderName:', err.message);
-              reject(err.message);
-            } else {
-              console.log(`repoFolderName updated for project ${projectId}`);
-              resolve();
-            }
-          });
-        });
+        await projectService.setRepositoryFolder(projectId, folderName);
         
         sendOutput(`Using existing repository at ${repoDirPath}\n`);
         sendStatus('success');
@@ -3681,17 +3159,7 @@ function registerMainEventHandlers() {
         await delay(3000);
 
         // Update repoFolderName in DB
-        await new Promise((resolve, reject) => {
-          db.run(`UPDATE projects SET repoFolderName = ? WHERE id = ?`, [folderName, projectId], (err) => {
-            if (err) {
-              console.error('Error updating repoFolderName:', err.message);
-              reject(err.message);
-            } else {
-              console.log(`repoFolderName updated for project ${projectId}`);
-              resolve();
-            }
-          });
-        });
+        await projectService.setRepositoryFolder(projectId, folderName);
       } else {
         // Step 1: git clone (create subfolder)
         sendOutput('Cloning repository...\n');
@@ -3714,18 +3182,7 @@ function registerMainEventHandlers() {
         }
         await delay(3000);
 
-        // Update repoFolderName in DB
-        await new Promise((resolve, reject) => {
-          db.run(`UPDATE projects SET repoFolderName = ? WHERE id = ?`, [finalRepoFolderName, projectId], (err) => {
-            if (err) {
-              console.error('Error updating repoFolderName:', err.message);
-              reject(err.message);
-            } else {
-              console.log(`repoFolderName updated for project ${projectId}`);
-              resolve();
-            }
-          });
-        });
+        await projectService.setRepositoryFolder(projectId, finalRepoFolderName);
       }
 
       // Step 2: ensure preview branch exists and checkout it (skip if existing git repo)
@@ -3927,51 +3384,33 @@ ipcMain.handle('cancel-project-creation', async (event, projectId, projectPath, 
 
 
 
-  ipcMain.handle('remove-project', async (event, projectId) => {
-    return new Promise((resolve, reject) => {
+  ipcMain.handle('remove-project', async (_event, projectId) => {
+    try {
       console.log('Removing project:', projectId);
-      
-      // Get project details first
-      db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
-        if (err) {
-          console.error('Error fetching project details:', err.message);
-          reject(err.message);
-          return;
-        }
+      const project = await projectService.getProjectDetails(projectId);
+      const removed = await projectService.removeProject(projectId);
 
-        if (!row) {
-          reject('Project not found');
-          return;
-        }
+      if (!removed) {
+        return { success: false, error: 'Project not found' };
+      }
 
-        // Delete project from database first
-        db.run('DELETE FROM projects WHERE id = ?', [projectId], function(err) {
-          if (err) {
-            console.error('Error deleting project from database:', err.message);
-            reject(err.message);
-            return;
+      if (project.repoFolderName && project.projectPath) {
+        const repoDirPath = path.join(project.projectPath, project.repoFolderName);
+        if (fs.existsSync(repoDirPath)) {
+          try {
+            fs.rmSync(repoDirPath, { recursive: true, force: true });
+            console.log(`Repository folder ${repoDirPath} deleted.`);
+          } catch (err) {
+            console.error(`Error deleting repository folder ${repoDirPath}: ${err.message}`);
           }
+        }
+      }
 
-          console.log(`Project ${projectId} deleted from database.`);
-
-          // Try to delete the folder (but don't fail if it doesn't work)
-          if (row.repoFolderName && row.projectPath) {
-            const repoDirPath = path.join(row.projectPath, row.repoFolderName);
-            if (fs.existsSync(repoDirPath)) {
-              try {
-                fs.rmSync(repoDirPath, { recursive: true, force: true });
-                console.log(`Repository folder ${repoDirPath} deleted.`);
-              } catch (err) {
-                console.error(`Error deleting repository folder ${repoDirPath}: ${err.message}`);
-                // Don't reject - the project was removed from DB
-              }
-            }
-          }
-
-          resolve({ success: true });
-        });
-      });
-    });
+      return { success: true };
+    } catch (error) {
+      console.error('Error removing project:', error);
+      throw error.message || error;
+    }
   });
 
   // Handler to get initial app logs
@@ -4487,267 +3926,80 @@ ipcMain.handle('get-dev-server-url-from-main', () => {
       });
 
       // Branch management IPC handlers
-      ipcMain.handle('git:list-branches', async (event, projectId) => {
+      ipcMain.handle('git:list-branches', async (_event, projectId) => {
         try {
-          const project = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          // Debug: Log project data to identify undefined values
-          console.log('🔍 DEBUG: Project data:', {
-            id: project.id,
-            projectName: project.projectName,
-            projectPath: project.projectPath,
-            repoFolderName: project.repoFolderName
-          });
-
-          // Validate required fields
-          if (!project.projectPath || !project.repoFolderName) {
-            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
-          }
-
-          const projectPath = path.join(project.projectPath, project.repoFolderName);
-          console.log('🔍 DEBUG: Full project path:', projectPath);
-          
-          const result = await gitListBranches(projectPath);
-          
-          return { success: true, ...result };
+          return await gitWorkflowService.listBranches(projectId);
         } catch (error) {
           console.error('Error listing branches:', error);
-          return { success: false, error: error.message };
+          throw error.message || error;
         }
       });
 
-      ipcMain.handle('git:create-branch', async (event, projectId, branchName) => {
+      ipcMain.handle('git:create-branch', async (_event, projectId, branchName) => {
         try {
-          const project = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          // Debug: Log project data
-          console.log('🔍 DEBUG: Project data for create branch:', {
-            id: project.id,
-            projectPath: project.projectPath,
-            repoFolderName: project.repoFolderName
-          });
-
-          // Validate required fields
-          if (!project.projectPath || !project.repoFolderName) {
-            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
-          }
-
-          const projectPath = path.join(project.projectPath, project.repoFolderName);
-          await gitCreateBranch(projectPath, branchName);
-          
-          return { success: true, branchName };
+          await gitWorkflowService.createBranch(projectId, branchName);
+          return { success: true };
         } catch (error) {
           console.error('Error creating branch:', error);
-          return { success: false, error: error.message };
+          throw error.message || error;
         }
       });
 
-      ipcMain.handle('git:checkout-branch', async (event, projectId, branchName) => {
+      ipcMain.handle('git:checkout-branch', async (_event, projectId, branchName) => {
         try {
-          const project = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          // Debug: Log project data
-          console.log('🔍 DEBUG: Project data for checkout branch:', {
-            id: project.id,
-            projectPath: project.projectPath,
-            repoFolderName: project.repoFolderName
-          });
-
-          // Validate required fields
-          if (!project.projectPath || !project.repoFolderName) {
-            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
-          }
-
-          const projectPath = path.join(project.projectPath, project.repoFolderName);
-          await gitCheckoutBranch(projectPath, branchName);
-          
-          return { success: true, branchName };
+          await gitWorkflowService.checkoutBranch(projectId, branchName);
+          return { success: true };
         } catch (error) {
           console.error('Error checking out branch:', error);
-          return { success: false, error: error.message };
+          throw error.message || error;
         }
       });
 
-      ipcMain.handle('git:get-current-branch', async (event, projectId) => {
+      ipcMain.handle('git:get-current-branch', async (_event, projectId) => {
         try {
-          const project = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          // Debug: Log project data
-          console.log('🔍 DEBUG: Project data for get current branch:', {
-            id: project.id,
-            projectPath: project.projectPath,
-            repoFolderName: project.repoFolderName
-          });
-
-          // Validate required fields
-          if (!project.projectPath || !project.repoFolderName) {
-            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
-          }
-
-          const projectPath = path.join(project.projectPath, project.repoFolderName);
-          const currentBranch = await gitGetCurrentBranch(projectPath);
-          
-          return { success: true, currentBranch };
+          return await gitWorkflowService.getCurrentBranch(projectId);
         } catch (error) {
           console.error('Error getting current branch:', error);
-          return { success: false, error: error.message };
+          throw error.message || error;
         }
       });
 
-      ipcMain.handle('git:get-repository-info', async (event, projectId) => {
+      ipcMain.handle('git:get-repository-info', async (_event, projectId) => {
         try {
-          const project = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          // Debug: Log project data
-          console.log('🔍 DEBUG: Project data for repository info:', {
-            id: project.id,
-            projectPath: project.projectPath,
-            repoFolderName: project.repoFolderName
-          });
-
-          // Validate required fields
-          if (!project.projectPath || !project.repoFolderName) {
-            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
-          }
-
-          const projectPath = path.join(project.projectPath, project.repoFolderName);
-          const repoInfo = await gitGetRepositoryInfo(projectPath);
-          
-          return { success: true, ...repoInfo };
+          return await gitWorkflowService.getRepositoryInfo(projectId);
         } catch (error) {
           console.error('Error getting repository info:', error);
-          return { success: false, error: error.message };
+          throw error.message || error;
         }
       });
 
-      ipcMain.handle('git:pull-from-preview', async (event, projectId) => {
+      ipcMain.handle('git:pull-from-preview', async (_event, projectId) => {
         try {
-          const project = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          // Validate required fields
-          if (!project.projectPath || !project.repoFolderName) {
-            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
-          }
-
-          const projectPath = path.join(project.projectPath, project.repoFolderName);
-          const result = await gitPullFromPreview(projectPath);
-          
-          return { success: true, ...result };
+          return await gitWorkflowService.pullFromPreview(projectId);
         } catch (error) {
           console.error('Error pulling from preview:', error);
-          return { success: false, error: error.message };
+          throw error.message || error;
         }
       });
 
-      ipcMain.handle('git:push-to-branch', async (event, projectId, targetBranch) => {
+      ipcMain.handle('git:push-to-branch', async (_event, projectId, targetBranch) => {
         try {
-          const project = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          // Validate required fields
-          if (!project.projectPath || !project.repoFolderName) {
-            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
-          }
-
-          const projectPath = path.join(project.projectPath, project.repoFolderName);
-          const result = await gitPushToBranch(projectPath, targetBranch);
-          
-          return { success: true, ...result };
+          return await gitWorkflowService.pushToBranch(projectId, targetBranch);
         } catch (error) {
           console.error('Error pushing to branch:', error);
-          return { success: false, error: error.message };
+          throw error.message || error;
         }
       });
 
-      ipcMain.handle('git:list-remote-branches', async (event, projectId) => {
+      ipcMain.handle('git:list-remote-branches', async (_event, projectId) => {
         try {
-          const project = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM projects WHERE id = ?', [projectId], (err, row) => {
-              if (err) reject(err);
-              else resolve(row);
-            });
-          });
-
-          if (!project) {
-            throw new Error('Project not found');
-          }
-
-          // Validate required fields
-          if (!project.projectPath || !project.repoFolderName) {
-            throw new Error(`Invalid project data: projectPath=${project.projectPath}, repoFolderName=${project.repoFolderName}`);
-          }
-
-          const projectPath = path.join(project.projectPath, project.repoFolderName);
-          const result = await gitListRemoteBranches(projectPath);
-          
-          return { success: true, ...result };
+          return await gitWorkflowService.listRemoteBranches(projectId);
         } catch (error) {
           console.error('Error listing remote branches:', error);
-          return { success: false, error: error.message };
+          throw error.message || error;
         }
       });
+
 
       ipcMain.handle('open-file-explorer', async (event, dirPath) => {
         try {
