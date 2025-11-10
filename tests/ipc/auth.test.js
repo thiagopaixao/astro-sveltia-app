@@ -113,11 +113,23 @@ describe('AuthHandlers Unit Tests', () => {
       });
     });
 
-    it('should handle authentication flow not implemented', async () => {
+    it('should handle authentication flow with mock fetch', async () => {
+      // Mock fetch to simulate GitHub API responses
+      global.fetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+          headers: {
+            entries: () => []
+          },
+          text: () => Promise.resolve('Error details')
+        });
+
       const result = await authHandlers.authenticateWithGitHub();
       
       expect(result.success).toBe(false);
-      expect(result.error).toBe('GitHub authentication flow not implemented yet');
+      expect(result.error).toContain('Failed to initiate device flow: 404 Not Found');
       expect(mockLogger.info).toHaveBeenCalledWith('🔐 Starting GitHub authentication flow...');
       expect(mockLogger.error).toHaveBeenCalledWith('❌ GitHub authentication failed:', expect.any(Error));
     });

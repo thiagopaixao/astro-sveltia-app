@@ -11,11 +11,13 @@ const fs = require('fs');
 const path = require('path');
 const git = require('isomorphic-git');
 const http = require('isomorphic-git/http/node');
+const keytar = require('keytar');
+const GITHUB_CONFIG = require('../../github-config.js');
 
 /**
  * @typedef {Object} ProjectDetails
  * @property {string} projectName - Project name
- * @property {string} githubUrl - GitHub repository URL
+ * @property {string} repoUrl - Repository URL
  * @property {string} projectPath - Project path
  * @property {string} repoFolderName - Repository folder name
  */
@@ -34,6 +36,50 @@ const http = require('isomorphic-git/http/node');
  * @property {string|null} projectId - Project ID if exists
  * @property {FolderInfo|null} folderInfo - Folder info if doesn't exist
  */
+
+/**
+ * Get GitHub token from keytar
+ * @returns {Promise<string|null>} GitHub token or null
+ */
+async function getGitHubToken() {
+  try {
+    return await keytar.getPassword(GITHUB_CONFIG.SERVICE_NAME, 'github-token');
+  } catch (error) {
+    console.error('Error getting GitHub token:', error);
+    return null;
+  }
+}
+
+/**
+ * Clone repository using isomorphic-git
+ * @param {string} url - Repository URL
+ * @param {string} dir - Target directory
+ * @param {Object} options - Additional options
+ * @returns {Promise<boolean>} Success status
+ */
+async function gitClone(url, dir, options = {}) {
+  try {
+    console.log(`🔄 Cloning repository from ${url} to ${dir}`);
+    
+    const token = await getGitHubToken();
+    const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+    
+    await git.clone({
+      fs,
+      http,
+      dir,
+      url,
+      auth,
+      ...options
+    });
+    
+    console.log(`✅ Repository cloned successfully to ${dir}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error cloning repository:`, error);
+    throw error;
+  }
+}
 
 /**
  * Project Management IPC Handlers
@@ -62,12 +108,13 @@ class ProjectHandlers {
       const db = await this.databaseManager.getDatabase();
       
       return new Promise((resolve, reject) => {
+        const self = this; // Preserve reference to the class
         db.get(
-          `SELECT projectName, githubUrl, projectPath, repoFolderName FROM projects WHERE id = ?`,
+          `SELECT projectName, repoUrl, projectPath, repoFolderName FROM projects WHERE id = ?`,
           [projectId],
           (err, row) => {
             if (err) {
-              this.logger.error('Error getting project details:', err.message);
+              self.logger.error('Error getting project details:', err.message);
               reject(err.message);
             } else if (row) {
               resolve(row);
@@ -92,11 +139,12 @@ class ProjectHandlers {
       const db = await this.databaseManager.getDatabase();
       
       return new Promise((resolve, reject) => {
+        const self = this; // Preserve reference to the class
         db.all(
           `SELECT id, projectName, projectPath, repoFolderName FROM projects ORDER BY createdAt DESC LIMIT 3`,
           (err, rows) => {
             if (err) {
-              this.logger.error('Error getting recent projects:', err.message);
+              self.logger.error('Error getting recent projects:', err.message);
               reject(err.message);
             } else {
               resolve(rows);
@@ -120,14 +168,15 @@ class ProjectHandlers {
       const db = await this.databaseManager.getDatabase();
       
       return new Promise((resolve, reject) => {
+        const self = this; // Preserve reference to the class
         db.all(
           `SELECT id, projectName, projectPath, repoFolderName, createdAt FROM projects ORDER BY createdAt DESC`,
           (err, rows) => {
             if (err) {
-              this.logger.error('Error getting all projects:', err.message);
+              self.logger.error('Error getting all projects:', err.message);
               reject(err.message);
             } else {
-              this.logger.info(`Found ${rows.length} projects`);
+              self.logger.info(`Found ${rows.length} projects`);
               resolve(rows);
             }
           }
@@ -245,19 +294,20 @@ class ProjectHandlers {
    */
   async saveProject(projectData) {
     try {
-      const { projectName, githubUrl, projectPath } = projectData;
+      const { projectName, repoUrl, projectPath } = projectData;
       const db = await this.databaseManager.getDatabase();
       
       return new Promise((resolve, reject) => {
+        const self = this; // Preserve reference to the class
         db.run(
-          `INSERT INTO projects (projectName, githubUrl, projectPath, repoFolderName) VALUES (?, ?, ?, ?)`,
-          [projectName, githubUrl, projectPath, null], // repoFolderName is null initially
+          `INSERT INTO projects (projectName, repoUrl, projectPath, repoFolderName) VALUES (?, ?, ?, ?)`,
+          [projectName, repoUrl, projectPath, null], // repoFolderName is null initially
           function (err) {
             if (err) {
-              this.logger.error('Error saving project:', err.message);
+              self.logger.error('Error saving project:', err.message);
               reject(err.message);
             } else {
-              this.logger.info(`Project inserted with rowid ${this.lastID}`);
+              self.logger.info(`Project inserted with rowid ${this.lastID}`);
               resolve(this.lastID);
             }
           }
@@ -265,6 +315,34 @@ class ProjectHandlers {
       });
     } catch (error) {
       this.logger.error('Error in saveProject:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update repo folder name in database
+   * @param {number} projectId - Project ID
+   * @param {string} folderName - Folder name
+   * @returns {Promise<void>}
+   */
+  async updateRepoFolderName(projectId, folderName) {
+    try {
+      const db = await this.databaseManager.getDatabase();
+      
+      return new Promise((resolve, reject) => {
+        const self = this; // Preserve reference to class
+        db.run(`UPDATE projects SET repoFolderName = ? WHERE id = ?`, [folderName, projectId], function (err) {
+          if (err) {
+            self.logger.error('Error updating repoFolderName:', err.message);
+            reject(err.message);
+          } else {
+            self.logger.info(`repoFolderName updated for project ${projectId}`);
+            resolve();
+          }
+        });
+      });
+    } catch (error) {
+      this.logger.error('Error in updateRepoFolderName:', error);
       throw error;
     }
   }
@@ -279,12 +357,13 @@ class ProjectHandlers {
       const db = await this.databaseManager.getDatabase();
       
       return new Promise((resolve, reject) => {
+        const self = this; // Preserve reference to the class
         db.run(`DELETE FROM projects WHERE id = ?`, [projectId], function (err) {
           if (err) {
-            this.logger.error('Error removing project:', err.message);
+            self.logger.error('Error removing project:', err.message);
             reject(err.message);
           } else {
-            this.logger.info(`Project ${projectId} removed successfully`);
+            self.logger.info(`Project ${projectId} removed successfully`);
             resolve(true);
           }
         });
@@ -384,6 +463,8 @@ class ProjectHandlers {
         throw error;
       }
     });
+
+
 
     this.logger.info('✅ Project management IPC handlers registered');
   }

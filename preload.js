@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+console.log('🔧 Preload script loaded successfully!');
+
 contextBridge.exposeInMainWorld('electronAPI', {
   navigateTo: (page) => ipcRenderer.send('navigate', page),
   getHomeDirectory: () => ipcRenderer.invoke('get-home-directory'),
@@ -40,6 +42,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // GitHub authentication functions
   checkGitHubAuth: () => ipcRenderer.invoke('checkGitHubAuth'),
   authenticateWithGitHub: () => ipcRenderer.invoke('authenticateWithGitHub'),
+  continueGitHubAuth: (deviceCode, interval) => ipcRenderer.invoke('continueGitHubAuth', deviceCode, interval),
   completeWelcomeSetup: () => ipcRenderer.invoke('completeWelcomeSetup'),
   // Node.js detection and installation functions
   checkNodeInstallation: () => ipcRenderer.invoke('checkNodeInstallation'),
@@ -58,3 +61,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listRemoteBranches: (projectId) => ipcRenderer.invoke('git:list-remote-branches', projectId),
   openInFileExplorer: (path) => ipcRenderer.invoke('open-file-explorer', path)
 });
+
+console.log('✅ electronAPI exposed to renderer successfully');

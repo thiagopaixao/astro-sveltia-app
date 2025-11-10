@@ -460,21 +460,80 @@
                 },
 
                 async authenticateWithGitHub() {
+                    console.log('🔘 Authentication button clicked!');
+                    console.log('🔍 Checking electronAPI availability:', !!window.electronAPI);
+                    console.log('🔍 Checking authenticateWithGitHub method:', !!(window.electronAPI && window.electronAPI.authenticateWithGitHub));
+                    
                     this.isAuthenticating = true;
                     try {
                         if (window.electronAPI && window.electronAPI.authenticateWithGitHub) {
+                            console.log('📡 Calling authenticateWithGitHub API...');
                             const result = await window.electronAPI.authenticateWithGitHub();
-                            if (result.success) {
+                            console.log('📥 Authentication API response:', result);
+                            
+                            if (result.requiresDeviceCode) {
+                                console.log('📱 Device code flow initiated:', {
+                                    deviceCode: result.deviceCode,
+                                    verificationUri: result.verificationUri,
+                                    expiresIn: result.expiresIn,
+                                    interval: result.interval
+                                });
+                                
+                                // Show device code to user
+                                const userCode = result.deviceCode;
+                                const verificationUri = result.verificationUri;
+                                
+                                console.log('🔔 Showing device code to user...');
+                                
+                                // Create a modal or alert with the code
+                                const proceed = confirm(
+                                    `Código de Autenticação GitHub\n\n` +
+                                    `1. Visite: ${verificationUri}\n` +
+                                    `2. Digite o código: ${userCode}\n\n` +
+                                    `Após inserir o código no GitHub, clique em OK para continuar.`
+                                );
+                                
+                                console.log('👤 User decision:', proceed);
+                                
+                                if (proceed) {
+                                    console.log('🔄 Continuing authentication polling...');
+                                    // Continue polling for token
+                                    const authResult = await window.electronAPI.continueGitHubAuth(
+                                        result.deviceCodeInternal, 
+                                        result.interval
+                                    );
+                                    
+                                    console.log('📥 Continue auth response:', authResult);
+                                    
+                                    if (authResult.success) {
+                                        console.log('✅ Authentication successful!');
+                                        this.isAuthenticated = true;
+                                        this.userInfo = authResult.userInfo;
+                                    } else {
+                                        console.error('❌ Authentication continuation failed:', authResult.error);
+                                        alert('Erro na autenticação: ' + authResult.error);
+                                    }
+                                } else {
+                                    console.log('🚫 User cancelled authentication');
+                                }
+                            } else if (result.success) {
+                                console.log('✅ Direct authentication successful!');
                                 this.isAuthenticated = true;
                                 this.userInfo = result.userInfo;
                             } else {
+                                console.error('❌ Authentication failed:', result.error);
                                 alert('Erro na autenticação: ' + result.error);
                             }
+                        } else {
+                            console.error('❌ electronAPI or authenticateWithGitHub not available');
+                            alert('Erro: API de autenticação não disponível');
                         }
                     } catch (error) {
-                        console.error('Authentication error:', error);
+                        console.error('💥 Authentication error:', error);
+                        console.error('🔍 Error stack:', error.stack);
                         alert('Erro na autenticação: ' + error.message);
                     } finally {
+                        console.log('🏁 Authentication process finished');
                         this.isAuthenticating = false;
                     }
                 },

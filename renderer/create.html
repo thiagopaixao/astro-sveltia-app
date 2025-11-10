@@ -254,7 +254,7 @@
             try {
                 const projectDetails = await window.electronAPI.getProjectDetails(this.projectId);
                 this.projectPath = projectDetails.projectPath;
-                this.githubUrl = projectDetails.githubUrl;
+                this.githubUrl = projectDetails.repoUrl; // Fixed: database column is repoUrl
                 this.repoFolderName = projectDetails.repoFolderName; // This might be null initially
 
                 // If process was not finished, restart it

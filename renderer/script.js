@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           isEmptyFolder = info.isEmpty;
         }
         
-        const projectId = await window.electronAPI.saveProject({ projectName, githubUrl, projectPath });
+        const projectId = await window.electronAPI.saveProject({ projectName, repoUrl: githubUrl, projectPath });
         sessionStorage.setItem('currentProjectId', projectId);
         sessionStorage.setItem('isExistingGitRepo', isExistingGitRepo.toString());
         sessionStorage.setItem('isEmptyFolder', isEmptyFolder.toString());

@@ -11,6 +11,8 @@ const { ProjectHandlers } = require('./projects.js');
 const { GitHandlers } = require('./git.js');
 const { BrowserHandlers } = require('./browser.js');
 const { SystemHandlers } = require('./system.js');
+const { FileHandlers } = require('./file.js');
+const { ProjectCreationHandler } = require('./projectCreation.js');
 
 /**
  * IPC Registry - Central point for registering all IPC handlers
@@ -29,7 +31,14 @@ class IpcRegistry {
     this.projectHandlers = new ProjectHandlers(dependencies);
     this.gitHandlers = new GitHandlers(dependencies);
     this.browserHandlers = new BrowserHandlers(dependencies);
-    this.systemHandlers = new SystemHandlers(dependencies);
+    this.fileHandlers = new FileHandlers(dependencies);
+    this.projectCreationHandler = new ProjectCreationHandler(dependencies);
+    
+    // Initialize SystemHandlers with ProcessManager from ProjectCreationHandler
+    this.systemHandlers = new SystemHandlers({
+      ...dependencies,
+      processManager: this.projectCreationHandler.processManager
+    });
     
     this.isRegistered = false;
   }
@@ -53,6 +62,8 @@ class IpcRegistry {
       this.projectHandlers.registerHandlers();
       this.gitHandlers.registerHandlers();
       this.browserHandlers.registerHandlers();
+      this.fileHandlers.registerHandlers();
+      this.projectCreationHandler.registerHandlers();
 
       this.isRegistered = true;
       this.logger.info('✅ All IPC handlers registered successfully');
@@ -80,6 +91,8 @@ class IpcRegistry {
 
     try {
       // Unregister handlers in reverse order
+      this.projectCreationHandler.unregisterHandlers();
+      this.fileHandlers.unregisterHandlers();
       this.browserHandlers.unregisterHandlers();
       this.gitHandlers.unregisterHandlers();
       this.projectHandlers.unregisterHandlers();
@@ -105,7 +118,9 @@ class IpcRegistry {
       projects: this.projectHandlers,
       git: this.gitHandlers,
       browser: this.browserHandlers,
-      system: this.systemHandlers
+      system: this.systemHandlers,
+      file: this.fileHandlers,
+      projectCreation: this.projectCreationHandler
     };
   }
 
@@ -120,7 +135,9 @@ class IpcRegistry {
       { name: 'Authentication', handlers: this.authHandlers },
       { name: 'Projects', handlers: this.projectHandlers },
       { name: 'Git', handlers: this.gitHandlers },
-      { name: 'Browser', handlers: this.browserHandlers }
+      { name: 'Browser', handlers: this.browserHandlers },
+      { name: 'File', handlers: this.fileHandlers },
+      { name: 'Project Creation', handlers: this.projectCreationHandler }
     ];
 
     handlerCategories.forEach(category => {
@@ -158,13 +175,15 @@ class IpcRegistry {
   getHandlerStats() {
     return {
       isRegistered: this.isRegistered,
-      handlerCount: 5,
+      handlerCount: 7,
       categories: [
         'System',
         'Authentication', 
         'Projects',
         'Git',
-        'Browser'
+        'Browser',
+        'File',
+        'Project Creation'
       ],
       registrationTime: new Date().toISOString()
     };

@@ -7,6 +7,9 @@
 'use strict';
 
 const { ipcMain, app, dialog, shell, BrowserWindow } = require('electron');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 /**
  * @typedef {Object} NodeDetectionResult
@@ -36,10 +39,12 @@ class SystemHandlers {
    * @param {Object} dependencies - Dependency injection container
    * @param {Object} dependencies.logger - Logger instance
    * @param {Object} dependencies.windowManager - Window manager instance
+   * @param {Object} [dependencies.processManager] - Process manager instance
    */
-  constructor({ logger, windowManager }) {
+  constructor({ logger, windowManager, processManager }) {
     this.logger = logger;
     this.windowManager = windowManager;
+    this.processManager = processManager;
     this.installationProgress = {
       stage: 'idle',
       progress: 0,
@@ -48,34 +53,37 @@ class SystemHandlers {
   }
 
   /**
-   * Get home directory path
-   * @returns {string} Home directory path
+   * Get home directory
+   * @returns {Promise<string>} Home directory path
    */
-  getHomeDirectory() {
-    return app.getPath('home');
+  async getHomeDirectory() {
+    try {
+      return app.getPath('home');
+    } catch (error) {
+      this.logger.error('Error getting home directory:', error);
+      return os.homedir();
+    }
   }
 
   /**
    * Open directory dialog
-   * @returns {Promise<string|null>} Selected directory path or null if cancelled
+   * @returns {Promise<string|null>} Selected directory path or null
    */
   async openDirectoryDialog() {
-    if (!this.windowManager || !this.windowManager.hasValidMainWindow()) {
-      this.logger.warn('⚠️ No valid main window for directory dialog');
-      return null;
-    }
-    
-    const { canceled, filePaths } = await dialog.showOpenDialog(
-      this.windowManager.getMainWindow(),
-      {
-        properties: ['openDirectory']
+    try {
+      const result = await dialog.showOpenDialog(this.windowManager.getMainWindow(), {
+        properties: ['openDirectory'],
+        title: 'Select Directory'
+      });
+      
+      if (result.canceled || result.filePaths.length === 0) {
+        return null;
       }
-    );
-    
-    if (canceled) {
+      
+      return result.filePaths[0];
+    } catch (error) {
+      this.logger.error('Error opening directory dialog:', error);
       return null;
-    } else {
-      return filePaths[0];
     }
   }
 
@@ -241,9 +249,9 @@ class SystemHandlers {
   }
 
   /**
-   * Install Node.js dependencies (placeholder implementation)
+   * Install Node.js dependencies with NVM
    * @param {Object} options - Installation options
-   * @returns {Promise<{success: boolean, message?: string, error?: string}>}
+   * @returns {Promise<{success: boolean, message?: string, error?: string, nodeVersion?: string, nodePath?: string}>}
    */
   async installNodeDependencies(options = {}) {
     try {
@@ -256,14 +264,313 @@ class SystemHandlers {
         message: 'Detecting existing Node.js installation...'
       };
       
-      // This is a placeholder implementation
-      // In a real scenario, this would handle NVM detection, Node.js download, etc.
-      throw new Error('Node.js installation not implemented yet');
+      // Step 1: Check if NVM is already installed
+      this.installationProgress = {
+        stage: 'checking_nvm',
+        progress: 20,
+        message: 'Checking for NVM installation...'
+      };
+      
+      const nvmInfo = await this.detectNVM();
+      this.logger.info('📋 NVM detection result:', nvmInfo);
+      
+      if (!nvmInfo.exists) {
+        // Step 2: Install NVM
+        this.installationProgress = {
+          stage: 'installing_nvm',
+          progress: 30,
+          message: 'Installing NVM...'
+        };
+        
+        await this.installNVM();
+      }
+      
+      // Step 3: Install Node.js v22
+      this.installationProgress = {
+        stage: 'installing_node',
+        progress: 50,
+        message: 'Installing Node.js v22...'
+      };
+      
+      const nodeResult = await this.installNodeVersion('22');
+      
+      // Step 4: Configure environment
+      this.installationProgress = {
+        stage: 'configuring',
+        progress: 80,
+        message: 'Configuring environment...'
+      };
+      
+      await this.configureNodeEnvironment();
+      
+      // Step 5: Verify installation
+      this.installationProgress = {
+        stage: 'verifying',
+        progress: 90,
+        message: 'Verifying installation...'
+      };
+      
+      const verification = await this.verifyNodeInstallation();
+      
+      if (!verification.success) {
+        throw new Error(verification.error || 'Installation verification failed');
+      }
+      
+      this.installationProgress = {
+        stage: 'completed',
+        progress: 100,
+        message: 'Installation completed successfully!'
+      };
+      
+      this.logger.info('✅ Node.js installation completed successfully');
+      
+      return {
+        success: true,
+        nodeVersion: verification.version,
+        nodePath: verification.path
+      };
       
     } catch (error) {
-      this.logger.error('Error installing Node.js dependencies:', error);
+      this.logger.error('❌ Error installing Node.js dependencies:', error);
+      this.installationProgress = {
+        stage: 'error',
+        progress: 0,
+        message: `Installation failed: ${error.message}`
+      };
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Detect NVM installation
+   * @returns {Promise<Object>} NVM detection result
+   */
+  async detectNVM() {
+    return new Promise((resolve) => {
+      const { exec } = require('child_process');
+      
+      // Check for NVM in common locations
+      const nvmPaths = [
+        process.env.NVM_DIR,
+        path.join(os.homedir(), '.nvm'),
+        path.join(os.homedir(), '.config', 'nvm'),
+        '/usr/local/nvm'
+      ].filter(Boolean);
+      
+      this.logger.info('🔍 Checking NVM paths:', nvmPaths);
+      
+      // Check if NVM command exists
+      exec('which nvm', (error, stdout, stderr) => {
+        if (!error && stdout.trim()) {
+          resolve({
+            exists: true,
+            path: stdout.trim(),
+            type: 'command'
+          });
+          return;
+        }
+        
+        // Check if NVM directory exists
+        for (const nvmPath of nvmPaths) {
+          if (fs.existsSync(nvmPath)) {
+            resolve({
+              exists: true,
+              path: nvmPath,
+              type: 'directory'
+            });
+            return;
+          }
+        }
+        
+        resolve({
+          exists: false,
+          path: null,
+          type: null
+        });
+      });
+    });
+  }
+
+  /**
+   * Install NVM
+   * @returns {Promise<void>}
+   */
+  async installNVM() {
+    return new Promise((resolve, reject) => {
+      const { exec } = require('child_process');
+      
+      this.logger.info('📦 Installing NVM...');
+      
+      // Download and install NVM script
+      const installScript = `
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+      `;
+      
+      exec(installScript, {
+        env: {
+          ...process.env,
+          NVM_DIR: path.join(os.homedir(), '.nvm')
+        }
+      }, (error, stdout, stderr) => {
+        if (error) {
+          this.logger.error('❌ NVM installation failed:', error);
+          reject(new Error(`NVM installation failed: ${error.message}`));
+          return;
+        }
+        
+        this.logger.info('✅ NVM installed successfully');
+        resolve();
+      });
+    });
+  }
+
+  /**
+   * Install specific Node.js version using NVM
+   * @param {string} version - Node.js version to install
+   * @returns {Promise<Object>} Installation result
+   */
+  async installNodeVersion(version) {
+    return new Promise((resolve, reject) => {
+      const { exec } = require('child_process');
+      
+      this.logger.info(`📦 Installing Node.js v${version}...`);
+      
+      const nvmScript = path.join(os.homedir(), '.nvm', 'nvm.sh');
+      const installCommand = `
+        source ${nvmScript} && nvm install ${version} && nvm use ${version} && nvm alias default ${version}
+      `;
+      
+      exec(installCommand, {
+        env: {
+          ...process.env,
+          NVM_DIR: path.join(os.homedir(), '.nvm'),
+          PATH: `${path.join(os.homedir(), '.nvm')}:${process.env.PATH}`
+        },
+        shell: '/bin/bash'
+      }, (error, stdout, stderr) => {
+        if (error) {
+          this.logger.error('❌ Node.js installation failed:', error);
+          reject(new Error(`Node.js installation failed: ${error.message}`));
+          return;
+        }
+        
+        this.logger.info(`✅ Node.js v${version} installed successfully`);
+        resolve({ version, success: true });
+      });
+    });
+  }
+
+  /**
+   * Configure Node.js environment
+   * @returns {Promise<void>}
+   */
+  async configureNodeEnvironment() {
+    return new Promise((resolve, reject) => {
+      const { exec } = require('child_process');
+      
+      this.logger.info('⚙️ Configuring Node.js environment...');
+      
+      // Update shell profiles
+      const bashrcPath = path.join(os.homedir(), '.bashrc');
+      const zshrcPath = path.join(os.homedir(), '.zshrc');
+      const profilePath = path.join(os.homedir(), '.profile');
+      
+      const nvmConfig = `
+# NVM configuration
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \\. "$NVM_DIR/bash_completion"
+`;
+      
+      try {
+        // Add to .bashrc if not already present
+        if (fs.existsSync(bashrcPath)) {
+          const bashrcContent = fs.readFileSync(bashrcPath, 'utf8');
+          if (!bashrcContent.includes('NVM configuration')) {
+            fs.appendFileSync(bashrcPath, nvmConfig);
+          }
+        }
+        
+        // Add to .zshrc if not already present
+        if (fs.existsSync(zshrcPath)) {
+          const zshrcContent = fs.readFileSync(zshrcPath, 'utf8');
+          if (!zshrcContent.includes('NVM configuration')) {
+            fs.appendFileSync(zshrcPath, nvmConfig);
+          }
+        }
+        
+        // Add to .profile if not already present
+        if (fs.existsSync(profilePath)) {
+          const profileContent = fs.readFileSync(profilePath, 'utf8');
+          if (!profileContent.includes('NVM configuration')) {
+            fs.appendFileSync(profilePath, nvmConfig);
+          }
+        }
+        
+        this.logger.info('✅ Environment configured successfully');
+        resolve();
+        
+      } catch (error) {
+        this.logger.error('❌ Environment configuration failed:', error);
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Verify Node.js installation
+   * @returns {Promise<Object>} Verification result
+   */
+  async verifyNodeInstallation() {
+    return new Promise((resolve) => {
+      const { exec } = require('child_process');
+      
+      this.logger.info('🔍 Verifying Node.js installation...');
+      
+      const nvmScript = path.join(os.homedir(), '.nvm', 'nvm.sh');
+      const verifyCommand = `
+        source ${nvmScript} && node --version && npm --version && which node && which npm
+      `;
+      
+      exec(verifyCommand, {
+        env: {
+          ...process.env,
+          NVM_DIR: path.join(os.homedir(), '.nvm'),
+          PATH: `${path.join(os.homedir(), '.nvm')}:${process.env.PATH}`
+        },
+        shell: '/bin/bash'
+      }, (error, stdout, stderr) => {
+        if (error) {
+          this.logger.error('❌ Node.js verification failed:', error);
+          resolve({
+            success: false,
+            error: `Verification failed: ${error.message}`
+          });
+          return;
+        }
+        
+        const lines = stdout.trim().split('\n');
+        const nodeVersion = lines[0]?.replace('v', '');
+        const npmVersion = lines[1];
+        const nodePath = lines[2];
+        const npmPath = lines[3];
+        
+        this.logger.info('✅ Node.js verification successful:', {
+          nodeVersion,
+          npmVersion,
+          nodePath,
+          npmPath
+        });
+        
+        resolve({
+          success: true,
+          version: nodeVersion,
+          npmVersion: npmVersion,
+          path: nodePath,
+          npmPath: npmPath
+        });
+      });
+    });
   }
 
   /**
@@ -305,10 +612,74 @@ class SystemHandlers {
    * @param {string} page - Page name to navigate to
    */
   navigate(event, page) {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (window && !window.isDestroyed()) {
-      // This would use the window manager to navigate
-      this.logger.info(`Navigating to page: ${page}`);
+    try {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (window && !window.isDestroyed()) {
+        // Use absolute path from project root
+        const rendererPath = path.join(process.cwd(), 'renderer', page);
+        const pagePath = `file://${rendererPath}`;
+        this.logger.info(`🚀 Navigating to page: ${page}`);
+        this.logger.info(`📁 Renderer path: ${rendererPath}`);
+        this.logger.info(`🌐 Full URL: ${pagePath}`);
+        
+        // Check if file exists before loading
+        const fs = require('fs');
+        if (fs.existsSync(rendererPath)) {
+          this.logger.info(`✅ File exists, loading page...`);
+          
+          // Prevent window from closing during navigation
+          const closeHandler = (e) => {
+            this.logger.warn(`⚠️ Preventing window close during navigation to: ${page}`);
+            e.preventDefault();
+          };
+          
+          window.on('close', closeHandler);
+          
+          window.loadURL(pagePath)
+            .then(() => {
+              this.logger.info(`✅ Page loaded successfully: ${page}`);
+              // Remove the close prevention handler after successful load
+              window.removeListener('close', closeHandler);
+            })
+            .catch(error => {
+              this.logger.error(`❌ Failed to load page: ${error.message}`);
+              this.logger.error(`❌ Error details:`, error);
+              // Remove the close prevention handler on error
+              window.removeListener('close', closeHandler);
+            });
+        } else {
+          this.logger.error(`❌ Page file does not exist: ${rendererPath}`);
+        }
+      } else {
+        this.logger.error(`❌ Window is destroyed or null for navigation to: ${page}`);
+      }
+    } catch (error) {
+      this.logger.error(`❌ Critical error in navigate method:`, error);
+    }
+  }
+
+  /**
+   * Complete welcome setup
+   * @param {Object} event - IPC event object
+   */
+  async completeWelcomeSetup(event) {
+    try {
+      this.logger.info('✅ Welcome setup completed');
+      
+      // Mark setup as completed by creating the first-time file
+      const { app } = require('electron');
+      const fs = require('fs');
+      const path = require('path');
+      
+      const firstTimeFile = path.join(app.getPath('userData'), '.first-time');
+      fs.writeFileSync(firstTimeFile, 'completed');
+      
+      this.logger.info(`✅ First-time setup marked as completed: ${firstTimeFile}`);
+      
+      return { success: true };
+    } catch (error) {
+      this.logger.error('❌ Error completing welcome setup:', error);
+      return { success: false, error: error.message };
     }
   }
 
@@ -318,8 +689,14 @@ class SystemHandlers {
    */
   getDevServerUrlFromMain() {
     this.logger.info('📡 get-dev-server-url-from-main called');
-    // This would return the global dev server URL
-    return null; // Placeholder
+    
+    // Return the real dev server URL if processManager is available
+    if (this.processManager && this.processManager.getGlobalDevServerUrl) {
+      return this.processManager.getGlobalDevServerUrl();
+    }
+    
+    // Fallback to null if no process manager
+    return null;
   }
 
   /**
@@ -384,19 +761,7 @@ class SystemHandlers {
   registerHandlers() {
     this.logger.info('⚙️ Registering system operations IPC handlers');
 
-    /**
-     * Get home directory
-     */
-    ipcMain.handle('get-home-directory', () => {
-      return this.getHomeDirectory();
-    });
-
-    /**
-     * Open directory dialog
-     */
-    ipcMain.handle('open-directory-dialog', async () => {
-      return await this.openDirectoryDialog();
-    });
+    
 
     /**
      * Check Node.js installation
@@ -469,7 +834,11 @@ class SystemHandlers {
      * Open file explorer
      */
     ipcMain.handle('open-file-explorer', async (event, dirPath) => {
-      return await this.openFileExplorer(dirPath);
+      return this.openFileExplorer(dirPath);
+    });
+
+    ipcMain.handle('completeWelcomeSetup', async (event) => {
+      return this.completeWelcomeSetup(event);
     });
 
     this.logger.info('✅ System operations IPC handlers registered');
@@ -481,17 +850,18 @@ class SystemHandlers {
   unregisterHandlers() {
     this.logger.info('⚙️ Unregistering system operations IPC handlers');
     
-    ipcMain.removeHandler('get-home-directory');
-    ipcMain.removeHandler('open-directory-dialog');
+    // Remove handle-based handlers
     ipcMain.removeHandler('checkNodeInstallation');
     ipcMain.removeHandler('installNodeDependencies');
     ipcMain.removeHandler('getNodeInstallationProgress');
     ipcMain.removeHandler('get-app-logs');
-    ipcMain.removeListener('clear-console-output');
-    ipcMain.removeListener('navigate');
     ipcMain.removeHandler('get-dev-server-url-from-main');
     ipcMain.removeHandler('confirm-exit-app');
     ipcMain.removeHandler('open-file-explorer');
+    
+    // Remove all listeners for event-based handlers
+    ipcMain.removeAllListeners('clear-console-output');
+    ipcMain.removeAllListeners('navigate');
     
     this.logger.info('✅ System operations IPC handlers unregistered');
   }

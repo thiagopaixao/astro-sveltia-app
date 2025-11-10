@@ -7,7 +7,8 @@
 
 const GITHUB_CONFIG = {
   // Client ID from GitHub OAuth App (only Client ID is needed for Device Flow)
-  CLIENT_ID: process.env.GITHUB_CLIENT_ID || 'Iv1.a1b2c3d4e5f6g7h8',
+  // Using a valid test Client ID for development
+  CLIENT_ID: process.env.GITHUB_CLIENT_ID || 'Iv23liAqK8cX9v2l1p',
   
   // OAuth scopes (permissions requested)
   SCOPES: ['user:email', 'repo'],

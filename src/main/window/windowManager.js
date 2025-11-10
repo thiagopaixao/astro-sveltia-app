@@ -47,7 +47,7 @@ class WindowManager {
         show: false,
         maximize: true,
         webPreferences: {
-          preload: path.join(__dirname, '..', '..', 'preload.js'),
+          preload: path.resolve(__dirname, '..', '..', '..', 'preload.js'),
           contextIsolation: true,
           nodeIntegration: false,
           ...config.windowConfig?.webPreferences
