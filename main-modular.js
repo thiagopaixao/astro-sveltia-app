@@ -14,6 +14,10 @@ const path = require('path');
 const { getLogger, setLogLevel } = require('./src/main/logging/logger.js');
 const { appTracker } = require('./src/main/processes/documentalTracker.js');
 const { ProcessInspectorFactory } = require('./src/main/platform/index.js');
+const { DatabaseManager } = require('./src/main/database/database.js');
+const { WindowManager } = require('./src/main/window/windowManager.js');
+const { ProjectService } = require('./src/application/ProjectService.js');
+const { createIpcRegistry } = require('./src/ipc/index.js');
 
 // Initialize new modular logging system
 const logger = getLogger('MainProcess');
@@ -38,6 +42,12 @@ let mainWindow;
 let editorView;
 let viewerView;
 let globalDevServerUrl = null;
+
+// New modular instances
+let databaseManager;
+let windowManager;
+let projectService;
+let ipcRegistry;
 let activeProcesses = {};
 
 // Legacy app logging buffer (will be replaced by modular logger)
@@ -76,12 +86,14 @@ function addToAppLog(level, ...args) {
   }
   
   // Send to all windows (legacy functionality)
-  const allWindows = BrowserWindow.getAllWindows();
-  allWindows.forEach(window => {
-    if (!window.isDestroyed()) {
-      window.webContents.send('app-log-output', logEntry);
-    }
-  });
+  if (windowManager) {
+    const allWindows = windowManager.getAllWindows();
+    allWindows.forEach(window => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('app-log-output', logEntry);
+      }
+    });
+  }
   
   // Call original console method
   originalConsoleLog(...args);
@@ -241,8 +253,8 @@ app.whenReady().then(async () => {
   // Create main window
   await createWindow();
   
-  // Setup IPC handlers
-  setupIpcHandlers();
+  // Setup modular IPC handlers
+  setupModularIpcHandlers();
   
   // Load previously tracked Documental processes using modular tracker
   loadDocumentalProcesses();
@@ -279,6 +291,21 @@ app.on('before-quit', async () => {
   logger.info('👋 App quitting - cleaning up...');
   isCleaningUp = true;
   
+  // Unregister IPC handlers
+  if (ipcRegistry) {
+    ipcRegistry.unregisterIpcHandlers();
+  }
+  
+  // Cleanup BrowserViews
+  if (windowManager) {
+    const allWindows = windowManager.getAllWindows();
+    allWindows.forEach(window => {
+      if (window && !window.isDestroyed()) {
+        // BrowserViews will be cleaned up by window manager
+      }
+    });
+  }
+  
   // Save any pending data
   saveDocumentalProcesses();
   
@@ -289,106 +316,95 @@ app.on('before-quit', async () => {
 // WINDOW MANAGEMENT: Migrated from main.js with modular logging
 // ============================================================================
 
-let db;
-
 function initializeDatabase() {
-  const userDataPath = app.getPath('userData');
-  const dbPath = path.join(userDataPath, 'documental.db');
-
-  db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-      logger.error('Error opening database:', err.message);
-    } else {
-      logger.info('Connected to the SQLite database.');
-      
-      // Create projects table
-      db.run(`CREATE TABLE IF NOT EXISTS projects (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        projectName TEXT NOT NULL,
-        projectPath TEXT NOT NULL,
-        repoFolderName TEXT,
-        repoUrl TEXT,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`);
-
-      // Create users table for GitHub authentication
-      db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        githubId TEXT UNIQUE,
-        login TEXT,
-        name TEXT,
-        email TEXT,
-        avatarUrl TEXT,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`);
-    }
+  logger.info('🗄️ Initializing database with modular DatabaseManager');
+  
+  databaseManager = new DatabaseManager({
+    userDataPath: app.getPath('userData'),
+    dbName: 'documental.db'
   });
+  
+  return databaseManager.initialize()
+    .then(() => {
+      logger.info('✅ Database initialized successfully');
+      return databaseManager.getDatabase();
+    })
+    .catch((err) => {
+      logger.error('❌ Failed to initialize database:', err);
+      throw err;
+    });
 }
 
 async function createWindow() {
-  logger.info('🪟 Creating main window with modular architecture');
+  logger.info('🪟 Creating main window with modular WindowManager');
   
-  mainWindow = new BrowserWindow({
-    width: 900,
-    height: 600,
-    show: false, // Don't show until maximized
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
+  windowManager = new WindowManager({
+    basePath: __dirname,
+    userDataPath: app.getPath('userData'),
+    windowConfig: {
+      width: 900,
+      height: 600,
+      show: false,
+      maximize: true
     }
   });
-
-  // Maximize and show window
-  mainWindow.maximize();
-  mainWindow.show();
-
-  // Check if it's first time using the app
-  const isFirstTime = await checkFirstTimeUser();
   
-  if (isFirstTime) {
-    logger.info('👋 First time user - showing welcome screen');
-    mainWindow.loadFile(path.join(__dirname, 'renderer', 'welcome.html'));
-  } else {
-    logger.info('🏠 Returning user - showing main screen');
-    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  }
-
-  // Hide menu bar
-  Menu.setApplicationMenu(null);
-
+  mainWindow = await windowManager.createMainWindow();
+  
   logger.info('✅ Main window created and shown successfully');
-}
-
-function checkFirstTimeUser() {
-  return new Promise((resolve) => {
-    const userDataPath = app.getPath('userData');
-    const firstTimeFile = path.join(userDataPath, '.first-time');
-    
-    if (fs.existsSync(firstTimeFile)) {
-      resolve(false);
-    } else {
-      fs.writeFileSync(firstTimeFile, 'true');
-      resolve(true);
-    }
-  });
+  return mainWindow;
 }
 
 // ============================================================================
-// IPC HANDLERS: Essential handlers migrated with modular logging
+// MODULAR IPC HANDLERS: New modular IPC structure
+// ============================================================================
+
+function setupModularIpcHandlers() {
+  logger.info('🔌 Setting up modular IPC handlers...');
+
+  try {
+    // Initialize project service
+    projectService = new ProjectService({
+      logger,
+      databaseManager
+    });
+
+    // Create IPC registry with all dependencies
+    ipcRegistry = createIpcRegistry({
+      logger,
+      databaseManager,
+      windowManager,
+      projectService
+    });
+
+    // Register all IPC handlers
+    ipcRegistry.registerIpcHandlers();
+
+    logger.info('✅ Modular IPC handlers configured successfully');
+  } catch (error) {
+    logger.error('❌ Failed to setup modular IPC handlers:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// LEGACY IPC HANDLERS: Keep for backward compatibility during transition
 // ============================================================================
 
 function setupIpcHandlers() {
-  logger.info('🔌 Setting up IPC handlers with modular logging');
+  logger.info('🔌 Setting up legacy IPC handlers with modular logging');
 
   ipcMain.handle('get-home-directory', () => {
     return app.getPath('home');
   });
 
   ipcMain.handle('open-directory-dialog', async () => {
-    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    if (!windowManager || !windowManager.hasValidMainWindow()) {
+      logger.warn('⚠️ No valid main window for directory dialog');
+      return null;
+    }
+    
+    const { canceled, filePaths } = await dialog.showOpenDialog(windowManager.getMainWindow(), {
       properties: ['openDirectory']
     });
     if (canceled) {
@@ -399,7 +415,7 @@ function setupIpcHandlers() {
   });
 
   // Add more essential IPC handlers as needed
-  logger.info('✅ IPC handlers configured successfully');
+  logger.info('✅ Legacy IPC handlers configured successfully');
 }
 
 // ============================================================================
@@ -485,6 +501,10 @@ module.exports = {
   logger,
   appTracker,
   ProcessInspectorFactory,
+  databaseManager,
+  windowManager,
+  projectService,
+  ipcRegistry,
   
   // Process tracking functions
   loadDocumentalProcesses,
