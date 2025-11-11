@@ -615,41 +615,42 @@ export NVM_DIR="$HOME/.nvm"
     try {
       const window = BrowserWindow.fromWebContents(event.sender);
       if (window && !window.isDestroyed()) {
-        // Use absolute path from project root
-        const rendererPath = path.join(process.cwd(), 'renderer', page);
-        const pagePath = `file://${rendererPath}`;
-        this.logger.info(`🚀 Navigating to page: ${page}`);
-        this.logger.info(`📁 Renderer path: ${rendererPath}`);
-        this.logger.info(`🌐 Full URL: ${pagePath}`);
-        
-        // Check if file exists before loading
-        const fs = require('fs');
-        if (fs.existsSync(rendererPath)) {
-          this.logger.info(`✅ File exists, loading page...`);
-          
-          // Prevent window from closing during navigation
-          const closeHandler = (e) => {
-            this.logger.warn(`⚠️ Preventing window close during navigation to: ${page}`);
-            e.preventDefault();
-          };
-          
-          window.on('close', closeHandler);
-          
-          window.loadURL(pagePath)
-            .then(() => {
-              this.logger.info(`✅ Page loaded successfully: ${page}`);
-              // Remove the close prevention handler after successful load
-              window.removeListener('close', closeHandler);
-            })
-            .catch(error => {
-              this.logger.error(`❌ Failed to load page: ${error.message}`);
-              this.logger.error(`❌ Error details:`, error);
-              // Remove the close prevention handler on error
-              window.removeListener('close', closeHandler);
-            });
+        // Use absolute path - handle both development and packaged environments
+        let rendererPath;
+        if (require('electron').app.isPackaged) {
+          // In packaged app, renderer files are inside app.asar
+          // Use app.getAppPath() which points to the asar in packaged apps
+          rendererPath = path.join(require('electron').app.getAppPath(), 'renderer', page);
         } else {
-          this.logger.error(`❌ Page file does not exist: ${rendererPath}`);
+          // In development, use current working directory
+          rendererPath = path.join(process.cwd(), 'renderer', page);
         }
+        
+        this.logger.info(`🚀 Navigating to page: ${page}`);
+        this.logger.info(`📦 App packaged: ${require('electron').app.isPackaged}`);
+        this.logger.info(`📁 Renderer path: ${rendererPath}`);
+        
+        // Use loadFile() instead of loadURL() - it handles asar files correctly
+        // Prevent window from closing during navigation
+        const closeHandler = (e) => {
+          this.logger.warn(`⚠️ Preventing window close during navigation to: ${page}`);
+          e.preventDefault();
+        };
+        
+        window.on('close', closeHandler);
+        
+        window.loadFile(rendererPath)
+          .then(() => {
+            this.logger.info(`✅ Page loaded successfully: ${page}`);
+            // Remove the close prevention handler after successful load
+            window.removeListener('close', closeHandler);
+          })
+          .catch(error => {
+            this.logger.error(`❌ Failed to load page: ${error.message}`);
+            this.logger.error(`❌ Error details:`, error);
+            // Remove the close prevention handler on error
+            window.removeListener('close', closeHandler);
+          });
       } else {
         this.logger.error(`❌ Window is destroyed or null for navigation to: ${page}`);
       }
@@ -664,7 +665,7 @@ export NVM_DIR="$HOME/.nvm"
    */
   async completeWelcomeSetup(event) {
     try {
-      this.logger.info('✅ Welcome setup completed');
+      this.logger.info('🎯 Completing welcome setup...');
       
       // Mark setup as completed by creating the first-time file
       const { app } = require('electron');
@@ -672,11 +673,29 @@ export NVM_DIR="$HOME/.nvm"
       const path = require('path');
       
       const firstTimeFile = path.join(app.getPath('userData'), '.first-time');
+      
+      // Write the completion marker
       fs.writeFileSync(firstTimeFile, 'completed');
       
-      this.logger.info(`✅ First-time setup marked as completed: ${firstTimeFile}`);
+      // Verify the file was written correctly
+      if (fs.existsSync(firstTimeFile)) {
+        const content = fs.readFileSync(firstTimeFile, 'utf8').trim();
+        const isCorrectlyWritten = content === 'completed';
+        
+        if (isCorrectlyWritten) {
+          this.logger.info(`✅ First-time setup successfully marked as completed: ${firstTimeFile}`);
+          return { success: true };
+        } else {
+          const errorMsg = `File content verification failed. Expected: "completed", Found: "${content}"`;
+          this.logger.error(`❌ ${errorMsg}`);
+          return { success: false, error: errorMsg };
+        }
+      } else {
+        const errorMsg = `Failed to create completion file: ${firstTimeFile}`;
+        this.logger.error(`❌ ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
       
-      return { success: true };
     } catch (error) {
       this.logger.error('❌ Error completing welcome setup:', error);
       return { success: false, error: error.message };

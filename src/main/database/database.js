@@ -87,6 +87,16 @@ class DatabaseManager {
         )
       `;
 
+      const createSettingsTable = `
+        CREATE TABLE IF NOT EXISTS settings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          key TEXT UNIQUE NOT NULL,
+          value TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+
       this.db.run(createProjectsTable, (err) => {
         if (err) {
           this.logger.error('❌ Error creating projects table:', err.message);
@@ -98,10 +108,18 @@ class DatabaseManager {
           if (err) {
             this.logger.error('❌ Error creating users table:', err.message);
             reject(err);
-          } else {
-            this.logger.info('✅ Database tables created successfully');
-            resolve();
+            return;
           }
+          
+          this.db.run(createSettingsTable, (err) => {
+            if (err) {
+              this.logger.error('❌ Error creating settings table:', err.message);
+              reject(err);
+            } else {
+              this.logger.info('✅ Database tables created successfully');
+              resolve();
+            }
+          });
         });
       });
     });

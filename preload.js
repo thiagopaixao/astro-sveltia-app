@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkNodeInstallation: () => ipcRenderer.invoke('checkNodeInstallation'),
   installNodeDependencies: (options) => ipcRenderer.invoke('installNodeDependencies', options),
   getNodeInstallationProgress: () => ipcRenderer.invoke('getNodeInstallationProgress'),
+  detectNode: () => ipcRenderer.invoke('node:detect'),
+  saveNodePreference: (choice) => ipcRenderer.invoke('node:save-preference', choice),
   // Git branch management functions
   listBranches: (projectId) => ipcRenderer.invoke('git:list-branches', projectId),
   createBranch: (projectId, branchName) => ipcRenderer.invoke('git:create-branch', projectId, branchName),

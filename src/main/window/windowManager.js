@@ -58,6 +58,45 @@ class WindowManager {
   }
 
   /**
+   * Create a custom window with specified HTML file
+   * @param {string} htmlFile - HTML file to load
+   * @param {Object} windowConfig - Window configuration overrides
+   * @returns {Promise<BrowserWindow>} The created window
+   */
+  async createWindow(htmlFile, windowConfig = {}) {
+    this.logger.info(`🪟 Creating custom window: ${htmlFile}`);
+    
+    const window = new BrowserWindow({
+      width: windowConfig.width || this.config.windowConfig.width,
+      height: windowConfig.height || this.config.windowConfig.height,
+      show: false,
+      resizable: windowConfig.resizable !== false,
+      maximizable: windowConfig.maximizable !== false,
+      minimizable: windowConfig.minimizable !== false,
+      webPreferences: {
+        ...this.config.windowConfig.webPreferences,
+        ...windowConfig.webPreferences
+      }
+    });
+
+    // Load the specified HTML file
+    const filePath = path.join(this.config.basePath, 'renderer', htmlFile);
+    this.logger.info(`📄 Loading file: ${filePath}`);
+    
+    await window.loadFile(filePath);
+
+    // Show window
+    window.show();
+
+    // Hide menu bar for custom windows
+    Menu.setApplicationMenu(null);
+
+    this.logger.info(`✅ Custom window '${htmlFile}' created and shown successfully`);
+    
+    return window;
+  }
+
+  /**
    * Create and show the main application window
    * @returns {Promise<BrowserWindow>} The created window
    */
@@ -83,10 +122,10 @@ class WindowManager {
     const isFirstTime = await this.checkFirstTimeUser();
     
     if (isFirstTime) {
-      this.logger.info('👋 First time user - showing welcome screen');
+      this.logger.info('👋 First time user detected - showing welcome screen');
       this.mainWindow.loadFile(path.join(this.config.basePath, 'renderer', 'welcome.html'));
     } else {
-      this.logger.info('🏠 Returning user - showing main screen');
+      this.logger.info('🏠 Returning user detected - showing main screen');
       this.mainWindow.loadFile(path.join(this.config.basePath, 'renderer', 'index.html'));
     }
 
@@ -111,11 +150,28 @@ class WindowManager {
       }
 
       const firstTimeFile = path.join(this.config.userDataPath, '.first-time');
+      this.logger.info(`🔍 Checking first-time user status at: ${firstTimeFile}`);
       
       if (fs.existsSync(firstTimeFile)) {
-        resolve(false);
+        try {
+          const content = fs.readFileSync(firstTimeFile, 'utf8').trim();
+          const isCompleted = content === 'completed';
+          this.logger.info(`📋 First-time file exists with content: "${content}", completed: ${isCompleted}, isFirstTime: ${!isCompleted}`);
+          
+          // Additional verification: ensure content is exactly "completed"
+          if (isCompleted) {
+            this.logger.info('✅ Setup completion verified - user is returning');
+          } else {
+            this.logger.warn('⚠️ File exists but content is not "completed" - treating as first time');
+          }
+          
+          resolve(!isCompleted); // Return true if NOT completed
+        } catch (error) {
+          this.logger.error('❌ Error reading first-time file:', error);
+          resolve(true); // Assume first time if file is corrupted
+        }
       } else {
-        fs.writeFileSync(firstTimeFile, 'true');
+        this.logger.info(`📝 No first-time file found at ${firstTimeFile}, user is first time`);
         resolve(true);
       }
     });

@@ -27,9 +27,11 @@ class ProcessManager {
    * Create an instance of ProcessManager
    * @param {Object} dependencies - Dependency injection container
    * @param {Object} dependencies.logger - Logger instance
+   * @param {Object} dependencies.nodeDetectionService - Node.js detection service
    */
-  constructor({ logger }) {
+  constructor({ logger, nodeDetectionService }) {
     this.logger = logger;
+    this.nodeDetectionService = nodeDetectionService;
     this.loadDocumentalProcesses();
   }
 
@@ -96,30 +98,56 @@ class ProcessManager {
 
   /**
    * Get npm path
-   * @returns {string} npm executable path
+   * @returns {Promise<string>} npm executable path
    */
-  getNpmPath() {
-    // Always prefer custom npm path if available
-    if (process.env.CUSTOM_NPM_PATH) {
-      this.logger.info(`Using custom npm path: ${process.env.CUSTOM_NPM_PATH}`);
-      return process.env.CUSTOM_NPM_PATH;
+  async getNpmPath() {
+    try {
+      // Always prefer custom npm path if available
+      if (process.env.CUSTOM_NPM_PATH) {
+        this.logger.info(`Using custom npm path: ${process.env.CUSTOM_NPM_PATH}`);
+        return process.env.CUSTOM_NPM_PATH;
+      }
+      
+      // Use Node.js detection service to get preferred npm
+      if (this.nodeDetectionService) {
+        const npmPath = await this.nodeDetectionService.getPreferredNpmExecutable();
+        this.logger.info(`Using detected npm path: ${npmPath}`);
+        return npmPath;
+      }
+      
+      this.logger.info('Using system npm');
+      return 'npm';
+    } catch (error) {
+      this.logger.warn('Failed to get npm path from detection service, falling back to system npm:', error.message);
+      return 'npm';
     }
-    this.logger.info('Using system npm');
-    return 'npm';
   }
 
   /**
    * Get Node.js path
-   * @returns {string} Node.js executable path
+   * @returns {Promise<string>} Node.js executable path
    */
-  getNodePath() {
-    // Always prefer custom node path if available
-    if (process.env.CUSTOM_NODE_PATH) {
-      this.logger.info(`Using custom node path: ${process.env.CUSTOM_NODE_PATH}`);
-      return process.env.CUSTOM_NODE_PATH;
+  async getNodePath() {
+    try {
+      // Always prefer custom node path if available
+      if (process.env.CUSTOM_NODE_PATH) {
+        this.logger.info(`Using custom node path: ${process.env.CUSTOM_NODE_PATH}`);
+        return process.env.CUSTOM_NODE_PATH;
+      }
+      
+      // Use Node.js detection service to get preferred node
+      if (this.nodeDetectionService) {
+        const nodePath = await this.nodeDetectionService.getPreferredNodeExecutable();
+        this.logger.info(`Using detected node path: ${nodePath}`);
+        return nodePath;
+      }
+      
+      this.logger.info('Using system node');
+      return 'node';
+    } catch (error) {
+      this.logger.warn('Failed to get node path from detection service, falling back to system node:', error.message);
+      return 'node';
     }
-    this.logger.info('Using system node');
-    return 'node';
   }
 
   /**
@@ -142,17 +170,55 @@ class ProcessManager {
   }
 
   /**
-   * Execute command with process tracking
+   * Execute a command in a directory
    * @param {string} command - Command to execute
-   * @param {Array} args - Command arguments
+   * @param {Array<string>} args - Command arguments
    * @param {string} cwd - Working directory
-   * @param {string} processId - Process identifier
-   * @param {Function} sendOutput - Output callback function
-   * @returns {Promise} Promise that resolves when command completes
+   * @param {string} processId - Process ID for tracking
+   * @param {Function} sendOutput - Output callback
+   * @returns {Promise<void>}
    */
   executeCommand(command, args, cwd, processId, sendOutput) {
-    return new Promise((resolve, reject) => {
-      const child = spawn(command, args, { cwd });
+    return new Promise(async (resolve, reject) => {
+      let actualCommand = command;
+      let env = { ...process.env };
+
+      // Check if we should use embedded Node.js/NPM
+      if (command === 'node' || command === 'npm' || command === 'npx') {
+        try {
+          const detection = await this.nodeDetectionService.detectNodeInstallation();
+          
+          if (detection.recommendation === 'use_embedded' && detection.embeddedNode) {
+            this.logger.info(`📦 Using embedded ${command} for process ${processId}`);
+            
+            if (command === 'node') {
+              actualCommand = detection.embeddedNode.path;
+            } else if (command === 'npm') {
+              actualCommand = this.nodeDetectionService.getEmbeddedNpmPath();
+            } else if (command === 'npx') {
+              actualCommand = this.nodeDetectionService.getEmbeddedNpxPath();
+            }
+
+            // Set environment variables for embedded Node.js
+            const embeddedNodePath = path.dirname(detection.embeddedNode.path);
+            env.PATH = `${embeddedNodePath}:${env.PATH}`;
+            
+            // Ensure Node.js can find its modules
+            env.NODE_PATH = path.join(path.dirname(detection.embeddedNode.path), '..', 'lib', 'node_modules');
+          }
+        } catch (error) {
+          this.logger.warn(`⚠️ Could not detect embedded Node.js for ${command}, falling back to system: ${error.message}`);
+        }
+      }
+
+      this.logger.info(`🚀 Executing: ${actualCommand} ${args.join(' ')} in ${cwd}`);
+
+      const child = spawn(actualCommand, args, { 
+        cwd, 
+        env,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      
       activeProcesses[processId] = child;
 
       child.stdout.on('data', (data) => {
@@ -237,41 +303,85 @@ class ProcessManager {
       }
     };
 
-    const devProcess = spawn(this.getNpmPath(), ['run', 'dev'], { cwd: repoDirPath });
-    activeProcesses[`dev-${projectId}`] = devProcess;
+    // Use executeCommand to ensure embedded Node.js/NPM is used
+    let devProcess;
+    let processStarted = false;
+    
+    try {
+      // Create a custom spawn to handle the dev server process
+      const { spawn } = require('child_process');
+      
+      // Get the proper npm path using the same logic as executeCommand
+      let actualNpmPath = 'npm';
+      let env = { ...process.env };
 
-    // Track this as a Documental process
-    if (devProcess.pid) {
-      this.addDocumentalProcess(devProcess.pid, {
-        port: null, // Will be updated when URL is detected
-        projectId: projectId,
-        command: 'npm run dev',
-        cwd: repoDirPath
+      // Check if we should use embedded Node.js/NPM
+      try {
+        const detection = await this.nodeDetectionService.detectNodeInstallation();
+        
+        if (detection.recommendation === 'use_embedded' && detection.embeddedNode) {
+          this.logger.info(`📦 Using embedded npm for dev server ${projectId}`);
+          actualNpmPath = this.nodeDetectionService.getEmbeddedNpmPath();
+
+          // Set environment variables for embedded Node.js
+          const embeddedNodePath = path.dirname(detection.embeddedNode.path);
+          env.PATH = `${embeddedNodePath}:${env.PATH}`;
+          
+          // Ensure Node.js can find its modules
+          env.NODE_PATH = path.join(path.dirname(detection.embeddedNode.path), '..', 'lib', 'node_modules');
+        }
+      } catch (error) {
+        this.logger.warn(`⚠️ Could not detect embedded Node.js for dev server, falling back to system: ${error.message}`);
+      }
+
+      this.logger.info(`🚀 Starting dev server: ${actualNpmPath} run dev in ${repoDirPath}`);
+
+      devProcess = spawn(actualNpmPath, ['run', 'dev'], { 
+        cwd: repoDirPath,
+        env,
+        stdio: ['ignore', 'pipe', 'pipe']
       });
-    }
+      
+      processStarted = true;
+      activeProcesses[`dev-${projectId}`] = devProcess;
 
-    devProcess.stdout.on('data', processOutput);
-    devProcess.stderr.on('data', processOutput);
-
-    devProcess.on('close', (code) => {
-      delete activeProcesses[`dev-${projectId}`];
+      // Track this as a Documental process
       if (devProcess.pid) {
-        this.removeDocumentalProcess(devProcess.pid);
+        this.addDocumentalProcess(devProcess.pid, {
+          port: null, // Will be updated when URL is detected
+          projectId: projectId,
+          command: 'npm run dev',
+          cwd: repoDirPath
+        });
       }
-      if (code !== 0) {
-        sendServerOutput(`Development server exited with code ${code}\n`);
+
+      devProcess.stdout.on('data', processOutput);
+      devProcess.stderr.on('data', processOutput);
+
+      devProcess.on('close', (code) => {
+        delete activeProcesses[`dev-${projectId}`];
+        if (devProcess.pid) {
+          this.removeDocumentalProcess(devProcess.pid);
+        }
+        if (code !== 0) {
+          sendServerOutput(`Development server exited with code ${code}\n`);
+          sendStatus('failure');
+        }
+      });
+
+      devProcess.on('error', (err) => {
+        delete activeProcesses[`dev-${projectId}`];
+        if (devProcess.pid) {
+          this.removeDocumentalProcess(devProcess.pid);
+        }
+        sendServerOutput(`Failed to start development server: ${err.message}\n`);
         sendStatus('failure');
-      }
-    });
+      });
 
-    devProcess.on('error', (err) => {
-      delete activeProcesses[`dev-${projectId}`];
-      if (devProcess.pid) {
-        this.removeDocumentalProcess(devProcess.pid);
-      }
-      sendServerOutput(`Failed to start development server: ${err.message}\n`);
+    } catch (error) {
+      sendServerOutput(`Failed to start development server: ${error.message}\n`);
       sendStatus('failure');
-    });
+    }
 
     sendServerOutput('Development server started in background. Waiting for readiness signal...\n');
     

@@ -18,6 +18,7 @@ const { WindowManager } = require('./src/main/window/windowManager.js');
 const { ProjectService } = require('./src/application/ProjectService.js');
 const { FileService } = require('./src/main/services/fileService.js');
 const { MenuManager } = require('./src/main/services/menuManager.js');
+const { NodeDetectionService } = require('./src/main/services/nodeDetectionService.js');
 const { createIpcRegistry } = require('./src/ipc/index.js');
 
 // Initialize modular logging system
@@ -30,6 +31,7 @@ let windowManager;
 let projectService;
 let fileService;
 let menuManager;
+let nodeDetectionService;
 let ipcRegistry;
 
 // Application state
@@ -92,6 +94,14 @@ async function initializeServices() {
     menuManager.initialize();
     logger.info('✅ Menu manager initialized');
 
+    // Initialize Node.js detection service
+    logger.info('🟢 Initializing Node.js detection service...');
+    nodeDetectionService = new NodeDetectionService({
+      logger,
+      database: databaseManager
+    });
+    logger.info('✅ Node.js detection service initialized');
+
     // Initialize IPC registry
     logger.info('🔌 Initializing IPC registry...');
     ipcRegistry = createIpcRegistry({
@@ -99,7 +109,8 @@ async function initializeServices() {
       databaseManager,
       windowManager,
       projectService,
-      fileService
+      fileService,
+      nodeDetectionService
     });
     ipcRegistry.registerIpcHandlers();
     logger.info('✅ IPC registry initialized');
@@ -109,6 +120,102 @@ async function initializeServices() {
 
   } catch (error) {
     logger.error('❌ Failed to initialize services:', error);
+    throw error;
+  }
+}
+
+/**
+ * Check if welcome setup has been completed
+ * @returns {Promise<boolean>} True if setup is completed
+ */
+async function checkWelcomeSetupCompleted() {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const firstTimeFile = path.join(app.getPath('userData'), '.first-time');
+    
+    logger.info(`🔍 Checking welcome setup completion at: ${firstTimeFile}`);
+    
+    if (fs.existsSync(firstTimeFile)) {
+      const content = fs.readFileSync(firstTimeFile, 'utf8').trim();
+      const isCompleted = content === 'completed';
+      logger.info(`📋 Setup file exists with content: "${content}", completed: ${isCompleted}`);
+      return isCompleted;
+    } else {
+      logger.info('📝 No setup completion file found');
+      return false;
+    }
+  } catch (error) {
+    logger.error('❌ Error checking setup completion:', error);
+    return false;
+  }
+}
+
+/**
+ * Check Node.js setup and create appropriate window
+ */
+async function createInitialWindow() {
+  try {
+    logger.info('🔍 Checking initial window requirements...');
+    
+    // FIRST: Check if welcome setup has been completed
+    const setupCompleted = await checkWelcomeSetupCompleted();
+    
+    if (setupCompleted) {
+      logger.info('✅ Welcome setup already completed - showing main window');
+      return await windowManager.createMainWindow();
+    }
+    
+    logger.info('👋 Welcome setup not completed - checking Node.js setup...');
+    
+    // SECOND: Check if user has already configured Node.js preference
+    const nodePreference = await nodeDetectionService.getNodePreference();
+    
+    if (nodePreference) {
+      logger.info(`✅ Node.js preference found: ${nodePreference}`);
+      // User has already configured Node.js but hasn't completed welcome setup
+      // This can happen if user completed Node.js setup but not the full wizard
+      logger.info('⚠️ Node.js preference exists but welcome setup not completed - showing welcome window');
+      return await windowManager.createWindow('welcome.html', {
+        width: 900,
+        height: 700,
+        resizable: false,
+        maximizable: false,
+        minimizable: false
+      });
+    }
+    
+    // THIRD: No preference found, check Node.js detection
+    const detection = await nodeDetectionService.detectNodeInstallation();
+    logger.info('🔍 Node.js detection result:', detection);
+    
+    // ALWAYS show welcome window on first run, even if system Node.js is valid
+    // This allows user to choose between system and embedded Node.js
+    logger.info('👋 First time setup - showing welcome window for Node.js selection');
+    
+    // Store detection result for the welcome window to use
+    global.nodeDetectionResult = detection;
+    
+    return await windowManager.createWindow('welcome.html', {
+      width: 900,
+      height: 700,
+      resizable: false,
+      maximizable: false,
+      minimizable: false
+    });
+    
+    // FOURTH: Otherwise, show welcome window with Node.js setup step
+    logger.info('⚙️ Node.js setup required, showing welcome window');
+    return await windowManager.createWindow('welcome.html', {
+      width: 900,
+      height: 700,
+      resizable: false,
+      maximizable: false,
+      minimizable: false
+    });
+    
+  } catch (error) {
+    logger.error('❌ Failed to create initial window:', error);
     throw error;
   }
 }
@@ -177,8 +284,8 @@ function setupAppEventHandlers() {
       // Initialize services
       await initializeServices();
       
-      // Create main window
-      await createMainWindow();
+      // Create initial window (main or node-setup based on detection)
+      await createInitialWindow();
       
       // Initialize process tracking
       await initializeProcessTracking();

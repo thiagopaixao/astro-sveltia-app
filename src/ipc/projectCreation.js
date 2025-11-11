@@ -21,12 +21,14 @@ class ProjectCreationHandler {
    * @param {Object} dependencies - Dependency injection container
    * @param {Object} dependencies.logger - Logger instance
    * @param {Object} dependencies.databaseManager - Database manager instance
+   * @param {Object} dependencies.nodeDetectionService - Node.js detection service
    */
-  constructor({ logger, databaseManager }) {
+  constructor({ logger, databaseManager, nodeDetectionService }) {
     this.logger = logger;
     this.databaseManager = databaseManager;
+    this.nodeDetectionService = nodeDetectionService;
     this.gitOps = new GitOperations({ logger });
-    this.processManager = new ProcessManager({ logger });
+    this.processManager = new ProcessManager({ logger, nodeDetectionService });
   }
 
   /**

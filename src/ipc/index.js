@@ -13,6 +13,7 @@ const { BrowserHandlers } = require('./browser.js');
 const { SystemHandlers } = require('./system.js');
 const { FileHandlers } = require('./file.js');
 const { ProjectCreationHandler } = require('./projectCreation.js');
+const { registerNodeDetectionHandlers } = require('./nodeDetection.js');
 
 /**
  * IPC Registry - Central point for registering all IPC handlers
@@ -39,6 +40,13 @@ class IpcRegistry {
       ...dependencies,
       processManager: this.projectCreationHandler.processManager
     });
+    
+    // Register Node.js detection handlers
+    if (dependencies.nodeDetectionService) {
+      registerNodeDetectionHandlers(dependencies);
+    } else {
+      this.logger.warn('⚠️ NodeDetectionService not provided, skipping Node.js detection handlers');
+    }
     
     this.isRegistered = false;
   }
@@ -137,7 +145,8 @@ class IpcRegistry {
       { name: 'Git', handlers: this.gitHandlers },
       { name: 'Browser', handlers: this.browserHandlers },
       { name: 'File', handlers: this.fileHandlers },
-      { name: 'Project Creation', handlers: this.projectCreationHandler }
+      { name: 'Project Creation', handlers: this.projectCreationHandler },
+      { name: 'Node Detection', handlers: null }
     ];
 
     handlerCategories.forEach(category => {
@@ -175,7 +184,7 @@ class IpcRegistry {
   getHandlerStats() {
     return {
       isRegistered: this.isRegistered,
-      handlerCount: 7,
+      handlerCount: 8,
       categories: [
         'System',
         'Authentication', 
@@ -183,7 +192,8 @@ class IpcRegistry {
         'Git',
         'Browser',
         'File',
-        'Project Creation'
+        'Project Creation',
+        'Node Detection'
       ],
       registrationTime: new Date().toISOString()
     };
