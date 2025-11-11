@@ -262,6 +262,91 @@ class ProjectCreationHandler {
   }
 
   /**
+   * Open project with preview branch check and dev server only
+   * @param {number} projectId - Project ID
+   * @param {string} projectPath - Project path
+   * @param {string} repoUrl - Repository URL
+   * @param {string} repoFolderName - Repository folder name
+   * @returns {Promise<Object>} Result object
+   */
+  async openProjectOnlyPreviewAndServer(projectId, projectPath, repoUrl, repoFolderName) {
+    try {
+      this.logger.info('Opening project with preview and server only:', { projectId, projectPath, repoUrl, repoFolderName });
+      
+      const sendOutput = (output) => {
+        // Send to all windows for synchronization
+        const { BrowserWindow } = require('electron');
+        BrowserWindow.getAllWindows().forEach(window => {
+          if (!window.isDestroyed()) {
+            window.webContents.send('command-output', output);
+          }
+        });
+      };
+
+      const sendServerOutput = (output) => {
+        // Send to all windows for synchronization
+        const { BrowserWindow } = require('electron');
+        BrowserWindow.getAllWindows().forEach(window => {
+          if (!window.isDestroyed()) {
+            window.webContents.send('server-output', output);
+          }
+        });
+      };
+
+      const sendStatus = (status) => {
+        // Send to all windows for synchronization
+        const { BrowserWindow } = require('electron');
+        BrowserWindow.getAllWindows().forEach(window => {
+          if (!window.isDestroyed()) {
+            window.webContents.send('command-status', status);
+          }
+        });
+      };
+
+      // For empty folders that were cloned directly, repoFolderName might be folder name itself
+      let repoDirPath;
+      if (repoFolderName && fs.existsSync(path.join(projectPath, repoFolderName))) {
+        repoDirPath = path.join(projectPath, repoFolderName);
+      } else {
+        // Check if projectPath itself is repo (for empty folder case)
+        if (fs.existsSync(path.join(projectPath, '.git'))) {
+          repoDirPath = projectPath;
+        } else {
+          throw new Error('Repository folder not found');
+        }
+      }
+
+      // Step 2: ensure preview branch exists and checkout it
+      sendOutput('🔍 Verificando e garantindo branch preview...\n');
+      try {
+        await this.gitOps.gitEnsurePreviewBranch(repoDirPath, sendOutput);
+        sendOutput('✅ Branch preview verificada.\n');
+        sendStatus('success');
+      } catch (error) {
+        sendOutput(`❌ Erro ao verificar branch preview: ${error.message}\n`);
+        // Don't throw error for checkout failure, continue with setup
+        sendStatus('success');
+      }
+      await this.processManager.delay(3000);
+
+      // Step 5: npm run dev (keep in background)
+      sendServerOutput('🚀 Executando servidor do modo dev...\n');
+      try {
+        await this.processManager.startDevServer(repoDirPath, projectId, sendServerOutput, sendStatus);
+      } catch (error) {
+        sendOutput(`❌ Erro ao iniciar servidor de desenvolvimento: ${error.message}\n`);
+        throw error;
+      }
+
+      return { success: true };
+      
+    } catch (error) {
+      this.logger.error('Error in open-project-only-preview-and-server handler:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Reopen existing project
    * @param {number} projectId - Project ID
    * @param {string} projectPath - Project path
@@ -401,6 +486,18 @@ class ProjectCreationHandler {
     });
 
     /**
+     * Open project with preview branch check and dev server only
+     */
+    ipcMain.handle('open-project-only-preview-and-server', async (event, projectId, projectPath, repoUrl, repoFolderName) => {
+      try {
+        return await this.openProjectOnlyPreviewAndServer(projectId, projectPath, repoUrl, repoFolderName);
+      } catch (error) {
+        this.logger.error('Error in open-project-only-preview-and-server handler:', error);
+        throw error;
+      }
+    });
+
+    /**
      * Reopen existing project
      */
     ipcMain.handle('reopen-project', async (event, projectId, projectPath, repoUrl, repoFolderName) => {
@@ -436,6 +533,7 @@ class ProjectCreationHandler {
     this.logger.info('🚀 Unregistering project creation IPC handlers');
     
     ipcMain.removeHandler('start-project-creation');
+    ipcMain.removeHandler('open-project-only-preview-and-server');
     ipcMain.removeHandler('reopen-project');
     ipcMain.removeHandler('cancel-project-creation');
 

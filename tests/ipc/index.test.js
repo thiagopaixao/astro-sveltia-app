@@ -186,9 +186,11 @@ describe('IpcRegistry Unit Tests', () => {
     it('should handle invalid dependencies gracefully', async () => {
       const { IpcRegistry } = await import('../../src/ipc/index.js');
       
+      // Test with missing logger - should throw when trying to use it
       expect(() => {
-        new IpcRegistry({});
-      }).not.toThrow();
+        const registry = new IpcRegistry({ logger: undefined });
+        registry.logger.info('test');
+      }).toThrow();
     });
   });
 
