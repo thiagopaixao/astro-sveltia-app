@@ -12,7 +12,7 @@ const path = require('path');
 const git = require('isomorphic-git');
 const http = require('isomorphic-git/http/node');
 const keytar = require('keytar');
-const GITHUB_CONFIG = require('../../github-config.js');
+const { GITHUB_CONFIG } = require('../config/github-config.js');
 
 /**
  * @typedef {Object} ProjectDetails

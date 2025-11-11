@@ -3,12 +3,12 @@ productName: Documental
 directories:
   output: dist
 files:
-  - main.js
-  - preload.js
-  - renderer/**/*
-  - github-config.js
-  - package.json
-  - node_modules/**/*
+  - "main.js"
+  - "preload.js"
+  - "renderer/**/*"
+  - "src/**/*"
+  - "package.json"
+  - "node_modules/**/*"
   - "!node_modules/.cache/**"
   - "!node_modules/.bin/**"
   - "!node_modules/**/test/**"

@@ -8,7 +8,7 @@
 
 const { ipcMain } = require('electron');
 const keytar = require('keytar');
-const GITHUB_CONFIG = require('../../github-config');
+const { GITHUB_CONFIG } = require('../config/github-config.js');
 
 /**
  * @typedef {Object} AuthResult

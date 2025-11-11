@@ -13,7 +13,7 @@ const keytar = require('keytar');
 
 // Dynamic import for ESM module - will be loaded when needed
 let Octokit = null;
-const GITHUB_CONFIG = require('../../github-config.js');
+const { GITHUB_CONFIG } = require('../config/github-config.js');
 
 /**
  * Git Operations Class
