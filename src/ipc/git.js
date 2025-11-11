@@ -148,91 +148,61 @@ class GitHandlers {
         }
       }
       
-    // List all references (branches) - use filesystem approach as primary since git.listRefs() is unreliable
-    let refs = [];
+    // Use the simple and reliable git.listBranches() approach (same as working GitOperations.js)
+    let branches = [];
+    let remoteBranches = [];
+    
     try {
-      // Primary method: read branches directly from filesystem (most reliable)
-      const headsDir = require('path').join(gitDir, 'refs', 'heads');
-      if (fs.existsSync(headsDir)) {
-        const branchFiles = fs.readdirSync(headsDir);
-        const localRefs = branchFiles.map(file => `refs/heads/${file}`);
-        refs.push(...localRefs);
-        this.logger.info(`📋 Found ${localRefs.length} local branches: ${branchFiles.join(', ')}`);
+      // Get all branches (local and remote) using isomorphic-git's built-in method
+      const allBranches = await git.listBranches({ fs, dir: projectPath });
+      
+      // Separate local and remote branches (same logic as GitOperations.js)
+      const localBranches = allBranches.filter(branch => !branch.includes('origin/'));
+      const remoteBranchNames = allBranches.filter(branch => branch.includes('origin/'))
+        .map(branch => branch.replace('origin/', ''));
+      
+      // Create branch objects for local branches
+      for (const branchName of localBranches) {
+        branches.push({
+          name: branchName,
+          isCurrent: branchName === currentBranch,
+          isRemote: false
+        });
       }
       
-      // Remote branches
-      const remotesDir = require('path').join(gitDir, 'refs', 'remotes');
-      if (fs.existsSync(remotesDir)) {
-        const remoteRefs = [];
-        
-        // Recursively find all remote refs
-        const findRemoteRefs = (dir, prefix = '') => {
-          const items = fs.readdirSync(dir);
-          for (const item of items) {
-            const itemPath = require('path').join(dir, item);
-            const stat = fs.statSync(itemPath);
-            
-            if (stat.isDirectory()) {
-              findRemoteRefs(itemPath, `${prefix}${item}/`);
-            } else if (stat.isFile() && item !== 'HEAD') {
-              remoteRefs.push(`refs/remotes/${prefix}${item}`);
-            }
-          }
-        };
-        
-        findRemoteRefs(remotesDir);
-        refs.push(...remoteRefs);
-        this.logger.info(`📋 Found ${remoteRefs.length} remote branches`);
-      }
-      
-      // Try git.listRefs() as backup and merge results if it works
-      try {
-        const gitRefs = await git.listRefs({ fs, dir: projectPath });
-        if (gitRefs.length > 0) {
-          // Merge with filesystem results, avoiding duplicates
-          const allRefs = [...new Set([...refs, ...gitRefs])];
-          refs = allRefs;
-          this.logger.info(`📋 Merged with git.listRefs() results: ${refs.length} total refs`);
-        }
-      } catch (gitListError) {
-        this.logger.warn(`⚠️ git.listRefs() failed, using filesystem only: ${gitListError.message}`);
-      }
-    } catch (error) {
-      this.logger.error(`❌ Failed to list branches via filesystem: ${error.message}`);
-      refs = [];
-    }
-      
-      const branches = [];
-      const remoteBranches = [];
-      
-      for (const ref of refs) {
-        if (ref.startsWith('refs/heads/')) {
-          const branchName = ref.replace('refs/heads/', '');
-          branches.push({
+      // Create branch objects for remote branches
+      for (const branchName of remoteBranchNames) {
+        if (branchName !== 'HEAD') {
+          remoteBranches.push({
             name: branchName,
-            isCurrent: branchName === currentBranch,
-            isRemote: false
+            isCurrent: false,
+            isRemote: true
           });
-        } else if (ref.startsWith('refs/remotes/')) {
-          // Handle different remote formats
-          let branchName = ref;
-          if (ref.startsWith('refs/remotes/origin/')) {
-            branchName = ref.replace('refs/remotes/origin/', '');
-          } else {
-            // Extract branch name after remote name
-            const parts = ref.split('/');
-            branchName = parts.slice(2).join('/');
-          }
-          
-          if (branchName !== 'HEAD') {
-            remoteBranches.push({
+        }
+      }
+      
+    } catch (error) {
+      this.logger.error(`Failed to list branches via git.listBranches(): ${error.message}`);
+      
+      // Fallback to filesystem method if git.listBranches() fails
+      this.logger.warn('Falling back to filesystem method...');
+      try {
+        const headsDir = require('path').join(gitDir, 'refs', 'heads');
+        if (fs.existsSync(headsDir)) {
+          const branchFiles = fs.readdirSync(headsDir);
+          for (const branchName of branchFiles) {
+            branches.push({
               name: branchName,
-              isCurrent: false,
-              isRemote: true
+              isCurrent: branchName === currentBranch,
+              isRemote: false
             });
           }
+          this.logger.info(`Fallback: Found ${branchFiles.length} local branches via filesystem`);
         }
+      } catch (fallbackError) {
+        this.logger.error(`Filesystem fallback also failed: ${fallbackError.message}`);
       }
+    }
       
       const result = {
         branches: branches.concat(remoteBranches),

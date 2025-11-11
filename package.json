@@ -32,8 +32,8 @@
     "development"
   ],
   "author": {
-    "name": "Documental Team",
-    "email": "team@documental.com"
+    "name": "Thiago Paixao",
+    "email": "tap@thiagopaixao.com"
   },
   "license": "ISC",
   "type": "commonjs",
@@ -132,7 +132,7 @@
         "Comment": "Ambiente de documentação centralizado com integração Git",
         "Keywords": "documentation;git;github;development;"
       },
-      "maintainer": "Documental Team <team@documental.com>"
+      "maintainer": "Thiago Paixão <tap@thiagopaixao.com>"
     },
     "win": {
       "target": [
