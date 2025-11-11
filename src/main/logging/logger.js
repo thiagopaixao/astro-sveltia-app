@@ -48,6 +48,14 @@ class Logger {
     };
     
     this.logBuffer = [];
+    // Store references to the truly original console methods before any overrides
+    this.trulyOriginalConsole = {
+      log: console.log.bind(console),
+      error: console.error.bind(console),
+      warn: console.warn.bind(console),
+      info: console.info.bind(console)
+    };
+    
     this.originalConsole = {
       log: console.log,
       error: console.error,
@@ -87,7 +95,7 @@ class Logger {
     
     // Call original console method for info level
     if (level === 'info') {
-      this.originalConsole.log(...args);
+      this.trulyOriginalConsole.log(...args);
     }
   }
 
@@ -114,16 +122,22 @@ class Logger {
    * @returns {void}
    */
   overrideConsoleMethods() {
-    console.log = (...args) => this.addToLog('info', ...args);
+    console.log = (...args) => {
+      this.addToLog('info', ...args);
+      this.trulyOriginalConsole.log(...args);
+    };
     console.error = (...args) => {
       this.addToLog('error', ...args);
-      this.originalConsole.error(...args);
+      this.trulyOriginalConsole.error(...args);
     };
     console.warn = (...args) => {
       this.addToLog('warn', ...args);
-      this.originalConsole.warn(...args);
+      this.trulyOriginalConsole.warn(...args);
     };
-    console.info = (...args) => this.addToLog('info', ...args);
+    console.info = (...args) => {
+      this.addToLog('info', ...args);
+      this.trulyOriginalConsole.info(...args);
+    };
   }
 
   /**
@@ -197,7 +211,7 @@ class Logger {
    */
   info(...args) {
     this.addToLog('info', ...args);
-    this.originalConsole.info(...args);
+    // Don't call console to avoid duplicates - just add to buffer
   }
 
   /**
@@ -207,7 +221,7 @@ class Logger {
    */
   error(...args) {
     this.addToLog('error', ...args);
-    this.originalConsole.error(...args);
+    // Don't call console to avoid duplicates - just add to buffer
   }
 
   /**
@@ -217,7 +231,7 @@ class Logger {
    */
   warn(...args) {
     this.addToLog('warn', ...args);
-    this.originalConsole.warn(...args);
+    // Don't call console to avoid duplicates - just add to buffer
   }
 
   /**
@@ -227,7 +241,7 @@ class Logger {
    */
   debug(...args) {
     this.addToLog('debug', ...args);
-    this.originalConsole.log(...args);
+    // Don't call console to avoid duplicates - just add to buffer
   }
 }
 

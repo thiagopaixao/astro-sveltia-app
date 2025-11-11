@@ -458,25 +458,50 @@ clearingCache: false,
     },
     async loadBranches() {
         const projectId = sessionStorage.getItem('currentProjectId');
+        console.log('🔍 loadBranches called');
+        console.log('- projectId from sessionStorage:', projectId);
+        console.log('- window.electronAPI available:', !!window.electronAPI);
+        console.log('- listBranches method available:', !!(window.electronAPI && window.electronAPI.listBranches));
+        
         if (!projectId) {
-            console.warn('No project ID found, cannot load branches');
+            console.warn('❌ No project ID found, cannot load branches');
             return;
         }
         
         this.branchLoading = true;
         try {
+            console.log('📡 Calling window.electronAPI.listBranches with projectId:', projectId);
             const result = await window.electronAPI.listBranches(projectId);
+            console.log('📥 Raw result from IPC:', result);
+            
             if (result.success) {
-                this.branches = result.branches;
+                console.log('✅ IPC call successful');
+                console.log('- result.branches:', result.branches);
+                console.log('- result.currentBranch:', result.currentBranch);
+                
+                this.branches = result.branches || [];
                 this.currentBranch = result.currentBranch;
                 this.selectedBranch = result.currentBranch;
-                console.log('✅ Branches loaded:', { branches: this.branches, current: this.currentBranch });
+                
+                console.log('✅ Branches loaded:', { 
+                    branches: this.branches, 
+                    current: this.currentBranch,
+                    branchesCount: this.branches.length 
+                });
+                
+                // Debug template rendering
+                console.log('🎨 Template will render branches:', this.branches.map(b => ({ 
+                    name: b.name, 
+                    value: b.name, 
+                    text: b.name 
+                })));
             } else {
                 console.error('❌ Error loading branches:', result.error);
                 alert('Erro ao carregar branches: ' + result.error);
             }
         } catch (error) {
             console.error('❌ Error loading branches:', error);
+            console.error('Stack:', error.stack);
             alert('Erro ao carregar branches: ' + error.message);
         } finally {
             this.branchLoading = false;
@@ -689,12 +714,19 @@ clearingCache: false,
     },
     async init() { // Make init an async function
         console.log('🚀 INIT STARTED - Renderer initialization beginning');
+        
+        // Check project context immediately
+        const currentProjectId = sessionStorage.getItem('currentProjectId');
+        console.log('🔍 PROJECT CONTEXT CHECK - currentProjectId:', currentProjectId);
+        console.log('🔍 All sessionStorage keys:', Object.keys(sessionStorage));
+        
         console.log('📊 Initial Alpine.js state:', {
             initialLoading: this.initialLoading,
             contentLoading: this.contentLoading,
             contentReady: this.contentReady,
             viewerLoaded: this.viewerLoaded,
-            editorLoaded: this.editorLoaded
+            editorLoaded: this.editorLoaded,
+            currentProjectId: currentProjectId
         });
         
         // Check if this window was opened with state parameters
@@ -942,7 +974,9 @@ clearingCache: false,
 
         // Watch for branch modal opening to reload branches
         this.$watch('branchModalOpen', (isOpen) => {
+            console.log('🔍 branchModalOpen changed to:', isOpen);
             if (isOpen) {
+                console.log('📋 Branch modal opened, calling loadBranches()');
                 this.loadBranches();
             }
         });
@@ -1726,10 +1760,20 @@ Publicando...
 <label class="text-sm font-medium text-text-dark">Mudar para branch</label>
 <div class="mt-1 relative">
 <select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch" :disabled="branchLoading">
-<template x-for="branch in branches" :key="branch">
-<option :value="branch" x-text="branch"></option>
+<template x-for="branch in branches" :key="branch.name">
+<option :value="branch.name" x-text="branch.name"></option>
 </template>
 </select>
+<!-- Debug info -->
+<div x-show="branches.length === 0" class="text-red-500 text-sm mt-2">
+🔍 DEBUG: No branches found. 
+<br>branches.length: <span x-text="branches.length"></span>
+<br>branchLoading: <span x-text="branchLoading"></span>
+<br>currentBranch: <span x-text="currentBranch"></span>
+</div>
+<div x-show="branches.length > 0" class="text-green-500 text-sm mt-2">
+✅ DEBUG: Found <span x-text="branches.length"></span> branches
+</div>
 <div x-show="branchLoading" class="absolute inset-0 flex items-center justify-center bg-background-dark bg-opacity-75">
 <div class="w-4 h-4 border-2 border-gray-600 border-t-primary rounded-full animate-spin"></div>
 </div>

@@ -9,6 +9,7 @@
 const git = require('isomorphic-git');
 const fs = require('fs');
 const path = require('path');
+const keytar = require('keytar');
 
 // Dynamic import for ESM module - will be loaded when needed
 let Octokit = null;

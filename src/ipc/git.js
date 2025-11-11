@@ -70,13 +70,31 @@ class GitHandlers {
           return;
         }
 
+        this.logger.info(`📂 Project data: ID=${row.id}, projectPath=${row.projectPath}, repoFolderName=${row.repoFolderName}`);
+
         // Validate required fields
-        if (!row.projectPath || !row.repoFolderName) {
-          reject(new Error(`Invalid project data: projectPath=${row.projectPath}, repoFolderName=${row.repoFolderName}`));
+        if (!row.projectPath) {
+          reject(new Error(`Invalid project data: projectPath is missing`));
           return;
         }
 
-        const projectPath = path.join(row.projectPath, row.repoFolderName);
+        // Handle different path scenarios
+        let projectPath;
+        if (row.repoFolderName) {
+          // Check if projectPath already includes repoFolderName
+          if (row.projectPath.endsWith(row.repoFolderName)) {
+            projectPath = row.projectPath;
+            this.logger.info(`📂 Project path already includes repo folder: ${projectPath}`);
+          } else {
+            projectPath = path.join(row.projectPath, row.repoFolderName);
+            this.logger.info(`📂 Constructed project path: ${projectPath}`);
+          }
+        } else {
+          projectPath = row.projectPath;
+          this.logger.info(`📂 Using project path directly: ${projectPath}`);
+        }
+
+        this.logger.info(`✅ Final project path: ${projectPath}`);
         resolve(projectPath);
       });
     });
@@ -89,11 +107,100 @@ class GitHandlers {
    */
   async gitListBranches(projectPath) {
     try {
-      // Get current branch
-      const currentBranch = await git.currentBranch({ fs: require('fs'), dir: projectPath });
+      this.logger.info(`🔍 Listing branches for repository: ${projectPath}`);
       
-      // List all references (branches)
-      const refs = await git.listRefs({ fs: require('fs'), dir: projectPath });
+      // Check if directory exists and is a git repository
+      const fs = require('fs');
+      if (!fs.existsSync(projectPath)) {
+        throw new Error(`Repository path does not exist: ${projectPath}`);
+      }
+      
+      const gitDir = require('path').join(projectPath, '.git');
+      if (!fs.existsSync(gitDir)) {
+        throw new Error(`Not a git repository: ${projectPath}`);
+      }
+      
+      // Get current branch with fallback
+      let currentBranch = 'master'; // Default fallback
+      try {
+        currentBranch = await git.currentBranch({ fs, dir: projectPath });
+        this.logger.info(`✅ Current branch detected: ${currentBranch}`);
+      } catch (error) {
+        this.logger.warn(`⚠️ Could not determine current branch, using fallback: ${error.message}`);
+        // Try to get branches directly as fallback
+        try {
+          const refs = await git.listRefs({ fs, dir: projectPath });
+          const headRef = refs.find(ref => ref === 'HEAD');
+          if (headRef) {
+            // Try to resolve HEAD manually
+            const headFile = require('path').join(gitDir, 'HEAD');
+            if (fs.existsSync(headFile)) {
+              const headContent = fs.readFileSync(headFile, 'utf8');
+              const match = headContent.match(/ref: refs\/heads\/(.+)/);
+              if (match) {
+                currentBranch = match[1].trim();
+                this.logger.info(`✅ Current branch resolved from HEAD file: ${currentBranch}`);
+              }
+            }
+          }
+        } catch (fallbackError) {
+          this.logger.warn(`⚠️ Could not resolve current branch from HEAD: ${fallbackError.message}`);
+        }
+      }
+      
+    // List all references (branches) - use filesystem approach as primary since git.listRefs() is unreliable
+    let refs = [];
+    try {
+      // Primary method: read branches directly from filesystem (most reliable)
+      const headsDir = require('path').join(gitDir, 'refs', 'heads');
+      if (fs.existsSync(headsDir)) {
+        const branchFiles = fs.readdirSync(headsDir);
+        const localRefs = branchFiles.map(file => `refs/heads/${file}`);
+        refs.push(...localRefs);
+        this.logger.info(`📋 Found ${localRefs.length} local branches: ${branchFiles.join(', ')}`);
+      }
+      
+      // Remote branches
+      const remotesDir = require('path').join(gitDir, 'refs', 'remotes');
+      if (fs.existsSync(remotesDir)) {
+        const remoteRefs = [];
+        
+        // Recursively find all remote refs
+        const findRemoteRefs = (dir, prefix = '') => {
+          const items = fs.readdirSync(dir);
+          for (const item of items) {
+            const itemPath = require('path').join(dir, item);
+            const stat = fs.statSync(itemPath);
+            
+            if (stat.isDirectory()) {
+              findRemoteRefs(itemPath, `${prefix}${item}/`);
+            } else if (stat.isFile() && item !== 'HEAD') {
+              remoteRefs.push(`refs/remotes/${prefix}${item}`);
+            }
+          }
+        };
+        
+        findRemoteRefs(remotesDir);
+        refs.push(...remoteRefs);
+        this.logger.info(`📋 Found ${remoteRefs.length} remote branches`);
+      }
+      
+      // Try git.listRefs() as backup and merge results if it works
+      try {
+        const gitRefs = await git.listRefs({ fs, dir: projectPath });
+        if (gitRefs.length > 0) {
+          // Merge with filesystem results, avoiding duplicates
+          const allRefs = [...new Set([...refs, ...gitRefs])];
+          refs = allRefs;
+          this.logger.info(`📋 Merged with git.listRefs() results: ${refs.length} total refs`);
+        }
+      } catch (gitListError) {
+        this.logger.warn(`⚠️ git.listRefs() failed, using filesystem only: ${gitListError.message}`);
+      }
+    } catch (error) {
+      this.logger.error(`❌ Failed to list branches via filesystem: ${error.message}`);
+      refs = [];
+    }
       
       const branches = [];
       const remoteBranches = [];
@@ -107,7 +214,16 @@ class GitHandlers {
             isRemote: false
           });
         } else if (ref.startsWith('refs/remotes/')) {
-          const branchName = ref.replace('refs/remotes/origin/', '');
+          // Handle different remote formats
+          let branchName = ref;
+          if (ref.startsWith('refs/remotes/origin/')) {
+            branchName = ref.replace('refs/remotes/origin/', '');
+          } else {
+            // Extract branch name after remote name
+            const parts = ref.split('/');
+            branchName = parts.slice(2).join('/');
+          }
+          
           if (branchName !== 'HEAD') {
             remoteBranches.push({
               name: branchName,
@@ -118,12 +234,15 @@ class GitHandlers {
         }
       }
       
-      return {
+      const result = {
         branches: branches.concat(remoteBranches),
         current: currentBranch
       };
+      
+      this.logger.info(`✅ Branch listing complete: ${result.branches.length} branches, current: ${result.current}`);
+      return result;
     } catch (error) {
-      this.logger.error('Error listing branches:', error);
+      this.logger.error('❌ Error listing branches:', error);
       throw error;
     }
   }
@@ -157,15 +276,58 @@ class GitHandlers {
    */
   async gitCheckoutBranch(projectPath, branchName) {
     try {
-      await git.checkout({
-        fs: require('fs'),
-        dir: projectPath,
-        ref: branchName
-      });
+      this.logger.info(`🔄 Checking out branch '${branchName}' in ${projectPath}`);
       
-      this.logger.info(`Checked out branch: ${branchName}`);
+      const fs = require('fs');
+      
+      // First, try to checkout directly (for local branches)
+      try {
+        await git.checkout({
+          fs,
+          dir: projectPath,
+          ref: branchName
+        });
+        
+        this.logger.info(`✅ Successfully checked out branch: ${branchName}`);
+        return;
+      } catch (directError) {
+        this.logger.warn(`⚠️ Direct checkout failed: ${directError.message}`);
+        
+        // If direct checkout fails, try to list branches and check if it exists
+        try {
+          const branchResult = await this.gitListBranches(projectPath);
+          const localBranch = branchResult.branches.find(b => b.name === branchName && !b.isRemote);
+          const remoteBranch = branchResult.branches.find(b => b.name === branchName && b.isRemote);
+          
+          if (localBranch) {
+            // Local branch exists but checkout failed, try again with force
+            this.logger.info(`📂 Local branch exists, trying checkout again...`);
+            await git.checkout({
+              fs,
+              dir: projectPath,
+              ref: branchName
+            });
+            this.logger.info(`✅ Successfully checked out local branch: ${branchName}`);
+          } else if (remoteBranch) {
+            // Remote branch exists, create local tracking branch
+            this.logger.info(`📥 Remote branch exists, creating local tracking branch...`);
+            await git.branch({
+              fs,
+              dir: projectPath,
+              ref: branchName,
+              checkout: true
+            });
+            this.logger.info(`✅ Created and checked out local branch: ${branchName}`);
+          } else {
+            throw new Error(`Branch '${branchName}' not found locally or remotely`);
+          }
+        } catch (branchError) {
+          this.logger.error(`❌ Branch checkout failed: ${branchError.message}`);
+          throw branchError;
+        }
+      }
     } catch (error) {
-      this.logger.error('Error checking out branch:', error);
+      this.logger.error('❌ Error checking out branch:', error);
       throw error;
     }
   }
@@ -192,17 +354,38 @@ class GitHandlers {
    */
   async gitGetRepositoryInfo(projectPath) {
     try {
-      const currentBranch = await git.currentBranch({ fs: require('fs'), dir: projectPath });
+      this.logger.info(`📋 Getting repository information from ${projectPath}`);
+      
+      const fs = require('fs');
+      
+      // Get current branch with fallback
+      let currentBranch = 'master';
+      try {
+        currentBranch = await git.currentBranch({ fs, dir: projectPath });
+        this.logger.info(`✅ Current branch: ${currentBranch}`);
+      } catch (error) {
+        this.logger.warn(`⚠️ Could not get current branch: ${error.message}`);
+        // Use gitListBranches to get current branch
+        try {
+          const branchResult = await this.gitListBranches(projectPath);
+          currentBranch = branchResult.current || 'master';
+          this.logger.info(`✅ Using fallback current branch: ${currentBranch}`);
+        } catch (fallbackError) {
+          this.logger.warn(`⚠️ Could not get branches for fallback: ${fallbackError.message}`);
+        }
+      }
       
       // Get branches
-      const { branches, remoteBranches } = await this.gitListBranches(projectPath);
-      const localBranches = branches.filter(b => !b.isRemote);
+      const branchResult = await this.gitListBranches(projectPath);
+      const allBranches = branchResult.branches || [];
+      const localBranches = allBranches.filter(b => !b.isRemote);
+      const remoteBranches = allBranches.filter(b => b.isRemote);
       
       // Get remote URL
       let remoteUrl = null;
       try {
         remoteUrl = await git.getConfig({
-          fs: require('fs'),
+          fs,
           dir: projectPath,
           path: 'remote.origin.url'
         });
@@ -210,12 +393,70 @@ class GitHandlers {
         this.logger.debug('Could not get remote URL:', error.message);
       }
       
+      // Get last commit information
+      let lastCommit = {
+        hash: '',
+        message: '',
+        date: null
+      };
+      
+      try {
+        // Try to get commit OID for the current branch HEAD
+        const commitOid = await git.resolveRef({
+          fs,
+          dir: projectPath,
+          ref: currentBranch
+        });
+        
+        if (commitOid) {
+          // Get commit details
+          const commit = await git.readCommit({
+            fs,
+            dir: projectPath,
+            oid: commitOid
+          });
+          
+          if (commit && commit.commit) {
+            lastCommit.hash = commitOid.substring(0, 7); // Short hash (7 characters)
+            lastCommit.message = commit.commit.message.split('\n')[0]; // First line only
+            lastCommit.date = new Date(commit.commit.author.timestamp * 1000);
+          }
+        }
+      } catch (error) {
+        this.logger.warn('Could not get last commit info:', error.message);
+        // Try fallback to get commit from HEAD directly
+        try {
+          const headOid = await git.resolveRef({
+            fs,
+            dir: projectPath,
+            ref: 'HEAD'
+          });
+          
+          if (headOid) {
+            const commit = await git.readCommit({
+              fs,
+              dir: projectPath,
+              oid: headOid
+            });
+            
+            if (commit && commit.commit) {
+              lastCommit.hash = headOid.substring(0, 7);
+              lastCommit.message = commit.commit.message.split('\n')[0];
+              lastCommit.date = new Date(commit.commit.author.timestamp * 1000);
+              this.logger.info(`✅ Got commit info from HEAD: ${lastCommit.hash}`);
+            }
+          }
+        } catch (headError) {
+          this.logger.warn('Could not get commit from HEAD either:', headError.message);
+        }
+      }
+      
       // Get status
       let isClean = true;
       let status = null;
       try {
         const statusResult = await git.statusMatrix({
-          fs: require('fs'),
+          fs,
           dir: projectPath
         });
         
@@ -226,14 +467,19 @@ class GitHandlers {
         this.logger.debug('Could not get status:', error.message);
       }
       
-      return {
+      const result = {
+        workingDirectory: projectPath,
+        remoteUrl: remoteUrl || '',
+        lastCommit: lastCommit,
         currentBranch,
         branches: localBranches.map(b => b.name),
         remoteBranches: remoteBranches.map(b => b.name),
-        remoteUrl,
         isClean,
         status
       };
+      
+      this.logger.info(`✅ Repository info retrieved:`, result);
+      return result;
     } catch (error) {
       this.logger.error('Error getting repository info:', error);
       throw error;
@@ -346,7 +592,7 @@ class GitHandlers {
       try {
         const projectPath = await this.getProjectPath(projectId);
         const result = await this.gitListBranches(projectPath);
-        return { success: true, ...result };
+        return { success: true, branches: result.branches, currentBranch: result.current };
       } catch (error) {
         this.logger.error('Error in git:list-branches handler:', error);
         return { success: false, error: error.message };
