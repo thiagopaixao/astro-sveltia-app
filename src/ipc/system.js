@@ -10,6 +10,7 @@ const { ipcMain, app, dialog, shell, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { PlatformService } = require('../main/services/platform/PlatformService.js');
 
 /**
  * @typedef {Object} NodeDetectionResult
@@ -41,10 +42,11 @@ class SystemHandlers {
    * @param {Object} dependencies.windowManager - Window manager instance
    * @param {Object} [dependencies.processManager] - Process manager instance
    */
-  constructor({ logger, windowManager, processManager }) {
+constructor({ logger, windowManager, processManager }) {
     this.logger = logger;
     this.windowManager = windowManager;
     this.processManager = processManager;
+    this.platformService = new PlatformService({ logger });
     this.installationProgress = {
       stage: 'idle',
       progress: 0,
@@ -56,12 +58,18 @@ class SystemHandlers {
    * Get home directory
    * @returns {Promise<string>} Home directory path
    */
-  async getHomeDirectory() {
+async getHomeDirectory() {
     try {
-      return app.getPath('home');
+      // Use platform service for cross-platform home directory
+      return this.platformService.getHomeDirectory();
     } catch (error) {
       this.logger.error('Error getting home directory:', error);
-      return os.homedir();
+      // Fallback to Electron's method
+      try {
+        return app.getPath('home');
+      } catch (fallbackError) {
+        return os.homedir();
+      }
     }
   }
 
@@ -91,35 +99,24 @@ class SystemHandlers {
    * Detect Node.js installation
    * @returns {Promise<NodeDetectionResult>} Node.js detection result
    */
-  async detectNodeInstallation() {
+async detectNodeInstallation() {
     try {
       const { spawn } = require('child_process');
       const path = require('path');
-      const os = require('os');
       
-      return new Promise((resolve) => {
-        const isWindows = os.platform() === 'win32';
-        const nodeCmd = isWindows ? 'node.exe' : 'node';
-        const npmCmd = isWindows ? 'npm.cmd' : 'npm';
+      return new Promise(async (resolve) => {
+        // Use platform service to get executable names
+        const nodeCmd = await this.platformService.adapter.getExecutableName('node');
+        const npmCmd = await this.platformService.adapter.getExecutableName('npm');
         
-        // Try to find Node.js in common locations
+        // Use platform service to get common paths
+        const commonPaths = await this.platformService.adapter.getCommonPaths('node');
         const possiblePaths = [
-          // System PATH
+          // System PATH (try executable name directly)
           nodeCmd,
-          // Common installation paths
-          isWindows ? [
-            'C:\\Program Files\\nodejs\\node.exe',
-            'C:\\Program Files (x86)\\nodejs\\node.exe',
-            path.join(os.homedir(), 'AppData\\Local\\Programs\\nodejs\\node.exe'),
-            path.join(os.homedir(), 'nvm\\current\\node.exe')
-          ] : [
-            '/usr/local/bin/node',
-            '/usr/bin/node',
-            path.join(os.homedir(), '.nvm', 'current', 'bin', 'node'),
-            '/opt/homebrew/bin/node',
-            path.join(os.homedir(), '.linuxbrew', 'bin', 'node')
-          ]
-        ].flat();
+          // Common installation paths from platform service
+          ...commonPaths
+        ];
 
         let nodePath = null;
         let npmPath = null;
@@ -345,22 +342,26 @@ class SystemHandlers {
    * Detect NVM installation
    * @returns {Promise<Object>} NVM detection result
    */
-  async detectNVM() {
-    return new Promise((resolve) => {
+async detectNVM() {
+    return new Promise(async (resolve) => {
       const { exec } = require('child_process');
       
-      // Check for NVM in common locations
+      // Use platform service to get home directory and common paths
+      const homeDir = this.platformService.getHomeDirectory();
       const nvmPaths = [
         process.env.NVM_DIR,
-        path.join(os.homedir(), '.nvm'),
-        path.join(os.homedir(), '.config', 'nvm'),
-        '/usr/local/nvm'
+        this.platformService.joinPath(homeDir, '.nvm'),
+        this.platformService.joinPath(homeDir, '.config', 'nvm'),
+        this.platformService.adapter.isWindows() ? null : '/usr/local/nvm' // Only on Unix systems
       ].filter(Boolean);
       
       this.logger.info('🔍 Checking NVM paths:', nvmPaths);
       
+      // Use platform service to get appropriate which command
+      const whichCommand = await this.platformService.adapter.getShellCommand('which');
+      
       // Check if NVM command exists
-      exec('which nvm', (error, stdout, stderr) => {
+      exec(`${whichCommand} nvm`, (error, stdout, stderr) => {
         if (!error && stdout.trim()) {
           resolve({
             exists: true,
@@ -395,13 +396,22 @@ class SystemHandlers {
    * Install NVM
    * @returns {Promise<void>}
    */
-  async installNVM() {
+async installNVM() {
     return new Promise((resolve, reject) => {
       const { exec } = require('child_process');
       
       this.logger.info('📦 Installing NVM...');
       
-      // Download and install NVM script
+      // Use platform service to get home directory and check platform
+      const homeDir = this.platformService.getHomeDirectory();
+      const nvmDir = this.platformService.joinPath(homeDir, '.nvm');
+      
+      // Download and install NVM script (Unix-only)
+      if (this.platformService.adapter.isWindows()) {
+        reject(new Error('NVM is not supported on Windows. Use NVM for Windows instead.'));
+        return;
+      }
+      
       const installScript = `
         curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
       `;
@@ -409,7 +419,7 @@ class SystemHandlers {
       exec(installScript, {
         env: {
           ...process.env,
-          NVM_DIR: path.join(os.homedir(), '.nvm')
+          NVM_DIR: nvmDir
         }
       }, (error, stdout, stderr) => {
         if (error) {
@@ -429,13 +439,23 @@ class SystemHandlers {
    * @param {string} version - Node.js version to install
    * @returns {Promise<Object>} Installation result
    */
-  async installNodeVersion(version) {
+async installNodeVersion(version) {
     return new Promise((resolve, reject) => {
       const { exec } = require('child_process');
       
       this.logger.info(`📦 Installing Node.js v${version}...`);
       
-      const nvmScript = path.join(os.homedir(), '.nvm', 'nvm.sh');
+      // Use platform service for cross-platform paths
+      const homeDir = this.platformService.getHomeDirectory();
+      const nvmDir = this.platformService.joinPath(homeDir, '.nvm');
+      const nvmScript = this.platformService.joinPath(nvmDir, 'nvm.sh');
+      
+      // Check if NVM is available (Unix only)
+      if (this.platformService.adapter.isWindows()) {
+        reject(new Error('NVM-based Node.js installation is not supported on Windows.'));
+        return;
+      }
+      
       const installCommand = `
         source ${nvmScript} && nvm install ${version} && nvm use ${version} && nvm alias default ${version}
       `;
@@ -443,8 +463,8 @@ class SystemHandlers {
       exec(installCommand, {
         env: {
           ...process.env,
-          NVM_DIR: path.join(os.homedir(), '.nvm'),
-          PATH: `${path.join(os.homedir(), '.nvm')}:${process.env.PATH}`
+          NVM_DIR: nvmDir,
+          PATH: `${nvmDir}:${process.env.PATH}`
         },
         shell: '/bin/bash'
       }, (error, stdout, stderr) => {
@@ -464,16 +484,26 @@ class SystemHandlers {
    * Configure Node.js environment
    * @returns {Promise<void>}
    */
-  async configureNodeEnvironment() {
+async configureNodeEnvironment() {
     return new Promise((resolve, reject) => {
       const { exec } = require('child_process');
       
       this.logger.info('⚙️ Configuring Node.js environment...');
       
+      // Use platform service for cross-platform paths
+      const homeDir = this.platformService.getHomeDirectory();
+      
+      // Skip NVM configuration on Windows
+      if (this.platformService.adapter.isWindows()) {
+        this.logger.info('⚠️ NVM configuration skipped on Windows');
+        resolve();
+        return;
+      }
+      
       // Update shell profiles
-      const bashrcPath = path.join(os.homedir(), '.bashrc');
-      const zshrcPath = path.join(os.homedir(), '.zshrc');
-      const profilePath = path.join(os.homedir(), '.profile');
+      const bashrcPath = this.platformService.joinPath(homeDir, '.bashrc');
+      const zshrcPath = this.platformService.joinPath(homeDir, '.zshrc');
+      const profilePath = this.platformService.joinPath(homeDir, '.profile');
       
       const nvmConfig = `
 # NVM configuration
@@ -489,15 +519,7 @@ export NVM_DIR="$HOME/.nvm"
           if (!bashrcContent.includes('NVM configuration')) {
             fs.appendFileSync(bashrcPath, nvmConfig);
           }
-        }
-        
-        // Add to .zshrc if not already present
-        if (fs.existsSync(zshrcPath)) {
-          const zshrcContent = fs.readFileSync(zshrcPath, 'utf8');
-          if (!zshrcContent.includes('NVM configuration')) {
-            fs.appendFileSync(zshrcPath, nvmConfig);
-          }
-        }
+}
         
         // Add to .profile if not already present
         if (fs.existsSync(profilePath)) {
@@ -521,13 +543,38 @@ export NVM_DIR="$HOME/.nvm"
    * Verify Node.js installation
    * @returns {Promise<Object>} Verification result
    */
-  async verifyNodeInstallation() {
+async verifyNodeInstallation() {
     return new Promise((resolve) => {
       const { exec } = require('child_process');
       
       this.logger.info('🔍 Verifying Node.js installation...');
       
-      const nvmScript = path.join(os.homedir(), '.nvm', 'nvm.sh');
+      // Use platform service for cross-platform paths
+      const homeDir = this.platformService.getHomeDirectory();
+      const nvmDir = this.platformService.joinPath(homeDir, '.nvm');
+      const nvmScript = this.platformService.joinPath(nvmDir, 'nvm.sh');
+      
+      // Skip NVM verification on Windows
+      if (this.platformService.adapter.isWindows()) {
+        // For Windows, just verify node and npm are available
+        const nodeCmd = this.platformService.adapter.getExecutableName('node');
+        const npmCmd = this.platformService.adapter.getExecutableName('npm');
+        
+        exec(`${nodeCmd} --version && ${npmCmd} --version`, (error, stdout, stderr) => {
+          if (error) {
+            resolve({ success: false, error: error.message });
+          } else {
+            const lines = stdout.trim().split('\n');
+            resolve({
+              success: true,
+              version: lines[0] || 'unknown',
+              npmVersion: lines[1] || 'unknown'
+            });
+          }
+        });
+        return;
+      }
+      
       const verifyCommand = `
         source ${nvmScript} && node --version && npm --version && which node && which npm
       `;
@@ -535,8 +582,8 @@ export NVM_DIR="$HOME/.nvm"
       exec(verifyCommand, {
         env: {
           ...process.env,
-          NVM_DIR: path.join(os.homedir(), '.nvm'),
-          PATH: `${path.join(os.homedir(), '.nvm')}:${process.env.PATH}`
+          NVM_DIR: nvmDir,
+          PATH: `${nvmDir}:${process.env.PATH}`
         },
         shell: '/bin/bash'
       }, (error, stdout, stderr) => {

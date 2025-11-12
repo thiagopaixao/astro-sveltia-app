@@ -10,6 +10,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+const { PlatformService } = require('./platform/PlatformService.js');
 
 // Lazy load NodeBinaryDownloader only when needed
 let NodeBinaryDownloader = null;
@@ -57,9 +58,10 @@ class NodeDetectionService {
    * @param {Object} dependencies.logger - Logger instance
    * @param {Object} dependencies.database - Database instance
    */
-  constructor({ logger, database }) {
+constructor({ logger, database }) {
     this.logger = logger;
     this.database = database;
+    this.platformService = new PlatformService({ logger });
     this.resourcesPath = app.isPackaged 
       ? path.join(process.resourcesPath, 'resources') 
       : path.join(__dirname, '../../../resources');
@@ -199,17 +201,17 @@ class NodeDetectionService {
    * Find system Node.js executable
    * @returns {Promise<string|null>} Path to Node.js executable
    */
-  async findSystemNodeExecutable() {
+async findSystemNodeExecutable() {
     const { execa } = require('execa');
     
     try {
-      // Try 'which' or 'where' command first
-      const command = process.platform === 'win32' ? 'where' : 'which';
-      const { stdout } = await execa(command, ['node']);
+      // Use platform service to get the appropriate which/where command
+      const whichCommand = await this.platformService.adapter.getShellCommand('which');
+      const { stdout } = await execa(whichCommand, ['node']);
       return stdout.split('\n')[0].trim();
     } catch {
-      // Fallback to common paths
-      const commonPaths = this.getCommonNodePaths();
+      // Fallback to common paths using platform service
+      const commonPaths = await this.platformService.adapter.getCommonPaths('node');
       
       for (const nodePath of commonPaths) {
         if (fs.existsSync(nodePath)) {
@@ -225,27 +227,9 @@ class NodeDetectionService {
    * Get common Node.js installation paths
    * @returns {string[]} Array of common paths
    */
-  getCommonNodePaths() {
-    const platform = process.platform;
-    const homeDir = require('os').homedir();
-    
-    if (platform === 'win32') {
-      return [
-        path.join('C:', 'Program Files', 'nodejs', 'node.exe'),
-        path.join('C:', 'Program Files (x86)', 'nodejs', 'node.exe'),
-        path.join(homeDir, 'AppData', 'Local', 'Programs', 'nodejs', 'node.exe'),
-        path.join(homeDir, 'nvm', 'current', 'node.exe')
-      ];
-    } else {
-      return [
-        '/usr/local/bin/node',
-        '/usr/bin/node',
-        '/opt/homebrew/bin/node',
-        path.join(homeDir, '.nvm', 'current', 'bin', 'node'),
-        path.join(homeDir, '.local', 'bin', 'node'),
-        path.join(homeDir, '.node', 'current', 'bin', 'node')
-      ];
-    }
+async getCommonNodePaths() {
+    // Delegate to platform service for cross-platform path handling
+    return await this.platformService.adapter.getCommonPaths('node');
   }
 
   /**
@@ -331,18 +315,18 @@ class NodeDetectionService {
 
   /**
    * Get embedded Node.js executable path
-   * @returns {string} Path to embedded Node.js
+   * @returns {Promise<string>} Path to embedded Node.js
    */
-  getEmbeddedNodePath() {
-    const platform = process.platform;
-    const arch = process.arch;
+  async getEmbeddedNodePath() {
+    const platform = this.platformService.adapter.getPlatform();
+    const arch = this.platformService.adapter.getArchitecture();
     
     const binaryPath = path.join(
       this.resourcesPath, 
       platform, 
       arch, 
       'bin',
-      platform === 'win32' ? 'node.exe' : 'node'
+      await this.platformService.adapter.getExecutableName('node')
     );
     
     return binaryPath;
@@ -352,16 +336,16 @@ class NodeDetectionService {
    * Get embedded NPM executable path
    * @returns {string} Path to embedded NPM
    */
-  getEmbeddedNpmPath() {
-    const platform = process.platform;
-    const arch = process.arch;
+async getEmbeddedNpmPath() {
+    const platform = this.platformService.adapter.getPlatform();
+    const arch = this.platformService.adapter.getArchitecture();
     
     const binaryPath = path.join(
       this.resourcesPath, 
       platform, 
       arch, 
       'bin',
-      platform === 'win32' ? 'npm.cmd' : 'npm'
+      await this.platformService.adapter.getExecutableName('npm')
     );
     
     return binaryPath;
@@ -371,16 +355,16 @@ class NodeDetectionService {
    * Get embedded NPX executable path
    * @returns {string} Path to embedded NPX
    */
-  getEmbeddedNpxPath() {
-    const platform = process.platform;
-    const arch = process.arch;
+async getEmbeddedNpxPath() {
+    const platform = this.platformService.adapter.getPlatform();
+    const arch = this.platformService.adapter.getArchitecture();
     
     const binaryPath = path.join(
       this.resourcesPath, 
       platform, 
       arch, 
       'bin',
-      platform === 'win32' ? 'npx.cmd' : 'npx'
+      await this.platformService.adapter.getExecutableName('npx')
     );
     
     return binaryPath;
@@ -457,33 +441,33 @@ class NodeDetectionService {
    * Get the appropriate NPM executable based on user preference
    * @returns {Promise<string>} Path to NPM executable
    */
-  async getPreferredNpmExecutable() {
+async getPreferredNpmExecutable() {
     const nodePath = await this.getPreferredNodeExecutable();
     const isEmbedded = nodePath.includes('resources');
     
     if (isEmbedded) {
-      return this.getEmbeddedNpmPath();
+      return await this.getEmbeddedNpmPath();
     }
     
     // For system Node.js, try to find npm in the same directory
     const nodeDir = path.dirname(nodePath);
-    const npmPath = path.join(nodeDir, process.platform === 'win32' ? 'npm.cmd' : 'npm');
+    const npmPath = path.join(nodeDir, await this.platformService.adapter.getExecutableName('npm'));
     
     if (fs.existsSync(npmPath)) {
       return npmPath;
     }
     
-    // Fallback to system npm
-    return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    // Fallback to system npm using platform service
+    return await this.platformService.adapter.getExecutableName('npm');
   }
 
   /**
    * Ensure embedded Node.js binaries are available
    * @returns {Promise<boolean>} Whether binaries are available
    */
-  async ensureEmbeddedBinaries() {
-    const platform = process.platform;
-    const arch = process.arch;
+async ensureEmbeddedBinaries() {
+    const platform = this.platformService.adapter.getPlatform();
+    const arch = this.platformService.adapter.getArchitecture();
     
     if (!this.downloader) {
       // Can't download binaries in packaged app without downloader

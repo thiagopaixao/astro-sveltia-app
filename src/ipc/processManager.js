@@ -7,17 +7,15 @@
 'use strict';
 
 const { spawn } = require('child_process');
+const { execa } = require('execa');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const { PlatformService } = require('../main/services/platform/PlatformService');
 
 // Global state
 let globalDevServerUrl = null;
 let activeProcesses = {};
 let activeDocumentalProcesses = {};
-
-// File paths
-const PROCESSES_FILE = path.join(os.homedir(), '.documental-processes.json');
 
 /**
  * Process Manager Class
@@ -32,6 +30,8 @@ class ProcessManager {
   constructor({ logger, nodeDetectionService }) {
     this.logger = logger;
     this.nodeDetectionService = nodeDetectionService;
+    this.platformService = new PlatformService({ logger });
+    this.processesFile = this.platformService.joinPath(this.platformService.getHomeDirectory(), '.documental-processes.json');
     this.loadDocumentalProcesses();
   }
 
@@ -41,8 +41,8 @@ class ProcessManager {
    */
   loadDocumentalProcesses() {
     try {
-      if (fs.existsSync(PROCESSES_FILE)) {
-        const data = fs.readFileSync(PROCESSES_FILE, 'utf8');
+      if (fs.existsSync(this.processesFile)) {
+        const data = fs.readFileSync(this.processesFile, 'utf8');
         const processes = JSON.parse(data);
         this.logger.info('Loaded Documental processes from file:', Object.keys(processes));
         activeDocumentalProcesses = processes;
@@ -59,7 +59,7 @@ class ProcessManager {
    */
   saveDocumentalProcesses() {
     try {
-      fs.writeFileSync(PROCESSES_FILE, JSON.stringify(activeDocumentalProcesses, null, 2));
+      fs.writeFileSync(this.processesFile, JSON.stringify(activeDocumentalProcesses, null, 2));
       this.logger.info('Saved Documental processes to file');
     } catch (error) {
       this.logger.error('Error saving Documental processes:', error);
@@ -201,10 +201,10 @@ class ProcessManager {
 
             // Set environment variables for embedded Node.js
             const embeddedNodePath = path.dirname(detection.embeddedNode.path);
-            env.PATH = `${embeddedNodePath}:${env.PATH}`;
+            env.PATH = this.platformService.joinPath(embeddedNodePath, '') + this.platformService.getPathSeparator() + env.PATH;
             
             // Ensure Node.js can find its modules
-            env.NODE_PATH = path.join(path.dirname(detection.embeddedNode.path), '..', 'lib', 'node_modules');
+            env.NODE_PATH = this.platformService.joinPath(path.dirname(detection.embeddedNode.path), '..', 'lib', 'node_modules');
           }
         } catch (error) {
           this.logger.warn(`⚠️ Could not detect embedded Node.js for ${command}, falling back to system: ${error.message}`);
@@ -213,35 +213,47 @@ class ProcessManager {
 
       this.logger.info(`🚀 Executing: ${actualCommand} ${args.join(' ')} in ${cwd}`);
 
-      const child = spawn(actualCommand, args, { 
-        cwd, 
-        env,
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-      
-      activeProcesses[processId] = child;
+      try {
+        const subprocess = execa(actualCommand, args, {
+          cwd,
+          env,
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        activeProcesses[processId] = subprocess;
 
-      child.stdout.on('data', (data) => {
-        sendOutput(data.toString());
-      });
+        // Handle stdout
+        subprocess.stdout?.on('data', (data) => {
+          sendOutput(data.toString());
+        });
 
-      child.stderr.on('data', (data) => {
-        sendOutput(data.toString());
-      });
+        // Handle stderr
+        subprocess.stderr?.on('data', (data) => {
+          sendOutput(data.toString());
+        });
 
-      child.on('close', (code) => {
+        // Handle process completion
+        subprocess.on('exit', (code, signal) => {
+          delete activeProcesses[processId];
+          if (code === 0) {
+            resolve();
+          } else if (signal) {
+            reject(`Command killed with signal: ${signal}`);
+          } else {
+            reject(`Command failed with code ${code}`);
+          }
+        });
+
+        // Handle process errors
+        subprocess.on('error', (err) => {
+          delete activeProcesses[processId];
+          reject(`Failed to start command: ${err.message}`);
+        });
+
+      } catch (error) {
         delete activeProcesses[processId];
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(`Command failed with code ${code}`);
-        }
-      });
-
-      child.on('error', (err) => {
-        delete activeProcesses[processId];
-        reject(`Failed to start command: ${err.message}`);
-      });
+        reject(`Failed to execute command: ${error.message}`);
+      }
     });
   }
 
@@ -325,10 +337,10 @@ class ProcessManager {
 
           // Set environment variables for embedded Node.js
           const embeddedNodePath = path.dirname(detection.embeddedNode.path);
-          env.PATH = `${embeddedNodePath}:${env.PATH}`;
+          env.PATH = this.platformService.joinPath(embeddedNodePath, '') + this.platformService.getPathSeparator() + env.PATH;
           
           // Ensure Node.js can find its modules
-          env.NODE_PATH = path.join(path.dirname(detection.embeddedNode.path), '..', 'lib', 'node_modules');
+          env.NODE_PATH = this.platformService.joinPath(path.dirname(detection.embeddedNode.path), '..', 'lib', 'node_modules');
         }
       } catch (error) {
         this.logger.warn(`⚠️ Could not detect embedded Node.js for dev server, falling back to system: ${error.message}`);
@@ -336,47 +348,61 @@ class ProcessManager {
 
       this.logger.info(`🚀 Starting dev server: ${actualNpmPath} run dev in ${repoDirPath}`);
 
-      devProcess = spawn(actualNpmPath, ['run', 'dev'], { 
-        cwd: repoDirPath,
-        env,
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-      
-      processStarted = true;
-      activeProcesses[`dev-${projectId}`] = devProcess;
-
-      // Track this as a Documental process
-      if (devProcess.pid) {
-        this.addDocumentalProcess(devProcess.pid, {
-          port: null, // Will be updated when URL is detected
-          projectId: projectId,
-          command: 'npm run dev',
-          cwd: repoDirPath
+      try {
+        devProcess = execa(actualNpmPath, ['run', 'dev'], { 
+          cwd: repoDirPath,
+          env,
+          stdio: ['pipe', 'pipe', 'pipe']
         });
-      }
+        
+        processStarted = true;
+        activeProcesses[`dev-${projectId}`] = devProcess;
 
-      devProcess.stdout.on('data', processOutput);
-      devProcess.stderr.on('data', processOutput);
-
-      devProcess.on('close', (code) => {
-        delete activeProcesses[`dev-${projectId}`];
+        // Track this as a Documental process
         if (devProcess.pid) {
-          this.removeDocumentalProcess(devProcess.pid);
+          this.addDocumentalProcess(devProcess.pid, {
+            port: null, // Will be updated when URL is detected
+            projectId: projectId,
+            command: 'npm run dev',
+            cwd: repoDirPath
+          });
         }
-        if (code !== 0) {
-          sendServerOutput(`Development server exited with code ${code}\n`);
+
+        // Handle stdout
+        devProcess.stdout?.on('data', processOutput);
+        
+        // Handle stderr
+        devProcess.stderr?.on('data', processOutput);
+
+        // Handle process completion
+        devProcess.on('exit', (code, signal) => {
+          delete activeProcesses[`dev-${projectId}`];
+          if (devProcess.pid) {
+            this.removeDocumentalProcess(devProcess.pid);
+          }
+          if (signal) {
+            sendServerOutput(`Development server killed with signal: ${signal}\n`);
+            sendStatus('failure');
+          } else if (code !== 0) {
+            sendServerOutput(`Development server exited with code ${code}\n`);
+            sendStatus('failure');
+          }
+        });
+
+        // Handle process errors
+        devProcess.on('error', (err) => {
+          delete activeProcesses[`dev-${projectId}`];
+          if (devProcess.pid) {
+            this.removeDocumentalProcess(devProcess.pid);
+          }
+          sendServerOutput(`Failed to start development server: ${err.message}\n`);
           sendStatus('failure');
-        }
-      });
+        });
 
-      devProcess.on('error', (err) => {
-        delete activeProcesses[`dev-${projectId}`];
-        if (devProcess.pid) {
-          this.removeDocumentalProcess(devProcess.pid);
-        }
-        sendServerOutput(`Failed to start development server: ${err.message}\n`);
+      } catch (error) {
+        sendServerOutput(`Failed to start development server: ${error.message}\n`);
         sendStatus('failure');
-      });
+      }
 
     } catch (error) {
       sendServerOutput(`Failed to start development server: ${error.message}\n`);
@@ -434,13 +460,16 @@ class ProcessManager {
     try {
       const process = activeProcesses[processId];
       if (process && !process.killed) {
-        process.kill('SIGTERM');
+        // Use platform-specific signals
+        const signal = this.platformService.getTerminationSignal();
+        process.kill(signal);
         process.killed = true;
         
         // Wait a bit and force kill if still running
         setTimeout(() => {
           if (!process.killed) {
-            process.kill('SIGKILL');
+            const forceSignal = this.platformService.getForceTerminationSignal();
+            process.kill(forceSignal);
           }
         }, 5000);
         

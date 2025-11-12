@@ -8,6 +8,7 @@
 
 const sqlite3 = require('sqlite3').verbose();
 const { getLogger } = require('../logging/logger.js');
+const { PlatformService } = require('../services/platform/PlatformService');
 
 /**
  * @typedef {Object} DatabaseConfig
@@ -26,6 +27,7 @@ class DatabaseManager {
   constructor(config = {}) {
     this.logger = getLogger('Database');
     this.db = null;
+    this.platformService = new PlatformService({ logger: this.logger });
     this.config = {
       userDataPath: config.userDataPath,
       dbName: config.dbName || 'documental.db'
@@ -38,7 +40,7 @@ class DatabaseManager {
    */
   async initialize() {
     return new Promise((resolve, reject) => {
-      const dbPath = require('path').join(this.config.userDataPath, this.config.dbName);
+      const dbPath = this.platformService.joinPath(this.config.userDataPath, this.config.dbName);
       
       this.logger.info(`🗄️ Initializing database at: ${dbPath}`);
       
