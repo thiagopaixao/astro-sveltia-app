@@ -79,6 +79,8 @@ class NodeDetectionService {
     this.logger.info(`📦 App packaged: ${app.isPackaged}`);
     this.logger.info(`🖥️ Platform: ${process.platform}-${process.arch}`);
     
+
+    
     try {
       // 1. Check system Node.js
       const systemNode = await this.checkSystemNode();
