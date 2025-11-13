@@ -91,10 +91,6 @@
                     </div>
 
                     <div class="flex gap-4 justify-center">
-                        <button @click="completeSetup()" class="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
-                            <span>Pular Configuração</span>
-                            <span class="material-symbols-outlined">skip_next</span>
-                        </button>
                         <button @click="nextStep()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
                             <span>Começar Configuração</span>
                             <span class="material-symbols-outlined">arrow_forward</span>
@@ -200,13 +196,19 @@
                             </div>
                         </div>
 
-                        <button @click="nextStep()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 mx-auto">
-                            <span>Continuar</span>
-                            <span class="material-symbols-outlined">arrow_forward</span>
-                        </button>
+                        <div class="flex gap-4 justify-center">
+                            <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                                <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
+                                Voltar
+                            </button>
+                            <button @click="nextStep()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                <span>Continuar</span>
+                                <span class="material-symbols-outlined">arrow_forward</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="flex gap-4 justify-center mt-8">
+                    <div x-show="!isAuthenticated" class="flex gap-4 justify-center mt-8">
                         <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
                             <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
                             Voltar
