@@ -6,23 +6,31 @@
     <title>Documental - Bem-vindo</title>
 <link href="./assets/css/fonts.css" rel="stylesheet"/>
 <link href="./assets/css/compiled.css" rel="stylesheet"/>
-<style>
-        .welcome-gradient {
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
         }
-        .fade-in {
-            animation: fadeIn 0.6s ease-in-out;
+        
+        body {
+            min-height: 100vh;
+            position: relative;
         }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .slide-in {
-            animation: slideIn 0.8s ease-out;
-        }
-        @keyframes slideIn {
-            from { transform: translateX(-100%); }
-            to { transform: translateX(0); }
+        
+        .fixed-footer {
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 9999 !important;
+            background-color: #1f2937 !important;
+            border-top: 2px solid #374151 !important;
+            padding: 1rem 2rem !important;
+            margin: 0 !important;
+            width: 100vw !important;
+            box-sizing: border-box !important;
         }
     </style>
     <script>
@@ -48,14 +56,14 @@
 
 </head>
 <body class="bg-background-dark text-text-dark antialiased">
-    <div class="flex flex-col h-screen" x-data="welcomeWizard">
+    <div class="flex flex-col min-h-screen" x-data="welcomeWizard">
         <!-- Progress Bar -->
         <div class="h-1 bg-gray-800">
             <div class="h-full welcome-gradient transition-all duration-500" :style="`width: ${(currentStep / totalSteps) * 100}%`"></div>
         </div>
 
         <!-- Main Content -->
-        <div class="flex-1 flex items-center justify-center p-8">
+        <div class="flex-1 flex items-center justify-center p-8 pb-24">
             <div class="w-full max-w-4xl">
                 
                 <!-- Step 1: Welcome -->
@@ -382,18 +390,19 @@
             </div>
         </div>
 
-        <!-- Footer -->
-        <div class="p-4 border-t border-gray-800 bg-surface-dark">
-            <div class="flex justify-between items-center max-w-4xl mx-auto">
-                <p class="text-sm text-muted-dark">
-                    Passo <span x-text="currentStep"></span> de <span x-text="totalSteps"></span>
-                </p>
-                <div class="flex gap-2">
-                    <template x-for="step in totalSteps" :key="step">
-                        <div class="w-2 h-2 rounded-full transition-colors duration-300" 
-                             :class="step <= currentStep ? 'bg-primary' : 'bg-gray-600'"></div>
-                    </template>
-                </div>
+    </div>
+
+    <!-- Footer - Fixed at bottom -->
+    <div class="fixed-footer" x-data="welcomeWizard">
+        <div class="flex justify-between items-center w-full">
+            <p class="text-sm text-muted-dark">
+                Passo <span x-text="currentStep"></span> de <span x-text="totalSteps"></span>
+            </p>
+            <div class="flex gap-2">
+                <template x-for="step in totalSteps" :key="step">
+                    <div class="w-3 h-3 rounded-full transition-colors duration-300" 
+                         :class="step <= currentStep ? 'bg-primary' : 'bg-gray-600'"></div>
+                </template>
             </div>
         </div>
     </div>
