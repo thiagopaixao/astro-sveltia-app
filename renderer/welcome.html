@@ -4,20 +4,9 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Documental - Bem-vindo</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <style type="text/tailwindcss">
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .material-symbols-outlined {
-            font-variation-settings:
-            'FILL' 0,
-            'wght' 400,
-            'GRAD' 0,
-            'opsz' 24
-        }
+<link href="./assets/css/fonts.css" rel="stylesheet"/>
+<link href="./assets/css/compiled.css" rel="stylesheet"/>
+<style>
         .welcome-gradient {
             background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
         }
@@ -407,7 +396,7 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="./assets/js/alpine.min.js" defer></script>
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('welcomeWizard', () => ({
