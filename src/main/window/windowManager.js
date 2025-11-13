@@ -85,6 +85,11 @@ class WindowManager {
     
     await window.loadFile(filePath);
 
+    // Maximize window if configured
+    if (windowConfig.maximize) {
+      window.maximize();
+    }
+
     // Show window
     window.show();
 

@@ -179,9 +179,10 @@ async function createInitialWindow() {
       return await windowManager.createWindow('welcome.html', {
         width: 900,
         height: 700,
-        resizable: false,
-        maximizable: false,
-        minimizable: false
+        resizable: true,
+        maximizable: true,
+        minimizable: true,
+        maximize: true
       });
     }
     
@@ -199,9 +200,10 @@ async function createInitialWindow() {
     return await windowManager.createWindow('welcome.html', {
       width: 900,
       height: 700,
-      resizable: false,
-      maximizable: false,
-      minimizable: false
+      resizable: true,
+      maximizable: true,
+      minimizable: true,
+      maximize: true
     });
     
     // FOURTH: Otherwise, show welcome window with Node.js setup step
@@ -209,9 +211,10 @@ async function createInitialWindow() {
     return await windowManager.createWindow('welcome.html', {
       width: 900,
       height: 700,
-      resizable: false,
-      maximizable: false,
-      minimizable: false
+      resizable: true,
+      maximizable: true,
+      minimizable: true,
+      maximize: true
     });
     
   } catch (error) {
