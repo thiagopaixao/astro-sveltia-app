@@ -6,7 +6,7 @@
 
 'use strict';
 
-const { ipcMain } = require('electron');
+const { ipcMain, clipboard } = require('electron');
 const keytar = require('keytar');
 const { GITHUB_CONFIG } = require('../config/github-config.js');
 
@@ -301,16 +301,96 @@ class AuthHandlers {
             }
             
             function copyCode() {
-              const code = '${user_code}';
-              navigator.clipboard.writeText(code).then(() => {
-                const btn = document.querySelector('.copy-button');
-                btn.textContent = '✅ Copiado!';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                  btn.textContent = '📋 Copiar Código';
-                  btn.classList.remove('copied');
-                }, 2000);
-              });
+              const codeElement = document.getElementById('userCode');
+              const code = codeElement ? codeElement.textContent : '${user_code}';
+              
+              // Try Electron's clipboard API first (most reliable)
+              if (window.electronAPI && window.electronAPI.writeToClipboard) {
+                window.electronAPI.writeToClipboard(code).then((result) => {
+                  if (result.success) {
+                    const btn = document.querySelector('.copy-button');
+                    btn.textContent = '✅ Copiado!';
+                    btn.classList.add('copied');
+                    setTimeout(() => {
+                      btn.textContent = '📋 Copiar Código';
+                      btn.classList.remove('copied');
+                    }, 2000);
+                  } else {
+                    console.error('Electron clipboard failed:', result.error);
+                    fallbackCopy(code);
+                  }
+                }).catch(err => {
+                  console.error('Electron clipboard error:', err);
+                  fallbackCopy(code);
+                });
+              } else {
+                // Fallback to browser clipboard
+                fallbackCopy(code);
+              }
+            }
+            
+            function fallbackCopy(code) {
+              // Try modern clipboard API
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code).then(() => {
+                  const btn = document.querySelector('.copy-button');
+                  btn.textContent = '✅ Copiado!';
+                  btn.classList.add('copied');
+                  setTimeout(() => {
+                    btn.textContent = '📋 Copiar Código';
+                    btn.classList.remove('copied');
+                  }, 2000);
+                }).catch(err => {
+                  console.error('Modern clipboard failed:', err);
+                  legacyCopy(code);
+                });
+              } else {
+                // Legacy fallback
+                legacyCopy(code);
+              }
+            }
+            
+            function legacyCopy(code) {
+              const textArea = document.createElement('textarea');
+              textArea.value = code;
+              textArea.style.position = 'fixed';
+              textArea.style.left = '-999999px';
+              textArea.style.top = '-999999px';
+              textArea.style.opacity = '0';
+              textArea.setAttribute('readonly', '');
+              document.body.appendChild(textArea);
+              textArea.select();
+              textArea.setSelectionRange(0, 99999); // For mobile devices
+              
+              try {
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                if (successful) {
+                  const btn = document.querySelector('.copy-button');
+                  btn.textContent = '✅ Copiado!';
+                  btn.classList.add('copied');
+                  setTimeout(() => {
+                    btn.textContent = '📋 Copiar Código';
+                    btn.classList.remove('copied');
+                  }, 2000);
+                } else {
+                  showCopyError(code);
+                }
+              } catch (fallbackErr) {
+                document.body.removeChild(textArea);
+                console.error('Legacy copy failed:', fallbackErr);
+                showCopyError(code);
+              }
+            }
+            
+            function showCopyError(code) {
+              console.error('All copy methods failed');
+              // Show the code in a more accessible way
+              const codeDisplay = document.createElement('div');
+              codeDisplay.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2d3748; color: white; padding: 20px; border-radius: 8px; z-index: 10000; font-family: monospace; font-size: 18px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 80%; text-align: center;';
+              codeDisplay.innerHTML = '<div style="margin-bottom: 10px;">❌ Falha ao copiar automaticamente</div><div style="margin-bottom: 10px;">Por favor, copie manualmente:</div><div style="background: #1a202c; padding: 10px; border-radius: 4px; margin: 10px 0; font-weight: bold;">' + code + '</div><button onclick="this.parentElement.remove()" style="background: #4299e1; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Fechar</button>';
+              document.body.appendChild(codeDisplay);
             }
             
             const timer = setInterval(() => {
@@ -802,6 +882,19 @@ class AuthHandlers {
       }
     });
 
+    /**
+     * Handle clipboard write operation
+     */
+    ipcMain.handle('writeToClipboard', async (event, text) => {
+      try {
+        clipboard.writeText(text);
+        return { success: true };
+      } catch (error) {
+        this.logger.error('Error writing to clipboard:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
     this.logger.info('✅ Authentication IPC handlers registered');
   }
 
@@ -853,6 +946,7 @@ class AuthHandlers {
       ipcMain.removeHandler('authenticateWithGitHub');
       ipcMain.removeHandler('continueGitHubAuth');
       ipcMain.removeHandler('logoutFromGitHub');
+      ipcMain.removeHandler('writeToClipboard');
       
       this.logger.info('✅ Authentication IPC handlers unregistered');
     }
