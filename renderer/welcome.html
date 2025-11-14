@@ -121,12 +121,7 @@
                         </div>
                     </div>
 
-                    <div class="flex gap-4 justify-center">
-                        <button @click="nextStep()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
-                            <span>Começar Configuração</span>
-                            <span class="material-symbols-outlined">arrow_forward</span>
-                        </button>
-                    </div>
+
                 </div>
 
                 <!-- Step 2: GitHub Authentication Explanation -->
@@ -167,16 +162,7 @@
                         </div>
                     </div>
 
-                    <div class="flex gap-4 justify-center">
-                        <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
-                            <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
-                            Voltar
-                        </button>
-                        <button @click="nextStep()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
-                            <span>Entendido</span>
-                            <span class="material-symbols-outlined">arrow_forward</span>
-                        </button>
-                    </div>
+
                 </div>
 
                 <!-- Step 3: GitHub Authentication -->
@@ -236,16 +222,7 @@
                             </div>
                         </div>
 
-                        <div class="flex gap-4 justify-center">
-                            <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
-                                <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
-                                Voltar
-                            </button>
-                            <button @click="nextStep()" class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
-                                <span>Continuar</span>
-                                <span class="material-symbols-outlined">arrow_forward</span>
-                            </button>
-                        </div>
+
                     </div>
 
                     <div x-show="!isAuthenticated" class="flex gap-4 justify-center mt-8">
@@ -268,115 +245,6 @@
                         </p>
                     </div>
 
-                    <!-- Error/Success Messages -->
-                    <div x-show="nodeErrorMessage" class="bg-red-900/20 border border-red-700 rounded-lg p-4 max-w-2xl mx-auto mb-6">
-                        <div class="flex items-start gap-3">
-                            <span class="material-symbols-outlined text-red-500 text-xl mt-1">error</span>
-                            <p class="text-sm text-red-400" x-text="nodeErrorMessage"></p>
-                        </div>
-                    </div>
-
-                    <div x-show="nodeSuccessMessage" class="bg-green-900/20 border border-green-700 rounded-lg p-4 max-w-2xl mx-auto mb-6">
-                        <div class="flex items-start gap-3">
-                            <span class="material-symbols-outlined text-green-500 text-xl mt-1">check_circle</span>
-                            <p class="text-sm text-green-400" x-text="nodeSuccessMessage"></p>
-                        </div>
-                    </div>
-
-                    <!-- Detection Status -->
-                    <div x-show="nodeDetectionResult && !nodeChoiceMade" class="bg-surface-dark rounded-lg p-8 max-w-3xl mx-auto mb-6">
-                        <h3 class="font-semibold text-text-dark mb-6 text-left">Status da Detecção</h3>
-                        
-                        <div class="space-y-4 mb-6">
-                            <div class="flex justify-between items-center p-4 bg-gray-800/50 rounded-lg">
-                                <span class="font-medium text-text-dark">Node.js do Sistema:</span>
-                                <div class="flex items-center gap-3">
-                                    <span class="text-sm" x-text="nodeDetectionResult.systemNode ? `v${nodeDetectionResult.systemNode.full} (${nodeDetectionResult.systemNode.path})` : 'Não encontrado'"></span>
-                                    <span class="px-3 py-1 rounded-full text-xs font-medium"
-                                          :class="nodeDetectionResult.systemNode ? 
-                                            (nodeDetectionResult.systemNode.isValid ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400') : 
-                                            'bg-red-900/30 text-red-400'"
-                                          x-text="nodeDetectionResult.systemNode ? 
-                                            (nodeDetectionResult.systemNode.isValid ? 'Válido' : 'Versão antiga') : 
-                                            'Não encontrado'"></span>
-                                </div>
-                            </div>
-
-                            <div class="flex justify-between items-center p-4 bg-gray-800/50 rounded-lg">
-                                <span class="font-medium text-text-dark">Node.js Embarcado:</span>
-                                <div class="flex items-center gap-3">
-                                    <span class="text-sm" x-text="nodeDetectionResult.embeddedNode ? `v${nodeDetectionResult.embeddedNode.full} (embarcado)` : 'Não disponível'"></span>
-                                    <span class="px-3 py-1 rounded-full text-xs font-medium"
-                                          :class="nodeDetectionResult.embeddedNode ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'"
-                                          x-text="nodeDetectionResult.embeddedNode ? 'Disponível' : 'Não disponível'"></span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Recommendation -->
-                        <div class="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-6">
-                            <h4 class="font-semibold text-blue-400 mb-2">Recomendação</h4>
-                            <p class="text-sm text-blue-300" x-text="getRecommendationText()"></p>
-                        </div>
-
-                        <!-- Choices -->
-                        <div x-show="showNodeChoices" class="space-y-4">
-                            <h4 class="font-semibold text-text-dark mb-3">Escolha uma opção:</h4>
-                            
-                            <div class="border border-gray-700 rounded-lg p-4 cursor-pointer transition-all duration-300 hover:border-primary"
-                                 :class="nodeChoice === 'system' ? 'border-primary bg-primary/10' : ''"
-                                 @click="selectNodeChoice('system')">
-                                <div class="flex items-start gap-3">
-                                    <div class="w-5 h-5 rounded-full border-2 border-gray-500 mt-0.5 flex items-center justify-center"
-                                         :class="nodeChoice === 'system' ? 'border-primary bg-primary' : ''">
-                                        <div x-show="nodeChoice === 'system'" class="w-2 h-2 bg-white rounded-full"></div>
-                                    </div>
-                                    <div class="text-left">
-                                        <h5 class="font-medium text-text-dark mb-1">Usar Node.js do Sistema</h5>
-                                        <p class="text-sm text-muted-dark">
-                                            Usar a instalação existente do Node.js no seu sistema. Esta opção é recomendada se você já tem o Node.js 20 LTS ou superior instalado.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="border border-gray-700 rounded-lg p-4 cursor-pointer transition-all duration-300 hover:border-primary"
-                                 :class="nodeChoice === 'embedded' ? 'border-primary bg-primary/10' : ''"
-                                 @click="selectNodeChoice('embedded')">
-                                <div class="flex items-start gap-3">
-                                    <div class="w-5 h-5 rounded-full border-2 border-gray-500 mt-0.5 flex items-center justify-center"
-                                         :class="nodeChoice === 'embedded' ? 'border-primary bg-primary' : ''">
-                                        <div x-show="nodeChoice === 'embedded'" class="w-2 h-2 bg-white rounded-full"></div>
-                                    </div>
-                                    <div class="text-left">
-                                        <h5 class="font-medium text-text-dark mb-1">Usar Node.js Embarcado</h5>
-                                        <p class="text-sm text-muted-dark">
-                                            Usar a versão do Node.js incluída no Documental. Esta opção garante compatibilidade e funciona offline.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Auto-selected embedded (no system node available) -->
-                    <div x-show="nodeDetectionResult && nodeChoiceMade && nodeChoice === 'embedded' && !showNodeChoices" class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-md mx-auto mb-6">
-                        <div class="flex items-center gap-3 mb-4">
-                            <span class="material-symbols-outlined text-green-500">check_circle</span>
-                            <p class="text-sm text-green-400">Node.js embarcado selecionado automaticamente!</p>
-                        </div>
-                        <div class="text-left">
-                            <p class="text-sm text-muted-dark mb-2">Versão:</p>
-                            <div class="bg-surface-dark rounded p-3">
-                                <p class="font-mono text-text-dark" x-text="`Node.js v${nodeDetectionResult.embeddedNode.full}`"></p>
-                                <p class="text-xs text-primary mt-1">
-                                    <span class="material-symbols-outlined text-xs align-middle">auto_awesome</span>
-                                    Instalação embarcada do Documental
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Loading State -->
                     <div x-show="isDetectingNode" class="bg-surface-dark rounded-lg p-6 max-w-md mx-auto mb-6">
                         <div class="flex items-center gap-3">
@@ -387,36 +255,79 @@
                         </div>
                     </div>
 
-                    <!-- Action Buttons -->
+                    <!-- Node.js Status Card -->
+                    <div x-show="nodeDetectionResult && !isDetectingNode" class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-md mx-auto mb-6">
+                        <div class="flex items-center gap-3">
+                            <span class="material-symbols-outlined text-green-500 text-xl">check_circle</span>
+                            <div>
+                                <p class="font-medium text-green-400">Node.js Embarcado Configurado</p>
+                                <p class="font-mono text-text-dark" x-text="`Node.js v${nodeDetectionResult.embeddedNode.full}`"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
                     <div class="flex gap-4 justify-center">
-                        <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
-                            <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
-                            Voltar
-                        </button>
-                        
-                        <button @click="detectNode()" x-show="!nodeDetectionResult && !isDetectingNode" 
-                                class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
-                            <span class="material-symbols-outlined">search</span>
-                            <span>Detectar Node.js</span>
-                        </button>
+                        <!-- Step 1: Welcome -->
+                        <div x-show="currentStep === 1" class="flex gap-4 justify-center w-full">
+                            <button @click="nextStep()" 
+                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                <span>Começar Configuração</span>
+                                <span class="material-symbols-outlined">arrow_forward</span>
+                            </button>
+                        </div>
 
-                        <button @click="saveNodePreference()" x-show="showNodeChoices && nodeChoice && !isSavingNodePreference" 
-                                class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
-                            <span class="material-symbols-outlined">save</span>
-                            <span>Salvar Preferência</span>
-                        </button>
+                        <!-- Step 2: GitHub Authentication Explanation -->
+                        <div x-show="currentStep === 2" class="flex gap-4 justify-center w-full">
+                            <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                                <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
+                                Voltar
+                            </button>
+                            
+                            <button @click="nextStep()" 
+                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                <span>Entendido</span>
+                                <span class="material-symbols-outlined">arrow_forward</span>
+                            </button>
+                        </div>
 
-                        <button @click="completeSetup()" x-show="nodeChoiceMade || (nodeDetectionResult && !showNodeChoices)" 
-                                class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
-                            <span>Finalizar Configuração</span>
-                            <span class="material-symbols-outlined">check</span>
-                        </button>
+                        <!-- Step 3: GitHub Authentication -->
+                        <div x-show="currentStep === 3" class="flex gap-4 justify-center w-full">
+                            <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                                <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
+                                Voltar
+                            </button>
+                            
+                            <button @click="nextStep()" x-show="isAuthenticated" 
+                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                <span>Continuar</span>
+                                <span class="material-symbols-outlined">arrow_forward</span>
+                            </button>
+                        </div>
 
-                        <button @click="detectNode()" x-show="nodeDetectionResult && !isDetectingNode" 
-                                class="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
-                            <span class="material-symbols-outlined align-middle mr-2">refresh</span>
-                            Detectar Novamente
-                        </button>
+                        <!-- Step 4: Node.js Detection -->
+                        <div x-show="currentStep === 4" class="flex gap-4 justify-center w-full">
+                            <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
+                                <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
+                                Voltar
+                            </button>
+                            
+                            <button @click="detectNode()" x-show="!nodeDetectionResult && !isDetectingNode" 
+                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
+                                Verificar Node.js Embarcado
+                            </button>
+
+                            <button @click="completeSetup()" x-show="nodeDetectionResult && nodeDetectionResult.embeddedNode" 
+                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
+                                Finalizar Configuração
+                            </button>
+
+                            <button @click="detectNode()" x-show="nodeDetectionResult && !isDetectingNode" 
+                                    class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
+                                Verificar Novamente
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -454,7 +365,7 @@
                 nodeChoice: null,
                 nodeChoiceMade: false,
                 showNodeChoices: false,
-                isSavingNodePreference: false,
+                isDetectingNode: false,
                 nodeErrorMessage: null,
                 nodeSuccessMessage: null,
                 
@@ -671,84 +582,23 @@
                 },
 
                 determineNodeChoices() {
-                    const hasValidSystem = this.nodeDetectionResult.systemNode && this.nodeDetectionResult.systemNode.isValid;
                     const hasEmbedded = this.nodeDetectionResult.embeddedNode;
                     const needsInstall = this.nodeDetectionResult.recommendation === 'install_required';
 
                     if (needsInstall) {
-                        // Show install guide only
+                        // Show error only
                         this.showNodeChoices = false;
-                        this.nodeChoice = null;
-                    } else if (hasValidSystem && hasEmbedded) {
-                        // Show both choices
-                        this.showNodeChoices = true;
                         this.nodeChoice = null;
                     } else if (hasEmbedded) {
                         // Auto-select embedded
                         this.showNodeChoices = false;
-                        this.selectNodeChoice('embedded');
+                        this.nodeChoice = 'embedded';
+                        this.nodeChoiceMade = true;
                     } else {
                         // Error case
                         this.showNodeChoices = false;
                         this.nodeChoice = null;
                     }
-                },
-
-                selectNodeChoice(choice) {
-                    this.nodeChoice = choice;
-                    this.nodeErrorMessage = null;
-                    this.nodeSuccessMessage = null;
-                },
-
-                async saveNodePreference() {
-                    if (!this.nodeChoice) {
-                        this.nodeErrorMessage = 'Por favor, selecione uma opção.';
-                        return;
-                    }
-
-                    this.isSavingNodePreference = true;
-                    this.nodeErrorMessage = null;
-                    this.nodeSuccessMessage = null;
-
-                    try {
-                        if (window.electronAPI && window.electronAPI.saveNodePreference) {
-                            const result = await window.electronAPI.saveNodePreference(this.nodeChoice);
-                            
-                            if (result.success) {
-                                this.nodeSuccessMessage = 'Preferência salva com sucesso!';
-                                this.nodeChoiceMade = true;
-                                this.showNodeChoices = false;
-                                
-                                // Wait a moment to show success before allowing continuation
-                                setTimeout(() => {
-                                    this.nodeSuccessMessage = null;
-                                }, 2000);
-                            } else {
-                                throw new Error(result.error);
-                            }
-                        } else {
-                            throw new Error('API para salvar preferência não disponível');
-                        }
-                    } catch (error) {
-                        console.error('Error saving Node.js preference:', error);
-                        this.nodeErrorMessage = 'Erro ao salvar preferência: ' + error.message;
-                    } finally {
-                        this.isSavingNodePreference = false;
-                    }
-                },
-
-                getRecommendationText() {
-                    if (!this.nodeDetectionResult) return '';
-                    
-                    const recommendations = {
-                        'use_system_choice': 'Ótimo! Você tem o Node.js 20 LTS ou superior instalado. Escolha usar a versão do sistema ou a versão embarcada.',
-                        'use_embedded_or_install': 'Seu Node.js é muito antigo. Recomendamos usar a versão embarcada ou instalar o Node.js 20 LTS manualmente.',
-                        'use_embedded': 'Nenhuma instalação do Node.js encontrada. Usaremos a versão embarcada incluída no Documental.',
-                        'install_required': 'Nenhuma instalação do Node.js encontrada e não há versão embarcada disponível. Por favor, instale o Node.js 20 LTS.',
-                        'error': 'Ocorreu um erro durante a detecção. Tente novamente.'
-                    };
-
-                    return recommendations[this.nodeDetectionResult.recommendation] || recommendations.error;
                 }
             }));
         });

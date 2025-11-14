@@ -45,48 +45,14 @@ function registerNodeDetectionHandlers({ logger, nodeDetectionService }) {
     }
   });
 
-  /**
-   * Handle Node.js preference save request
-   */
-  ipcMain.handle('node:save-preference', async (event, preference) => {
-    try {
-      logger.info(`💾 IPC: Salvando preferência do Node.js: ${preference}`);
-      
-      await nodeDetection.saveNodePreference(preference);
-      
-      logger.info('✅ IPC: Preferência do Node.js salva com sucesso');
-      return { success: true };
-      
-    } catch (error) {
-      logger.error('❌ IPC: Erro ao salvar preferência do Node.js:', error);
-      return { success: false, error: error.message };
-    }
-  });
+
 
   /**
-   * Handle Node.js preference get request
-   */
-  ipcMain.handle('node:get-preference', async () => {
-    try {
-      logger.info('📋 IPC: Obtendo preferência do Node.js...');
-      
-      const preference = await nodeDetection.getNodePreference();
-      
-      logger.info(`✅ IPC: Preferência do Node.js: ${preference || 'não definida'}`);
-      return { preference };
-      
-    } catch (error) {
-      logger.error('❌ IPC: Erro ao obter preferência do Node.js:', error);
-      return { preference: null, error: error.message };
-    }
-  });
-
-  /**
-   * Handle get preferred Node.js executable request
+   * Handle get embedded Node.js executable request
    */
   ipcMain.handle('node:get-executable', async () => {
     try {
-      logger.info('🎯 IPC: Obtendo executável do Node.js preferido...');
+      logger.info('🎯 IPC: Obtendo executável do Node.js embarcado...');
       
       const nodePath = await nodeDetection.getPreferredNodeExecutable();
       const npmPath = await nodeDetection.getPreferredNpmExecutable();

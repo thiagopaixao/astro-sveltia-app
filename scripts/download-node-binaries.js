@@ -360,18 +360,23 @@ class NodeBinaryDownloader {
         console.log('🔧 Usando fallback para .xz no Windows...');
         const { execSync } = require('child_process');
         try {
-          execSync(`7z x "${tarPath}" -so | tar x -C "${extractPath}" --strip-components=1`, { 
+          // Try using tar on Windows (Git Bash or WSL tar)
+          execSync(`tar -xf "${tarPath}" -C "${extractPath}" --strip-components=1`, { 
             stdio: 'inherit',
             shell: true 
           });
-        } catch (fallbackError) {
-          // If 7z is not available, try using tar with different flags
+        } catch (tarError) {
           try {
-            execSync(`tar -xf "${tarPath}" -C "${extractPath}" --strip-components=1`, { 
-              stdio: 'inherit' 
+            // Try 7z if available
+            execSync(`7z x "${tarPath}" -so | tar x -C "${extractPath}" --strip-components=1`, { 
+              stdio: 'inherit',
+              shell: true 
             });
-          } catch (tarError) {
-            throw new Error(`Não foi possível extrair ${tarPath}: ${fallbackError.message}`);
+          } catch (fallbackError) {
+            console.warn('⚠️ Não foi possível extrair arquivos .xz no Windows. Use Linux/macOS para baixar binários dessas plataformas.');
+            console.warn('⚠️ Para desenvolvimento no Windows, os binários do Linux/macOS não são necessários.');
+            // Don't throw error for cross-platform downloads on Windows
+            return;
           }
         }
       } else {

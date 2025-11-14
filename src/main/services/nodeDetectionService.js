@@ -120,37 +120,7 @@ constructor({ logger, database }) {
     }
   }
 
-  /**
-   * Check system Node.js installation
-   * @returns {Promise<NodeVersionInfo|null>} System Node.js information
-   */
-  async checkSystemNode() {
-    try {
-      const nodePath = await this.findSystemNodeExecutable();
-      if (!nodePath) {
-        return null;
-      }
-      
-      const version = await this.getNodeVersion(nodePath);
-      if (!version) {
-        return null;
-      }
-      
-      const versionInfo = this.parseVersion(version);
-      
-      return {
-        version,
-        path: nodePath,
-        isValid: versionInfo.major >= this.MIN_LTS_VERSION,
-        isLTS: versionInfo.major >= this.MIN_LTS_VERSION, // Simplified LTS check
-        ...versionInfo
-      };
-      
-    } catch (error) {
-      this.logger.warn('⚠️ Erro ao verificar Node.js do sistema:', error.message);
-      return null;
-    }
-  }
+
 
   /**
    * Check embedded Node.js binaries
@@ -198,38 +168,49 @@ constructor({ logger, database }) {
   }
 
   /**
-   * Find system Node.js executable
-   * @returns {Promise<string|null>} Path to Node.js executable
+   * Detect Node.js installation and provide recommendations
+   * @returns {Promise<NodeDetectionResult>} Detection result
    */
-async findSystemNodeExecutable() {
-    const { execa } = require('execa');
+  async detectNodeInstallation() {
+    this.logger.info('🔍 Detectando instalação do Node.js embarcado...');
+    this.logger.info(`📁 Resources path: ${this.resourcesPath}`);
+    this.logger.info(`📦 App packaged: ${app.isPackaged}`);
+    this.logger.info(`🖥️ Platform: ${process.platform}-${process.arch}`);
     
     try {
-      // Use platform service to get the appropriate which/where command
-      const whichCommand = await this.platformService.adapter.getShellCommand('which');
-      const { stdout } = await execa(whichCommand, ['node']);
-      return stdout.split('\n')[0].trim();
-    } catch {
-      // Fallback to common paths using platform service
-      const commonPaths = await this.platformService.adapter.getCommonPaths('node');
+      // 1. Ensure embedded binaries are available
+      await this.ensureEmbeddedBinaries();
       
-      for (const nodePath of commonPaths) {
-        if (fs.existsSync(nodePath)) {
-          return nodePath;
-        }
-      }
+      // 2. Check embedded Node.js only
+      const embeddedNode = await this.checkEmbeddedNode();
       
-      return null;
+      // 3. Generate recommendation based on embedded availability
+      const recommendation = this.generateRecommendation(embeddedNode);
+      
+      const result = {
+        found: !!embeddedNode,
+        systemNode: null, // Always null - we don't use system Node anymore
+        embeddedNode,
+        recommendation
+      };
+      
+      this.logger.info('✅ Detecção do Node.js concluída:', {
+        embeddedNode: embeddedNode?.version || 'not available',
+        recommendation
+      });
+      
+      return result;
+      
+    } catch (error) {
+      this.logger.error('❌ Erro na detecção do Node.js:', error);
+      return {
+        found: false,
+        systemNode: null,
+        embeddedNode: null,
+        recommendation: 'error',
+        error: error.message
+      };
     }
-  }
-
-  /**
-   * Get common Node.js installation paths
-   * @returns {string[]} Array of common paths
-   */
-async getCommonNodePaths() {
-    // Delegate to platform service for cross-platform path handling
-    return await this.platformService.adapter.getCommonPaths('node');
   }
 
   /**
@@ -284,49 +265,36 @@ async getCommonNodePaths() {
   }
 
   /**
-   * Generate recommendation based on available Node.js installations
-   * @param {NodeVersionInfo|null} systemNode - System Node.js info
+   * Generate recommendation based on embedded Node.js availability
    * @param {NodeVersionInfo|null} embeddedNode - Embedded Node.js info
    * @returns {string} Recommendation
    */
-  generateRecommendation(systemNode, embeddedNode) {
-    // If system Node.js is valid and meets requirements
-    if (systemNode && systemNode.isValid) {
-      return 'use_system_choice';
-    }
-    
-    // If system Node.js is invalid but embedded is available
-    if (systemNode && !systemNode.isValid && embeddedNode) {
-      return 'use_embedded_or_install';
-    }
-    
-    // If only embedded is available
-    if (embeddedNode && !systemNode) {
+  generateRecommendation(embeddedNode) {
+    // If embedded is available
+    if (embeddedNode) {
       return 'use_embedded';
     }
     
-    // If neither is available
-    if (!systemNode && !embeddedNode) {
-      return 'install_required';
-    }
-    
-    return 'unknown';
+    // If embedded is not available
+    return 'install_required';
   }
 
   /**
    * Get embedded Node.js executable path
-   * @returns {Promise<string>} Path to embedded Node.js
+   * @returns {string} Path to embedded Node.js
    */
-  async getEmbeddedNodePath() {
+  getEmbeddedNodePath() {
     const platform = this.platformService.adapter.getPlatform();
     const arch = this.platformService.adapter.getArchitecture();
+    
+    const nodeExecutable = platform === 'win32' ? 'node.exe' : 'node';
     
     const binaryPath = path.join(
       this.resourcesPath, 
       platform, 
       arch, 
       'bin',
-      await this.platformService.adapter.getExecutableName('node')
+      nodeExecutable
     );
     
     return binaryPath;
@@ -336,142 +304,61 @@ async getCommonNodePaths() {
    * Get embedded NPM executable path
    * @returns {string} Path to embedded NPM
    */
-async getEmbeddedNpmPath() {
+  getEmbeddedNpmPath() {
     const platform = this.platformService.adapter.getPlatform();
     const arch = this.platformService.adapter.getArchitecture();
+    
+    const npmExecutable = platform === 'win32' ? 'npm.cmd' : 'npm';
     
     const binaryPath = path.join(
       this.resourcesPath, 
       platform, 
       arch, 
       'bin',
-      await this.platformService.adapter.getExecutableName('npm')
+      npmExecutable
     );
     
     return binaryPath;
   }
 
-  /**
-   * Get embedded NPX executable path
-   * @returns {string} Path to embedded NPX
-   */
-async getEmbeddedNpxPath() {
-    const platform = this.platformService.adapter.getPlatform();
-    const arch = this.platformService.adapter.getArchitecture();
-    
-    const binaryPath = path.join(
-      this.resourcesPath, 
-      platform, 
-      arch, 
-      'bin',
-      await this.platformService.adapter.getExecutableName('npx')
-    );
-    
-    return binaryPath;
-  }
+
+
+
 
   /**
-   * Save user's Node.js preference to database
-   * @param {string} preference - User preference ('system' or 'embedded')
-   * @returns {Promise<void>}
-   */
-  async saveNodePreference(preference) {
-    try {
-      await this.database.run(`
-        INSERT OR REPLACE INTO settings (key, value, updated_at) 
-        VALUES ('node_preference', ?, CURRENT_TIMESTAMP)
-      `, [preference]);
-      
-      this.logger.info(`✅ Preferência do Node.js salva: ${preference}`);
-      
-    } catch (error) {
-      this.logger.error('❌ Erro ao salvar preferência do Node.js:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get user's Node.js preference from database
-   * @returns {Promise<string|null>} User preference or null
-   */
-  async getNodePreference() {
-    try {
-      const result = await this.database.get(`
-        SELECT value FROM settings WHERE key = 'node_preference'
-      `);
-      
-      return result ? result.value : null;
-      
-    } catch (error) {
-      this.logger.error('❌ Erro ao obter preferência do Node.js:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Get the appropriate Node.js executable based on user preference
+   * Get the Node.js executable (always embedded)
    * @returns {Promise<string>} Path to Node.js executable
    */
   async getPreferredNodeExecutable() {
-    const preference = await this.getNodePreference();
     const detection = await this.detectNodeInstallation();
-    
-    // If user has a preference and it's valid
-    if (preference === 'system' && detection.systemNode && detection.systemNode.isValid) {
-      return detection.systemNode.path;
-    }
-    
-    if (preference === 'embedded' && detection.embeddedNode) {
-      return detection.embeddedNode.path;
-    }
-    
-    // Auto-select based on availability and validity
-    if (detection.systemNode && detection.systemNode.isValid) {
-      return detection.systemNode.path;
-    }
     
     if (detection.embeddedNode) {
       return detection.embeddedNode.path;
     }
     
-    throw new Error('Nenhuma instalação válida do Node.js encontrada');
+    throw new Error('Node.js embarcado não encontrado');
   }
 
   /**
-   * Get the appropriate NPM executable based on user preference
+   * Get the NPM executable (always embedded)
    * @returns {Promise<string>} Path to NPM executable
    */
-async getPreferredNpmExecutable() {
-    const nodePath = await this.getPreferredNodeExecutable();
-    const isEmbedded = nodePath.includes('resources');
-    
-    if (isEmbedded) {
-      return await this.getEmbeddedNpmPath();
-    }
-    
-    // For system Node.js, try to find npm in the same directory
-    const nodeDir = path.dirname(nodePath);
-    const npmPath = path.join(nodeDir, await this.platformService.adapter.getExecutableName('npm'));
-    
-    if (fs.existsSync(npmPath)) {
-      return npmPath;
-    }
-    
-    // Fallback to system npm using platform service
-    return await this.platformService.adapter.getExecutableName('npm');
+  async getPreferredNpmExecutable() {
+    return await this.getEmbeddedNpmPath();
   }
 
   /**
    * Ensure embedded Node.js binaries are available
    * @returns {Promise<boolean>} Whether binaries are available
    */
-async ensureEmbeddedBinaries() {
+  async ensureEmbeddedBinaries() {
     const platform = this.platformService.adapter.getPlatform();
     const arch = this.platformService.adapter.getArchitecture();
     
     if (!this.downloader) {
-      // Can't download binaries in packaged app without downloader
-      return false;
+      // In packaged app, binaries should already be included
+      const nodePath = this.getEmbeddedNodePath();
+      return fs.existsSync(nodePath);
     }
     
     if (this.downloader.hasBinaries(platform, arch)) {

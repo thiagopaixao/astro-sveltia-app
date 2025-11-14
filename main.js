@@ -171,31 +171,12 @@ async function createInitialWindow() {
     
     logger.info('👋 Welcome setup not completed - checking Node.js setup...');
     
-    // SECOND: Check if user has already configured Node.js preference
-    const nodePreference = await nodeDetectionService.getNodePreference();
-    
-    if (nodePreference) {
-      logger.info(`✅ Node.js preference found: ${nodePreference}`);
-      // User has already configured Node.js but hasn't completed welcome setup
-      // This can happen if user completed Node.js setup but not the full wizard
-      logger.info('⚠️ Node.js preference exists but welcome setup not completed - showing welcome window');
-      return await windowManager.createWindow('welcome.html', {
-        width: 900,
-        height: 700,
-        resizable: true,
-        maximizable: true,
-        minimizable: true,
-        maximize: true
-      });
-    }
-    
-    // THIRD: No preference found, check Node.js detection
+    // SECOND: Check Node.js detection (always use embedded now)
     const detection = await nodeDetectionService.detectNodeInstallation();
     logger.info('🔍 Node.js detection result:', detection);
     
-    // ALWAYS show welcome window on first run, even if system Node.js is valid
-    // This allows user to choose between system and embedded Node.js
-    logger.info('👋 First time setup - showing welcome window for Node.js selection');
+    // ALWAYS show welcome window on first run for Node.js verification
+    logger.info('👋 First time setup - showing welcome window for Node.js verification');
     
     // Store detection result for the welcome window to use
     global.nodeDetectionResult = detection;
