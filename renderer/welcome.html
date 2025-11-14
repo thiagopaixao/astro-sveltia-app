@@ -216,13 +216,22 @@
                                 <p class="text-sm text-green-400">Autenticação realizada com sucesso!</p>
                             </div>
                             <div x-show="userInfo" class="text-left">
-                                <p class="text-sm text-muted-dark mb-2">Conectado como:</p>
-                                <div class="flex items-center gap-3">
-                                    <img x-show="userInfo.avatar_url" :src="userInfo.avatar_url" :alt="userInfo.name" class="w-10 h-10 rounded-full">
+                                <div class="flex justify-between items-start mb-4">
                                     <div>
-                                        <p class="font-semibold text-text-dark" x-text="userInfo.name || userInfo.login"></p>
-                                        <p class="text-sm text-muted-dark" x-text="userInfo.email"></p>
+                                        <p class="text-sm text-muted-dark mb-2">Conectado como:</p>
+                                        <div class="flex items-center gap-3">
+                                            <img x-show="userInfo.avatar_url" :src="userInfo.avatar_url" :alt="userInfo.name" class="w-10 h-10 rounded-full">
+                                            <div>
+                                                <p class="font-semibold text-text-dark" x-text="userInfo.name || userInfo.login"></p>
+                                                <p class="text-sm text-muted-dark" x-text="userInfo.email"></p>
+                                            </div>
+                                        </div>
                                     </div>
+                                    <button @click="logoutFromGitHub()" 
+                                            class="bg-red-600 hover:bg-red-500 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors duration-300 flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-lg">logout</span>
+                                        Sair
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -584,6 +593,52 @@
                     } catch (error) {
                         console.error('Error completing setup:', error);
                         alert('Erro ao finalizar configuração: ' + error.message);
+                    }
+                },
+
+                /**
+                 * Logout from GitHub
+                 */
+                async logoutFromGitHub() {
+                    try {
+                        console.log('🔘 Logging out from GitHub...');
+                        
+                        if (window.electronAPI && window.electronAPI.logoutFromGitHub) {
+                            const result = await window.electronAPI.logoutFromGitHub();
+                            
+                            if (result.success) {
+                                console.log('✅ Successfully logged out from GitHub');
+                                this.isAuthenticated = false;
+                                this.userInfo = null;
+                                
+                                // Show success message briefly
+                                const successDiv = document.createElement('div');
+                                successDiv.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+                                successDiv.innerHTML = `
+                                    <div class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined">check_circle</span>
+                                        <span>Desconectado do GitHub com sucesso!</span>
+                                    </div>
+                                `;
+                                document.body.appendChild(successDiv);
+                                
+                                // Remove success message after 3 seconds
+                                setTimeout(() => {
+                                    if (successDiv.parentNode) {
+                                        successDiv.parentNode.removeChild(successDiv);
+                                    }
+                                }, 3000);
+                            } else {
+                                console.error('❌ Failed to logout from GitHub:', result.error);
+                                alert('Erro ao sair do GitHub: ' + result.error);
+                            }
+                        } else {
+                            console.error('❌ Logout API not available');
+                            alert('Erro: API de logout não disponível');
+                        }
+                    } catch (error) {
+                        console.error('💥 Logout error:', error);
+                        alert('Erro ao sair do GitHub: ' + error.message);
                     }
                 },
 

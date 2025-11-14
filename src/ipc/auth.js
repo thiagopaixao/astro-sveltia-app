@@ -72,6 +72,321 @@ class AuthHandlers {
   }
 
   /**
+   * Show authentication window with device code
+   * @param {Object} deviceCodeResponse - Device code response from GitHub
+   * @returns {Promise<Object>} Authentication result
+   */
+  async showAuthenticationWindow(deviceCodeResponse) {
+    return new Promise((resolve) => {
+      const { user_code, verification_uri, expires_in, device_code } = deviceCodeResponse;
+      
+      this.logger.info('🪟 Creating authentication window...');
+      
+      // Import BrowserWindow dynamically to avoid circular dependencies
+      const { BrowserWindow } = require('electron');
+      
+      // Create authentication window
+      const authWindow = new BrowserWindow({
+        width: 650,
+        height: 550,
+        show: false,
+        parent: BrowserWindow.getFocusedWindow(),
+        modal: true,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        alwaysOnTop: true,
+        webPreferences: {
+          nodeIntegration: true,
+          contextIsolation: false
+        }
+      });
+      
+      // Create HTML with instructions
+      const instructionsHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Autenticação GitHub - Documental</title>
+          <meta charset="utf-8">
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+              color: #c9d1d9;
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .container {
+              max-width: 500px;
+              width: 90%;
+              text-align: center;
+            }
+            .logo { font-size: 48px; margin-bottom: 20px; }
+            h2 { 
+              font-size: 24px; 
+              margin-bottom: 10px; 
+              color: #58a6ff;
+              font-weight: 600;
+            }
+            .subtitle { 
+              color: #8b949e; 
+              margin-bottom: 20px; 
+              font-size: 14px;
+            }
+            .warning {
+              background: rgba(255, 193, 7, 0.1);
+              border: 1px solid rgba(255, 193, 7, 0.3);
+              border-radius: 6px;
+              padding: 12px;
+              margin-bottom: 20px;
+              font-size: 12px;
+              color: #ffc107;
+            }
+            .code-container {
+              background: #0d1117;
+              border: 2px solid #30363d;
+              border-radius: 8px;
+              padding: 20px;
+              margin-bottom: 25px;
+            }
+            .code-label {
+              font-size: 11px;
+              color: #8b949e;
+              margin-bottom: 8px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .code {
+              font-size: 32px;
+              font-weight: bold;
+              color: #58a6ff;
+              letter-spacing: 4px;
+              margin-bottom: 15px;
+              font-family: 'Courier New', monospace;
+            }
+            .copy-button {
+              background: #238636;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 14px;
+              transition: all 0.2s;
+            }
+            .copy-button:hover { background: #2ea043; }
+            .copy-button.copied { background: #1a7f37; }
+            .steps {
+              text-align: left;
+              background: rgba(22, 27, 34, 0.5);
+              border-radius: 8px;
+              padding: 20px;
+              margin-bottom: 20px;
+            }
+            .step {
+              margin-bottom: 12px;
+              font-size: 14px;
+              line-height: 1.5;
+            }
+            .step-number { color: #58a6ff; font-weight: bold; }
+            .link {
+              color: #58a6ff;
+              text-decoration: none;
+            }
+            .link:hover { text-decoration: underline; }
+            .status {
+              background: rgba(56, 139, 253, 0.1);
+              border: 1px solid rgba(56, 139, 253, 0.3);
+              border-radius: 6px;
+              padding: 15px;
+              margin-top: 20px;
+            }
+            .spinner {
+              border: 2px solid #30363d;
+              border-top: 2px solid #58a6ff;
+              border-radius: 50%;
+              width: 20px;
+              height: 20px;
+              animation: spin 1s linear infinite;
+              margin: 0 auto 10px;
+            }
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+            @keyframes pulse {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0.7; }
+            }
+            .success {
+              background: rgba(35, 134, 54, 0.1);
+              border: 1px solid rgba(35, 134, 54, 0.3);
+              border-radius: 6px;
+              padding: 12px;
+              margin: 15px 0;
+              color: #3fb950;
+            }
+            .error {
+              background: rgba(248, 81, 73, 0.1);
+              border: 1px solid rgba(248, 81, 73, 0.3);
+              border-radius: 6px;
+              padding: 12px;
+              margin: 15px 0;
+              color: #f85149;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="logo">🔐</div>
+            <h2>Conectar com GitHub</h2>
+            <p class="subtitle">Use o código abaixo para autorizar o Documental</p>
+            
+            <div class="warning">
+              ⚠️ Mantenha esta janela aberta durante a autenticação
+            </div>
+            
+            <div class="code-container">
+              <div class="code-label">SEU CÓDIGO</div>
+              <div class="code" id="userCode">${user_code}</div>
+              <button class="copy-button" onclick="copyCode()">📋 Copiar Código</button>
+            </div>
+            
+            <div class="steps">
+              <div class="step">
+                <span class="step-number">1.</span>
+                <strong>Visite:</strong> 
+                <a href="${verification_uri}" target="_blank" class="link">${verification_uri}</a>
+              </div>
+              <div class="step">
+                <span class="step-number">2.</span>
+                <strong>Digite o código:</strong> ${user_code}
+              </div>
+              <div class="step">
+                <span class="step-number">3.</span>
+                <strong>Autorize</strong> o acesso do Documental App
+              </div>
+            </div>
+            
+            <div class="status" id="status">
+              <div class="spinner"></div>
+              <p><strong>Aguardando autorização...</strong></p>
+              <p id="timer">⏱️ Tempo restante: ${Math.floor(expires_in / 60)}:${(expires_in % 60).toString().padStart(2, '0')}</p>
+            </div>
+          </div>
+          
+          <script>
+            let timeLeft = ${expires_in};
+            const timerEl = document.getElementById('timer');
+            const statusEl = document.getElementById('status');
+            
+            function updateStatus(message, type = 'info') {
+              const statusHTML = type === 'success' ? 
+                '<div class="success">✅ ' + message + '</div>' :
+                type === 'error' ? 
+                '<div class="error">❌ ' + message + '</div>' :
+                '<div class="spinner"></div><p><strong>' + message + '</strong></p>';
+              
+              statusEl.innerHTML = statusHTML + '<p id="timer">⏱️ Tempo restante: ' + formatTime(timeLeft) + '</p>';
+            }
+            
+            function formatTime(seconds) {
+              const mins = Math.floor(seconds / 60);
+              const secs = seconds % 60;
+              return mins + ':' + secs.toString().padStart(2, '0');
+            }
+            
+            function copyCode() {
+              const code = '${user_code}';
+              navigator.clipboard.writeText(code).then(() => {
+                const btn = document.querySelector('.copy-button');
+                btn.textContent = '✅ Copiado!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                  btn.textContent = '📋 Copiar Código';
+                  btn.classList.remove('copied');
+                }, 2000);
+              });
+            }
+            
+            const timer = setInterval(() => {
+              timeLeft--;
+              const timerEl = document.getElementById('timer');
+              if (timerEl) {
+                timerEl.textContent = '⏱️ Tempo restante: ' + formatTime(timeLeft);
+              }
+              
+              if (timeLeft <= 60) {
+                updateStatus('Código expirando em breve! Aja rápido.', 'warning');
+              }
+              
+              if (timeLeft <= 0) {
+                clearInterval(timer);
+                updateStatus('Código expirado. Feche esta janela e tente novamente.', 'error');
+              }
+            }, 1000);
+            
+            // Auto-focus on code for better visibility
+            document.addEventListener('DOMContentLoaded', () => {
+              const codeEl = document.getElementById('userCode');
+              if (codeEl) {
+                codeEl.style.animation = 'pulse 2s infinite';
+              }
+            });
+          </script>
+        </body>
+        </html>
+      `;
+      
+      // Load instructions page
+      authWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(instructionsHTML));
+      authWindow.show();
+      authWindow.center();
+      
+      // Start token polling in background
+      this.logger.info('🔄 Starting token polling...');
+      this.continueGitHubAuthentication(device_code, 5).then(tokenResult => {
+        // Close authentication window
+        authWindow.close();
+        
+        if (tokenResult.success && tokenResult.userInfo) {
+          // Save user info to database
+          this.saveUserInfo(tokenResult.userInfo).then(saved => {
+            if (saved) {
+              this.logger.info('✅ User info saved successfully');
+              resolve({
+                success: true,
+                userInfo: tokenResult.userInfo
+              });
+            } else {
+              resolve({
+                success: false,
+                error: 'Failed to save user information'
+              });
+            }
+          });
+        } else {
+          resolve({
+            success: false,
+            error: tokenResult.error || 'Authentication failed'
+          });
+        }
+      }).catch(error => {
+        authWindow.close();
+        this.logger.error('❌ Authentication error:', error);
+        resolve({
+          success: false,
+          error: error.message
+        });
+      });
+    });
+  }
+
+  /**
    * Authenticate with GitHub using device flow
    * @returns {Promise<AuthResult>} Authentication result
    */
@@ -96,16 +411,10 @@ class AuthHandlers {
         interval: deviceCodeResponse.interval
       });
       
-      // Step 2: Return device code info to frontend for display
-      return {
-        success: false,
-        requiresDeviceCode: true,
-        deviceCode: deviceCodeResponse.user_code,
-        verificationUri: deviceCodeResponse.verification_uri,
-        expiresIn: deviceCodeResponse.expires_in,
-        interval: deviceCodeResponse.interval,
-        deviceCodeInternal: deviceCodeResponse.device_code
-      };
+      // Step 2: Show authentication window with device code
+      const authResult = await this.showAuthenticationWindow(deviceCodeResponse);
+      
+      return authResult;
       
     } catch (error) {
       this.logger.error('❌ GitHub authentication failed:', error);
@@ -193,26 +502,27 @@ class AuthHandlers {
     try {
       this.logger.info('🔧 Building device flow request...');
       
-      const params = new URLSearchParams({
+      const requestBody = {
         client_id: GITHUB_CONFIG.CLIENT_ID,
         scope: GITHUB_CONFIG.SCOPES.join(' ')
-      });
+      };
 
       this.logger.info('📤 Sending request to GitHub device code API:', {
         url: GITHUB_CONFIG.DEVICE_CODE_URL,
         method: 'POST',
         clientId: GITHUB_CONFIG.CLIENT_ID,
         scopes: GITHUB_CONFIG.SCOPES.join(' '),
-        params: params.toString()
+        body: requestBody
       });
 
       const response = await fetch(GITHUB_CONFIG.DEVICE_CODE_URL, {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'Content-Type': 'application/json',
+          'User-Agent': 'Documental-App/1.0'
         },
-        body: params
+        body: JSON.stringify(requestBody)
       });
 
       this.logger.info('📥 GitHub device code API response:', {
@@ -249,7 +559,7 @@ class AuthHandlers {
    * @returns {Promise<string|null>} Access token or null if failed
    */
   async pollForToken(deviceCode, interval) {
-    const maxAttempts = 30; // Maximum 5 minutes (30 * 10 seconds)
+    const maxAttempts = 180; // Maximum 15 minutes (180 * 5 seconds)
     let attempts = 0;
 
     this.logger.info('⏱️ Starting token polling with parameters:', {
@@ -284,9 +594,14 @@ class AuthHandlers {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/json',
+            'User-Agent': 'Documental-App/1.0'
           },
-          body: params
+          body: JSON.stringify({
+            client_id: GITHUB_CONFIG.CLIENT_ID,
+            device_code: deviceCode,
+            grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+          })
         });
 
         this.logger.info('📥 Token API response:', {
@@ -323,11 +638,29 @@ class AuthHandlers {
           }
         }
 
-        const tokenData = await response.json();
+        const responseText = await response.text();
+        this.logger.info('📥 Raw token response:', responseText);
+        
+        let tokenData;
+        try {
+          tokenData = JSON.parse(responseText);
+        } catch (parseError) {
+          this.logger.error('❌ Failed to parse token response:', parseError);
+          this.logger.error('🔍 Response text:', responseText);
+          throw new Error(`Invalid JSON response: ${responseText}`);
+        }
+        
+        // Check if response contains an error
+        if (tokenData.error) {
+          this.logger.info('📥 Token response contains error:', tokenData.error);
+          throw new Error(`Token request failed: ${tokenData.error_description || tokenData.error}`);
+        }
+        
         this.logger.info('✅ Token received successfully!', {
           hasAccessToken: !!tokenData.access_token,
           tokenType: tokenData.token_type,
-          scope: tokenData.scope
+          scope: tokenData.scope,
+          fullResponse: tokenData
         });
         return tokenData.access_token;
 
@@ -456,7 +789,58 @@ class AuthHandlers {
 
 
 
+    /**
+     * Handle logout from GitHub
+     */
+    ipcMain.handle('logoutFromGitHub', async () => {
+      try {
+        const result = await this.logoutFromGitHub();
+        return result;
+      } catch (error) {
+        this.logger.error('Error in logout handler:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
     this.logger.info('✅ Authentication IPC handlers registered');
+  }
+
+  /**
+   * Logout from GitHub
+   * @returns {Promise<Object>} Logout result
+   */
+  async logoutFromGitHub() {
+    try {
+      this.logger.info('🔘 Starting GitHub logout...');
+      
+      // Remove token from keytar
+      await keytar.deletePassword(GITHUB_CONFIG.SERVICE_NAME, 'github-token');
+      this.logger.info('✅ Token removed from keytar');
+      
+      // Clear user info from database (optional - keep for history)
+      // const db = await this.databaseManager.getDatabase();
+      // await new Promise((resolve, reject) => {
+      //   db.run('DELETE FROM users', (err) => {
+      //     if (err) reject(err);
+      //     else resolve();
+      //   });
+      // });
+      // this.logger.info('✅ User info cleared from database');
+      
+      this.logger.info('✅ GitHub logout completed successfully');
+      
+      return { 
+        success: true, 
+        message: 'Logged out successfully' 
+      };
+      
+    } catch (error) {
+      this.logger.error('❌ GitHub logout failed:', error);
+      return { 
+        success: false, 
+        error: error.message 
+      };
+    }
   }
 
     /**
@@ -468,6 +852,7 @@ class AuthHandlers {
       ipcMain.removeHandler('checkGitHubAuth');
       ipcMain.removeHandler('authenticateWithGitHub');
       ipcMain.removeHandler('continueGitHubAuth');
+      ipcMain.removeHandler('logoutFromGitHub');
       
       this.logger.info('✅ Authentication IPC handlers unregistered');
     }

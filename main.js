@@ -4,6 +4,9 @@
  * @since 1.0.0
  */
 
+// Load environment variables FIRST - before any other imports
+require('dotenv').config();
+
 'use strict';
 
 // Core Electron imports

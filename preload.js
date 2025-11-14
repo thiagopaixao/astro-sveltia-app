@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   authenticateWithGitHub: () => ipcRenderer.invoke('authenticateWithGitHub'),
   continueGitHubAuth: (deviceCode, interval) => ipcRenderer.invoke('continueGitHubAuth', deviceCode, interval),
   completeWelcomeSetup: () => ipcRenderer.invoke('completeWelcomeSetup'),
+  logoutFromGitHub: () => ipcRenderer.invoke('logoutFromGitHub'),
   // Node.js detection and installation functions
   checkNodeInstallation: () => ipcRenderer.invoke('checkNodeInstallation'),
   installNodeDependencies: (options) => ipcRenderer.invoke('installNodeDependencies', options),
