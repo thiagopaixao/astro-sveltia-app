@@ -225,12 +225,7 @@
 
                     </div>
 
-                    <div x-show="!isAuthenticated" class="flex gap-4 justify-center mt-8">
-                        <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
-                            <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
-                            Voltar
-                        </button>
-                    </div>
+
                 </div>
 
                 <!-- Step 4: Node.js Detection and Setup -->
@@ -365,7 +360,6 @@
                 nodeChoice: null,
                 nodeChoiceMade: false,
                 showNodeChoices: false,
-                isDetectingNode: false,
                 nodeErrorMessage: null,
                 nodeSuccessMessage: null,
                 
