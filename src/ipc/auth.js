@@ -7,7 +7,7 @@
 'use strict';
 
 const { ipcMain, clipboard } = require('electron');
-const keytar = require('keytar');
+const { secureTokenService } = require('../services/secureTokenService.js');
 const { GITHUB_CONFIG } = require('../config/github-config.js');
 
 /**
@@ -40,12 +40,12 @@ class AuthHandlers {
   }
 
   /**
-   * Get GitHub token from keytar
+   * Get GitHub token from secure storage
    * @returns {Promise<string|null>} GitHub token or null if not found
    */
   async getGitHubToken() {
     try {
-      const token = await keytar.getPassword(GITHUB_CONFIG.SERVICE_NAME, 'github-token');
+      const token = await secureTokenService.getToken();
       return token;
     } catch (error) {
       this.logger.error('Error getting GitHub token:', error);
@@ -533,7 +533,10 @@ class AuthHandlers {
       
       // Step 4: Store token securely
       this.logger.info('💾 Storing token securely...');
-      await keytar.setPassword(GITHUB_CONFIG.SERVICE_NAME, 'github-token', token);
+      const stored = await secureTokenService.storeToken(token);
+      if (!stored) {
+        throw new Error('Failed to store token securely');
+      }
       this.logger.info('✅ Token stored successfully');
       
       // Step 5: Get user information
@@ -575,6 +578,92 @@ class AuthHandlers {
   }
 
   /**
+   * Make HTTPS request using Node.js native https module
+   * @param {string} url - Request URL
+   * @param {Object} options - Request options
+   * @returns {Promise<Object>} Response data
+   */
+  async makeHttpsRequest(url, options) {
+    const https = require('https');
+    const { URL } = require('url');
+    
+    return new Promise((resolve, reject) => {
+      const parsedUrl = new URL(url);
+      
+      const requestOptions = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || 443,
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: options.method || 'GET',
+        headers: options.headers || {}
+      };
+
+      // Add Content-Length if body is provided
+      if (options.body) {
+        requestOptions.headers['Content-Length'] = Buffer.byteLength(options.body);
+      }
+
+      this.logger.info('🌐 Making HTTPS request:', {
+        hostname: requestOptions.hostname,
+        path: requestOptions.path,
+        method: requestOptions.method,
+        headers: requestOptions.headers,
+        hasBody: !!options.body
+      });
+
+      const req = https.request(requestOptions, (res) => {
+        let data = '';
+        
+        this.logger.info('📥 HTTPS response received:', {
+          statusCode: res.statusCode,
+          statusMessage: res.statusMessage,
+          headers: res.headers
+        });
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          this.logger.info('📋 Response body received:', {
+            length: data.length,
+            preview: data.substring(0, 100)
+          });
+
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              const jsonData = JSON.parse(data);
+              resolve(jsonData);
+            } catch (parseError) {
+              this.logger.error('❌ Failed to parse JSON response:', parseError);
+              reject(new Error(`Invalid JSON response: ${data}`));
+            }
+          } else {
+            this.logger.error('❌ HTTPS request failed:', {
+              statusCode: res.statusCode,
+              statusMessage: res.statusMessage,
+              body: data
+            });
+            reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage}: ${data}`));
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        this.logger.error('💥 HTTPS request error:', error);
+        reject(error);
+      });
+
+      // Write body if provided
+      if (options.body) {
+        req.write(options.body);
+      }
+
+      req.end();
+    });
+  }
+
+  /**
    * Initiate GitHub device flow
    * @returns {Promise<Object>} Device code response
    */
@@ -595,7 +684,8 @@ class AuthHandlers {
         body: requestBody
       });
 
-      const response = await fetch(GITHUB_CONFIG.DEVICE_CODE_URL, {
+      // Use native Node.js https module instead of fetch for better Electron compatibility
+      const responseData = await this.makeHttpsRequest(GITHUB_CONFIG.DEVICE_CODE_URL, {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -605,24 +695,6 @@ class AuthHandlers {
         body: JSON.stringify(requestBody)
       });
 
-      this.logger.info('📥 GitHub device code API response:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        headers: Object.fromEntries(response.headers.entries())
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        this.logger.error('❌ Device flow request failed:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
-        throw new Error(`Failed to initiate device flow: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const responseData = await response.json();
       this.logger.info('✅ Device flow response received:', responseData);
       return responseData;
       
@@ -670,79 +742,48 @@ class AuthHandlers {
           params: params.toString()
         });
 
-        const response = await fetch(GITHUB_CONFIG.TOKEN_URL, {
+        const tokenRequestBody = {
+          client_id: GITHUB_CONFIG.CLIENT_ID,
+          device_code: deviceCode,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+        };
+
+        const responseData = await this.makeHttpsRequest(GITHUB_CONFIG.TOKEN_URL, {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
             'User-Agent': 'Documental-App/1.0'
           },
-          body: JSON.stringify({
-            client_id: GITHUB_CONFIG.CLIENT_ID,
-            device_code: deviceCode,
-            grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-          })
+          body: JSON.stringify(tokenRequestBody)
         });
 
-        this.logger.info('📥 Token API response:', {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          this.logger.error('❌ Token request failed:', {
-            status: response.status,
-            statusText: response.statusText,
-            body: errorText
-          });
+        this.logger.info('✅ Token response received:', responseData);
+        
+        // Check if response contains an error
+        if (responseData.error) {
+          this.logger.info('📥 Token response contains error:', responseData.error);
           
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch (e) {
-            errorData = { error: 'unknown', error_description: errorText };
-          }
-          
-          if (errorData.error === 'authorization_pending') {
+          if (responseData.error === 'authorization_pending') {
             this.logger.info('⏳ Authorization still pending, continuing polling...');
             continue;
-          } else if (errorData.error === 'slow_down') {
+          } else if (responseData.error === 'slow_down') {
             this.logger.info('🐌 GitHub requested slower polling, waiting longer...');
             // Wait longer before next poll
             await new Promise(resolve => setTimeout(resolve, interval * 2000));
             continue;
           } else {
-            throw new Error(`Token request failed: ${errorData.error_description || errorData.error}`);
+            throw new Error(`Token request failed: ${responseData.error_description || responseData.error}`);
           }
-        }
-
-        const responseText = await response.text();
-        this.logger.info('📥 Raw token response:', responseText);
-        
-        let tokenData;
-        try {
-          tokenData = JSON.parse(responseText);
-        } catch (parseError) {
-          this.logger.error('❌ Failed to parse token response:', parseError);
-          this.logger.error('🔍 Response text:', responseText);
-          throw new Error(`Invalid JSON response: ${responseText}`);
-        }
-        
-        // Check if response contains an error
-        if (tokenData.error) {
-          this.logger.info('📥 Token response contains error:', tokenData.error);
-          throw new Error(`Token request failed: ${tokenData.error_description || tokenData.error}`);
         }
         
         this.logger.info('✅ Token received successfully!', {
-          hasAccessToken: !!tokenData.access_token,
-          tokenType: tokenData.token_type,
-          scope: tokenData.scope,
-          fullResponse: tokenData
+          hasAccessToken: !!responseData.access_token,
+          tokenType: responseData.token_type,
+          scope: responseData.scope,
+          fullResponse: responseData
         });
-        return tokenData.access_token;
+        return responseData.access_token;
 
       } catch (error) {
         this.logger.error(`💥 Error in polling attempt ${attempts}:`, error);
@@ -906,9 +947,13 @@ class AuthHandlers {
     try {
       this.logger.info('🔘 Starting GitHub logout...');
       
-      // Remove token from keytar
-      await keytar.deletePassword(GITHUB_CONFIG.SERVICE_NAME, 'github-token');
-      this.logger.info('✅ Token removed from keytar');
+      // Remove token from secure storage
+      const deleted = await secureTokenService.deleteToken();
+      if (!deleted) {
+        this.logger.warn('⚠️ Token may not have existed in secure storage');
+      } else {
+        this.logger.info('✅ Token removed from secure storage');
+      }
       
       // Clear user info from database (optional - keep for history)
       // const db = await this.databaseManager.getDatabase();

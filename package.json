@@ -11,15 +11,18 @@
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",
     "build:css": "npx tailwindcss -i renderer/assets/css/main.css -o renderer/assets/css/compiled.css --postcss",
-    "build": "npm run build:css && electron-builder",
-    "build:linux": "npm run prebuild:linux && electron-builder --linux",
-    "build:linux:deb": "npm run prebuild:linux && electron-builder --linux deb",
-    "build:linux:dir": "npm run prebuild:linux && electron-builder --linux dir",
-    "build:linux:snap": "npm run prebuild:linux && electron-builder --linux snap",
-    "build:linux:appimage": "npm run prebuild:linux && electron-builder --linux AppImage",
-    "build:win": "npm run prebuild:windows && electron-builder --win portable",
-    "build:macos": "npm run prebuild:macos && electron-builder --mac",
-    "build:all": "npm run prebuild:all && electron-builder -mwl",
+    "build:env": "node scripts/generate-runtime-env.js",
+    "build": "npm run build:css && npm run build:env && electron-builder",
+
+    "build:linux": "npm run prebuild:linux && npm run build:env && electron-builder --linux",
+    "build:linux:deb": "npm run prebuild:linux && npm run build:env && electron-builder --linux deb",
+    "build:linux:dir": "npm run prebuild:linux && npm run build:env && electron-builder --linux dir",
+    "build:linux:snap": "npm run prebuild:linux && npm run build:env && electron-builder --linux snap",
+    "build:linux:appimage": "npm run prebuild:linux && npm run build:env && electron-builder --linux AppImage",
+    "build:win": "npm run prebuild:windows && npm run build:env && electron-builder --win portable",
+    "build:macos": "npm run prebuild:macos && npm run build:env && electron-builder --mac",
+    "build:all": "npm run prebuild:all && npm run build:env && electron-builder -mwl",
+
     "dist": "npm run build && node scripts/post-build.js",
     "clean": "rimraf dist",
     "prebuild:windows": "node scripts/download-node-binaries.js win32 x64",
@@ -121,6 +124,13 @@
       "node_modules/sqlite3/**/*",
       "node_modules/keytar/**/*"
     ],
+    "extraMetadata": {
+      "env": {
+        "GITHUB_CLIENT_ID": {
+          "$fromFile": "electron-builder.env"
+        }
+      }
+    },
     "extraResources": [
       {
         "from": "resources",

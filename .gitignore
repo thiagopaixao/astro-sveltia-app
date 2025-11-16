@@ -7,6 +7,7 @@ core
 .env
 .env.local
 .env.*.local
+electron-builder.env
 
 # OS generated files
 .DS_Store
@@ -25,5 +26,6 @@ yarn-error.log*
 
 dist
 .opencode/
+opencode.json
 tmp/
 documental-processes.json
