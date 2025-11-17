@@ -102,7 +102,7 @@
                             Seu ambiente de documentação centralizado está pronto para transformar a forma como você cria e gerencia seus projetos.
                         </p>
                     </div>
-                    
+ 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 max-w-3xl mx-auto">
                         <div class="bg-surface-dark rounded-lg p-6 text-center">
                             <span class="material-symbols-outlined text-3xl text-primary mb-3">rocket_launch</span>
@@ -120,9 +120,16 @@
                             <p class="text-sm text-muted-dark">Interface intuitiva e poderosa</p>
                         </div>
                     </div>
-
-
+ 
+                    <div class="mt-10 flex justify-center">
+                        <button @click="nextStep()"
+                                class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-10 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                            <span>Começar Configuração</span>
+                            <span class="material-symbols-outlined">arrow_forward</span>
+                        </button>
+                    </div>
                 </div>
+
 
                 <!-- Step 2: GitHub Authentication Explanation -->
                 <div x-show="currentStep === 2" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="text-center fade-in">
@@ -230,51 +237,120 @@
 
                 <!-- Step 4: Node.js Detection and Setup -->
                 <div x-show="currentStep === 4" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="text-center fade-in">
-                    <div class="mb-12">
+                    <div class="mb-10">
                         <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gray-800 mb-6">
-                            <span class="material-symbols-outlined text-4xl text-primary">code</span>
+                            <span class="material-symbols-outlined text-4xl text-primary">cloud_download</span>
                         </div>
-                        <h1 class="text-4xl font-black text-text-dark mb-4">Configuração do Node.js</h1>
+                        <h1 class="text-4xl font-black text-text-dark mb-4">Baixar Node.js 20 LTS</h1>
                         <p class="text-xl text-muted-dark max-w-2xl mx-auto leading-relaxed">
-                            Vamos configurar o ambiente Node.js para o Documental
+                            O Documental utiliza um Node.js portátil próprio para clonar repositórios e instalar dependências de forma segura.
                         </p>
                     </div>
 
-                    <!-- Loading State -->
-                    <div x-show="isDetectingNode" class="bg-surface-dark rounded-lg p-6 max-w-md mx-auto mb-6">
+                    <div class="bg-surface-dark rounded-lg p-6 max-w-2xl mx-auto mb-6 text-left">
+                        <div class="flex items-start gap-4">
+                            <span class="material-symbols-outlined text-primary text-3xl">verified_user</span>
+                            <div>
+                                <h3 class="text-lg font-semibold text-text-dark mb-2">Node.js 20.x LTS oficial</h3>
+                                <p class="text-sm text-muted-dark mb-3">
+                                    Ao confirmar o download, o Documental obtém diretamente do nodejs.org os binários para o seu sistema, instala em uma pasta segura do usuário e valida as versões do Node e npm automaticamente.
+                                </p>
+                                <ul class="list-disc list-inside text-sm text-muted-dark space-y-1">
+                                    <li>Sem prompts externos ou privilégios administrativos</li>
+                                    <li>Funciona mesmo se existir outro Node.js instalado no sistema</li>
+                                    <li>Pode ser reinstalado sempre que necessário</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div x-show="isDetectingNode" class="bg-surface-dark rounded-lg p-6 max-w-md mx-auto mb-4">
                         <div class="flex items-center gap-3">
                             <div class="animate-spin">
                                 <span class="material-symbols-outlined text-primary">refresh</span>
                             </div>
-                            <p class="text-sm text-muted-dark">Detectando Node.js...</p>
+                            <p class="text-sm text-muted-dark">Detectando runtime do Node.js...</p>
                         </div>
                     </div>
 
-                    <!-- Node.js Status Card -->
-                    <div x-show="nodeDetectionResult && !isDetectingNode" class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-md mx-auto mb-6">
-                        <div class="flex items-center gap-3">
-                            <span class="material-symbols-outlined text-green-500 text-xl">check_circle</span>
-                            <div>
-                                <p class="font-medium text-green-400">Node.js Embarcado Configurado</p>
-                                <p class="font-mono text-text-dark" x-text="`Node.js v${nodeDetectionResult.embeddedNode.full}`"></p>
+                    <template x-if="nodeDetectionResult && nodeDetectionResult.runtime && nodeDetectionResult.runtime.installed && nodeDetectionResult.runtime.isValid">
+                        <div class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-xl mx-auto mb-4 text-left">
+                            <div class="flex items-center gap-3 mb-3">
+                                <span class="material-symbols-outlined text-green-500 text-xl">check_circle</span>
+                                <p class="font-medium text-green-400">Node.js portátil instalado com sucesso</p>
                             </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-xs uppercase text-muted-dark">Node.js</p>
+                                    <p class="font-mono text-lg text-text-dark" x-text="`v${nodeDetectionResult.runtime.version}`"></p>
+                                </div>
+                                <div>
+                                    <p class="text-xs uppercase text-muted-dark">npm</p>
+                                    <p class="font-mono text-lg text-text-dark" x-text="nodeDetectionResult.runtime.npmVersion || 'Verificando...' "></p>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <p class="text-xs uppercase text-muted-dark">Local utilizado</p>
+                                    <p class="text-sm text-muted-dark" x-text="nodeDetectionResult.runtime.nodePath"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="nodeDetectionResult && (!nodeDetectionResult.runtime || !nodeDetectionResult.runtime.installed || !nodeDetectionResult.runtime.isValid)">
+                        <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-6 max-w-xl mx-auto mb-4 text-left">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-yellow-500 text-xl">info</span>
+                                <p class="font-medium text-yellow-400">Node.js ainda não foi baixado</p>
+                            </div>
+                            <p class="text-sm text-muted-dark mt-3">Clique em "Baixar e instalar" para que o Documental cuide de tudo automaticamente.</p>
+                        </div>
+                    </template>
+
+                    <div x-show="nodeErrorMessage" class="bg-red-900/20 border border-red-700 rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="material-symbols-outlined text-red-400">error</span>
+                            <p class="text-red-200 font-medium">Erro ao verificar Node.js</p>
+                        </div>
+                        <p class="text-sm text-red-200" x-text="nodeErrorMessage"></p>
+                    </div>
+
+                    <div x-show="installingNode" class="bg-surface-dark rounded-lg p-5 max-w-xl mx-auto mb-4 text-left">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="animate-spin">
+                                <span class="material-symbols-outlined text-primary">downloading</span>
+                            </div>
+                            <div>
+                                <p class="text-sm text-text-dark font-medium" x-text="nodeInstallProgress?.message || 'Baixando Node.js...' "></p>
+                                <p class="text-xs text-muted-dark" x-text="typeof nodeInstallProgress?.percent === 'number' ? `${nodeInstallProgress.percent}%` : ''"></p>
+                            </div>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                            <div class="h-full welcome-gradient transition-all duration-300" :style="`width: ${typeof nodeInstallProgress?.percent === 'number' ? nodeInstallProgress.percent : 10}%`"></div>
+                        </div>
+                    </div>
+
+                    <div x-show="nodeInstallError" class="bg-red-900/20 border border-red-700 rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
+
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="material-symbols-outlined text-red-400">error</span>
+                            <p class="text-red-300 font-medium">Falha ao instalar Node.js</p>
+                        </div>
+                        <p class="text-sm text-red-200" x-text="nodeInstallError"></p>
+                    </div>
+
+                    <div x-show="nodeInstallSuccess" class="bg-green-900/20 border border-green-700 rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-green-400">task_alt</span>
+                            <p class="text-green-200 text-sm">Node.js baixado e validado com sucesso!</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Action Buttons -->
                     <div class="flex gap-4 justify-center">
-                        <!-- Step 1: Welcome -->
-                        <div x-show="currentStep === 1" class="flex gap-4 justify-center w-full">
-                            <button @click="nextStep()" 
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
-                                <span>Começar Configuração</span>
-                                <span class="material-symbols-outlined">arrow_forward</span>
-                            </button>
-                        </div>
-
                         <!-- Step 2: GitHub Authentication Explanation -->
                         <div x-show="currentStep === 2" class="flex gap-4 justify-center w-full">
+
                             <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
                                 <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
                                 Voltar
@@ -302,27 +378,33 @@
                         </div>
 
                         <!-- Step 4: Node.js Detection -->
-                        <div x-show="currentStep === 4" class="flex gap-4 justify-center w-full">
+                        <div x-show="currentStep === 4" class="flex flex-wrap gap-4 justify-center w-full">
                             <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
                                 <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
                                 Voltar
                             </button>
-                            
-                            <button @click="detectNode()" x-show="!nodeDetectionResult && !isDetectingNode" 
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
-                                Verificar Node.js Embarcado
+
+                            <button @click="installManagedNode()" 
+                                    x-show="shouldInstallRuntime()"
+                                    :disabled="installingNode || isDetectingNode"
+                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
+                                <span class="material-symbols-outlined align-middle mr-2">download</span>
+                                <span x-text="installingNode ? 'Instalando...' : 'Baixar e instalar Node.js 20 LTS'"></span>
                             </button>
 
-                            <button @click="completeSetup()" x-show="nodeDetectionResult && nodeDetectionResult.embeddedNode" 
+                            <button @click="detectNode()" 
+                                    :disabled="isDetectingNode"
+                                    class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
+                                Verificar novamente
+                            </button>
+
+                            <button @click="completeSetup()" 
+                                    x-show="runtimePronto()"
                                     class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
                                 Finalizar Configuração
                             </button>
-
-                            <button @click="detectNode()" x-show="nodeDetectionResult && !isDetectingNode" 
-                                    class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
-                                Verificar Novamente
-                            </button>
                         </div>
+
                     </div>
                 </div>
             </div>
@@ -357,11 +439,11 @@
                 // Node.js detection properties
                 isDetectingNode: false,
                 nodeDetectionResult: null,
-                nodeChoice: null,
-                nodeChoiceMade: false,
-                showNodeChoices: false,
                 nodeErrorMessage: null,
-                nodeSuccessMessage: null,
+                nodeInstallError: null,
+                nodeInstallSuccess: false,
+                nodeInstallProgress: null,
+                installingNode: false,
                 
                 // Setup completion tracking
                 setupCompleted: false,
@@ -369,6 +451,12 @@
                 init() {
                     // Check if already authenticated
                     this.checkAuthenticationStatus();
+
+                    if (window.electronAPI && window.electronAPI.onNodeInstallProgress) {
+                        window.electronAPI.onNodeInstallProgress((progress) => {
+                            this.nodeInstallProgress = progress;
+                        });
+                    }
                 },
 
                 nextStep() {
@@ -386,6 +474,16 @@
                     if (this.currentStep > 1) {
                         this.currentStep--;
                     }
+                },
+
+                runtimePronto() {
+                    const runtime = this.nodeDetectionResult?.runtime;
+                    return !!(runtime && runtime.installed && runtime.isValid);
+                },
+
+                shouldInstallRuntime() {
+                    const runtime = this.nodeDetectionResult?.runtime;
+                    return !runtime || !runtime.installed || !runtime.isValid;
                 },
 
                 async checkAuthenticationStatus() {
@@ -551,7 +649,6 @@
                 async detectNode() {
                     this.isDetectingNode = true;
                     this.nodeErrorMessage = null;
-                    this.nodeSuccessMessage = null;
 
                     try {
                         if (window.electronAPI && window.electronAPI.detectNode) {
@@ -563,37 +660,44 @@
                             }
 
                             this.nodeDetectionResult = result;
-                            this.determineNodeChoices();
                         } else {
                             throw new Error('API de detecção do Node.js não disponível');
                         }
                     } catch (error) {
                         console.error('Error detecting Node.js:', error);
                         this.nodeErrorMessage = 'Erro na detecção do Node.js: ' + error.message;
+                        this.nodeDetectionResult = null;
                     } finally {
                         this.isDetectingNode = false;
                     }
                 },
 
-                determineNodeChoices() {
-                    const hasEmbedded = this.nodeDetectionResult.embeddedNode;
-                    const needsInstall = this.nodeDetectionResult.recommendation === 'install_required';
+                async installManagedNode() {
+                    try {
+                        if (!window.electronAPI || !window.electronAPI.installManagedNode) {
+                            throw new Error('API de instalação não disponível');
+                        }
 
-                    if (needsInstall) {
-                        // Show error only
-                        this.showNodeChoices = false;
-                        this.nodeChoice = null;
-                    } else if (hasEmbedded) {
-                        // Auto-select embedded
-                        this.showNodeChoices = false;
-                        this.nodeChoice = 'embedded';
-                        this.nodeChoiceMade = true;
-                    } else {
-                        // Error case
-                        this.showNodeChoices = false;
-                        this.nodeChoice = null;
+                        this.nodeInstallError = null;
+                        this.nodeInstallSuccess = false;
+                        this.installingNode = true;
+                        this.nodeInstallProgress = { stage: 'starting', percent: 5, message: 'Preparando download...' };
+
+                        const result = await window.electronAPI.installManagedNode();
+                        if (!result.success) {
+                            throw new Error(result.error || 'Falha ao instalar Node.js');
+                        }
+
+                        this.nodeInstallSuccess = true;
+                        this.nodeInstallProgress = { stage: 'completed', percent: 100, message: 'Instalação concluída' };
+                        await this.detectNode();
+                    } catch (error) {
+                        console.error('Erro instalando Node.js gerenciado:', error);
+                        this.nodeInstallError = error.message;
+                    } finally {
+                        this.installingNode = false;
                     }
-                }
+                },
             }));
         });
     </script>

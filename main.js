@@ -100,8 +100,7 @@ async function initializeServices() {
     // Initialize Node.js detection service
     logger.info('🟢 Initializing Node.js detection service...');
     nodeDetectionService = new NodeDetectionService({
-      logger,
-      database: databaseManager
+      logger
     });
     logger.info('✅ Node.js detection service initialized');
 
@@ -171,7 +170,7 @@ async function createInitialWindow() {
     
     logger.info('👋 Welcome setup not completed - checking Node.js setup...');
     
-    // SECOND: Check Node.js detection (always use embedded now)
+    // SECOND: Check Node.js detection (managed runtime ensures Node availability)
     const detection = await nodeDetectionService.detectNodeInstallation();
     logger.info('🔍 Node.js detection result:', detection);
     

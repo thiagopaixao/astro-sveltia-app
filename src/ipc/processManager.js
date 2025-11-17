@@ -183,33 +183,30 @@ class ProcessManager {
       let actualCommand = command;
       let env = { ...process.env };
 
-      // Check if we should use embedded Node.js/NPM
+      // Prefer managed Node.js runtime when available
       if (command === 'node' || command === 'npm' || command === 'npx') {
         try {
           const detection = await this.nodeDetectionService.detectNodeInstallation();
-          
-          if (detection.recommendation === 'use_embedded' && detection.embeddedNode) {
-            this.logger.info(`📦 Using embedded ${command} for process ${processId}`);
-            
-            if (command === 'node') {
-              actualCommand = detection.embeddedNode.path;
+          const runtime = detection.runtime;
+
+          if (runtime?.installed && runtime.isValid) {
+            this.logger.info(`📦 Using managed ${command} for process ${processId}`);
+
+            if (command === 'node' && runtime.nodePath) {
+              actualCommand = runtime.nodePath;
             } else if (command === 'npm') {
-              actualCommand = this.nodeDetectionService.getEmbeddedNpmPath();
+              actualCommand = runtime.npmPath || await this.nodeDetectionService.getPreferredNpmExecutable();
             } else if (command === 'npx') {
-              actualCommand = this.nodeDetectionService.getEmbeddedNpxPath();
+              actualCommand = runtime.npxPath || await this.nodeDetectionService.getPreferredNpxExecutable();
             }
 
-            // Set environment variables for embedded Node.js
-            const embeddedNodePath = path.dirname(detection.embeddedNode.path);
-            env.PATH = this.platformService.joinPath(embeddedNodePath, '') + this.platformService.getPathSeparator() + env.PATH;
-            
-            // Ensure Node.js can find its modules
-            env.NODE_PATH = this.platformService.joinPath(path.dirname(detection.embeddedNode.path), '..', 'lib', 'node_modules');
+            env = this.nodeDetectionService.getManagedRuntimeEnv(env);
           }
         } catch (error) {
-          this.logger.warn(`⚠️ Could not detect embedded Node.js for ${command}, falling back to system: ${error.message}`);
+          this.logger.warn(`⚠️ Could not activate managed Node.js for ${command}, falling back to system: ${error.message}`);
         }
       }
+
 
       this.logger.info(`🚀 Executing: ${actualCommand} ${args.join(' ')} in ${cwd}`);
 
@@ -315,7 +312,8 @@ class ProcessManager {
       }
     };
 
-    // Use executeCommand to ensure embedded Node.js/NPM is used
+    // Use executeCommand to ensure managed Node.js/NPM is used
+
     let devProcess;
     let processStarted = false;
     
@@ -327,24 +325,20 @@ class ProcessManager {
       let actualNpmPath = 'npm';
       let env = { ...process.env };
 
-      // Check if we should use embedded Node.js/NPM
+      // Prefer managed runtime for dev server as well
       try {
         const detection = await this.nodeDetectionService.detectNodeInstallation();
+        const runtime = detection.runtime;
         
-        if (detection.recommendation === 'use_embedded' && detection.embeddedNode) {
-          this.logger.info(`📦 Using embedded npm for dev server ${projectId}`);
-          actualNpmPath = this.nodeDetectionService.getEmbeddedNpmPath();
-
-          // Set environment variables for embedded Node.js
-          const embeddedNodePath = path.dirname(detection.embeddedNode.path);
-          env.PATH = this.platformService.joinPath(embeddedNodePath, '') + this.platformService.getPathSeparator() + env.PATH;
-          
-          // Ensure Node.js can find its modules
-          env.NODE_PATH = this.platformService.joinPath(path.dirname(detection.embeddedNode.path), '..', 'lib', 'node_modules');
+        if (runtime?.installed && runtime.isValid) {
+          this.logger.info(`📦 Using managed npm for dev server ${projectId}`);
+          actualNpmPath = runtime.npmPath || await this.nodeDetectionService.getPreferredNpmExecutable();
+          env = this.nodeDetectionService.getManagedRuntimeEnv(env);
         }
       } catch (error) {
-        this.logger.warn(`⚠️ Could not detect embedded Node.js for dev server, falling back to system: ${error.message}`);
+        this.logger.warn(`⚠️ Could not activate managed Node.js for dev server, falling back to system: ${error.message}`);
       }
+
 
       this.logger.info(`🚀 Starting dev server: ${actualNpmPath} run dev in ${repoDirPath}`);
 
