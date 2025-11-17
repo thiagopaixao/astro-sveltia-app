@@ -288,10 +288,11 @@
             try {
                 // Cancel the process and delete project
                 if (this.projectId && this.projectPath) {
-                    await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
+                    await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName, true);
                     // Also remove from database
                     await window.electronAPI.removeProject(this.projectId);
                 }
+
                 
                 // Clear session storage
                 sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
@@ -310,8 +311,9 @@
             try {
                 // Just cancel the process without deleting
                 if (this.projectId && this.projectPath) {
-                    await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
+                    await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName, false);
                 }
+
                 
                 // Clear session storage
                 sessionStorage.removeItem(`projectCreationState-${this.projectId}`);

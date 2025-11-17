@@ -93,6 +93,85 @@ class ProjectCreationHandler {
   }
 
   /**
+   * Retrieve repository folder name from database
+   * @param {number} projectId - Project ID
+   * @returns {Promise<string|null>} Folder name or null if not stored
+   */
+  async getRepoFolderName(projectId) {
+    try {
+      const db = await this.databaseManager.getDatabase();
+      return new Promise((resolve, reject) => {
+        db.get('SELECT repoFolderName FROM projects WHERE id = ?', [projectId], (err, row) => {
+          if (err) {
+            this.logger.error('Error fetching repoFolderName:', err.message);
+            reject(err);
+          } else {
+            resolve(row ? row.repoFolderName : null);
+          }
+        });
+      });
+    } catch (error) {
+      this.logger.error('Error in getRepoFolderName:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Determine repository directory information before running commands
+   * @param {string} projectPath - Base project path
+   * @param {string} repoUrl - Repository URL
+   * @param {boolean} isExistingGitRepo - Whether using an existing repo
+   * @param {boolean} isEmptyFolder - Whether cloning into an empty folder
+   * @returns {{ repoDirPath: string, repoFolderName: string, shouldClone: boolean }}
+   */
+  determineRepositoryTarget(projectPath, repoUrl, isExistingGitRepo, isEmptyFolder) {
+    const ensureDirectory = (targetPath) => {
+      if (!fs.existsSync(targetPath)) {
+        fs.mkdirSync(targetPath, { recursive: true });
+      }
+    };
+
+    if (!fs.existsSync(projectPath)) {
+      ensureDirectory(projectPath);
+    }
+
+    if (isExistingGitRepo) {
+      return {
+        repoDirPath: projectPath,
+        repoFolderName: path.basename(projectPath),
+        shouldClone: false
+      };
+    }
+
+    if (isEmptyFolder) {
+      return {
+        repoDirPath: projectPath,
+        repoFolderName: path.basename(projectPath),
+        shouldClone: true
+      };
+    }
+
+    const fallbackName = 'documental-project';
+    const repoName = repoUrl ? repoUrl.split('/').pop().replace('.git', '') : fallbackName;
+    let finalRepoFolderName = repoName || fallbackName;
+    let counter = 0;
+    while (fs.existsSync(path.join(projectPath, finalRepoFolderName))) {
+      counter += 1;
+      finalRepoFolderName = `${repoName}-${counter}`;
+    }
+
+    const repoDirPath = path.join(projectPath, finalRepoFolderName);
+    ensureDirectory(repoDirPath);
+
+    return {
+      repoDirPath,
+      repoFolderName: finalRepoFolderName,
+      shouldClone: true
+    };
+  }
+
+
+  /**
    * Start complete project creation process
    * @param {number} projectId - Project ID
    * @param {string} projectPath - Project path
@@ -135,60 +214,43 @@ class ProjectCreationHandler {
         });
       };
 
-      let repoDirPath;
+      const { repoDirPath, repoFolderName, shouldClone } = this.determineRepositoryTarget(
+        projectPath,
+        repoUrl,
+        isExistingGitRepo,
+        isEmptyFolder
+      );
+
+      if (repoFolderName) {
+        await this.updateRepoFolderName(projectId, repoFolderName);
+      }
       
       if (isExistingGitRepo) {
-        // Use existing folder
-        repoDirPath = projectPath;
-        const folderName = path.basename(projectPath);
-        
         sendOutput(`📁 Using existing repository at ${repoDirPath}\n`);
-        await this.updateRepoFolderName(projectId, folderName);
         sendStatus('success');
         await this.processManager.delay(3000);
-        
-      } else if (isEmptyFolder) {
-        // Clone directly into empty folder
-        repoDirPath = projectPath;
-        const folderName = path.basename(projectPath);
-        
-        sendOutput('📥 Cloning repository directly into selected folder...\n');
-        try {
-          await this.gitClone(repoUrl, repoDirPath, sendOutput);
-          sendOutput(`✅ Repository cloned into ${repoDirPath}\n`);
-          sendStatus('success');
-        } catch (error) {
-          sendOutput(`❌ Error cloning repository: ${error.message}\n`);
-          throw error;
-        }
-        await this.processManager.delay(3000);
-
-        await this.updateRepoFolderName(projectId, folderName);
-        
       } else {
-        // Clone into new subfolder
-        sendOutput('📥 Cloning repository...\n');
-        const repoName = repoUrl.split('/').pop().replace('.git', '');
-        let finalRepoFolderName = repoName;
-        let counter = 0;
-        while (fs.existsSync(path.join(projectPath, finalRepoFolderName))) {
-          counter++;
-          finalRepoFolderName = `${repoName}-${counter}`;
-        }
-        repoDirPath = path.join(projectPath, finalRepoFolderName);
+        const cloneMessage = isEmptyFolder
+          ? '📥 Cloning repository directly into selected folder...\n'
+          : '📥 Cloning repository...\n';
+        sendOutput(cloneMessage);
 
-        try {
-          await this.gitClone(repoUrl, repoDirPath, sendOutput);
-          sendOutput(`✅ Repository cloned into ${repoDirPath}\n`);
+        if (shouldClone) {
+          try {
+            await this.gitClone(repoUrl, repoDirPath, sendOutput);
+            sendOutput(`✅ Repository cloned into ${repoDirPath}\n`);
+            sendStatus('success');
+          } catch (error) {
+            sendOutput(`❌ Error cloning repository: ${error.message}\n`);
+            throw error;
+          }
+        } else {
           sendStatus('success');
-        } catch (error) {
-          sendOutput(`❌ Error cloning repository: ${error.message}\n`);
-          throw error;
         }
-        await this.processManager.delay(3000);
 
-        await this.updateRepoFolderName(projectId, finalRepoFolderName);
+        await this.processManager.delay(3000);
       }
+
 
       // Step 2: ensure preview branch exists and checkout it (skip if existing git repo)
       if (!isExistingGitRepo) {
@@ -439,9 +501,10 @@ class ProjectCreationHandler {
    * @param {string} repoFolderName - Repository folder name
    * @returns {Promise<void>}
    */
-  async cancelProjectCreation(projectId, projectPath, repoFolderName) {
+  async cancelProjectCreation(projectId, projectPath, repoFolderName, shouldDeleteFiles = false) {
     try {
-      this.logger.info('Canceling project creation:', { projectId, projectPath, repoFolderName });
+      const resolvedFolderName = repoFolderName || await this.getRepoFolderName(projectId);
+      this.logger.info('Canceling project creation:', { projectId, projectPath, repoFolderName: resolvedFolderName, shouldDeleteFiles });
       
       const sendOutput = (output) => {
         // Send to all windows for synchronization
@@ -453,13 +516,20 @@ class ProjectCreationHandler {
         });
       };
 
-      await this.processManager.cancelProjectCreation(projectId, projectPath, repoFolderName, sendOutput);
+      await this.processManager.cancelProjectCreation(
+        projectId,
+        projectPath,
+        resolvedFolderName,
+        shouldDeleteFiles,
+        sendOutput
+      );
       
     } catch (error) {
       this.logger.error('Error in cancel-project-creation handler:', error);
       throw error;
     }
   }
+
 
   /**
    * Get dev server URL from main process
@@ -514,14 +584,15 @@ class ProjectCreationHandler {
     /**
      * Cancel project creation
      */
-    ipcMain.handle('cancel-project-creation', async (event, projectId, projectPath, repoFolderName) => {
+    ipcMain.handle('cancel-project-creation', async (event, projectId, projectPath, repoFolderName, shouldDeleteFiles = false) => {
       try {
-        return await this.cancelProjectCreation(projectId, projectPath, repoFolderName);
+        return await this.cancelProjectCreation(projectId, projectPath, repoFolderName, shouldDeleteFiles);
       } catch (error) {
         this.logger.error('Error in cancel-project-creation handler:', error);
         throw error;
       }
     });
+
 
 
 

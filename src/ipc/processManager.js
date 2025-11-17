@@ -10,7 +10,9 @@ const { spawn } = require('child_process');
 const { execa } = require('execa');
 const fs = require('fs');
 const path = require('path');
+const { rimraf } = require('rimraf');
 const { PlatformService } = require('../main/services/platform/PlatformService');
+
 
 // Global state
 let globalDevServerUrl = null;
@@ -477,40 +479,148 @@ class ProcessManager {
   }
 
   /**
+   * Terminate all processes associated with a project
+   * @param {number} projectId - Project ID
+   */
+  async terminateProcessesForProject(projectId) {
+    const normalizedId = String(projectId);
+    const keysToTerminate = Object.keys(activeProcesses).filter((key) => {
+      return (
+        key === normalizedId ||
+        key === `build-${normalizedId}` ||
+        key === `dev-${normalizedId}` ||
+        key.startsWith(`${normalizedId}-`)
+      );
+    });
+
+    for (const key of keysToTerminate) {
+      await this.terminateProcessByKey(key);
+    }
+  }
+
+  /**
+   * Terminate a specific tracked process
+   * @param {string} processKey - Process key identifier
+   */
+  async terminateProcessByKey(processKey) {
+    const processRef = activeProcesses[processKey];
+    if (!processRef) {
+      return;
+    }
+
+    await new Promise((resolve) => {
+      const exitHandler = () => finalize();
+      const errorHandler = () => finalize();
+      const detachListeners = () => {
+        if (typeof processRef.off === 'function') {
+          processRef.off('exit', exitHandler);
+          processRef.off('error', errorHandler);
+        } else if (typeof processRef.removeListener === 'function') {
+          processRef.removeListener('exit', exitHandler);
+          processRef.removeListener('error', errorHandler);
+        }
+      };
+
+      const finalize = () => {
+        detachListeners();
+        if (processRef.pid) {
+          this.removeDocumentalProcess(processRef.pid);
+        }
+        delete activeProcesses[processKey];
+        resolve();
+      };
+
+      if (typeof processRef.once === 'function') {
+        processRef.once('exit', exitHandler);
+        processRef.once('error', errorHandler);
+      }
+
+      // If the process already exited, finalize immediately
+      if (typeof processRef.exitCode === 'number' || processRef.killed) {
+        finalize();
+        return;
+      }
+
+      try {
+        const signal = this.platformService.getTerminationSignal();
+        processRef.kill(signal);
+      } catch (error) {
+        this.logger.warn(`Error terminating process ${processKey}:`, error);
+        finalize();
+        return;
+      }
+
+      setTimeout(() => {
+        if (activeProcesses[processKey]) {
+          try {
+            const forceSignal = this.platformService.getForceTerminationSignal();
+            processRef.kill(forceSignal);
+          } catch (forceError) {
+            this.logger.error(`Failed to force kill process ${processKey}:`, forceError);
+          }
+        }
+      }, 3000);
+    });
+  }
+
+  /**
+   * Resolve repository path considering nested folders
+   * @param {string} projectPath - Base project path
+   * @param {string} repoFolderName - Repository folder name
+   * @returns {string|null} Resolved repository path
+   */
+  resolveRepoPath(projectPath, repoFolderName) {
+    if (repoFolderName) {
+      if (path.basename(projectPath) === repoFolderName && fs.existsSync(projectPath)) {
+        return projectPath;
+      }
+
+      const nestedPath = path.join(projectPath, repoFolderName);
+      if (fs.existsSync(nestedPath)) {
+        return nestedPath;
+      }
+    }
+
+    if (fs.existsSync(projectPath)) {
+      return projectPath;
+    }
+
+    return null;
+  }
+
+  /**
    * Cancel project creation and clean up
+
    * @param {number} projectId - Project ID
    * @param {string} projectPath - Project path
    * @param {string} repoFolderName - Repository folder name
    * @param {Function} sendOutput - Output callback
    * @returns {Promise<void>}
    */
-  async cancelProjectCreation(projectId, projectPath, repoFolderName, sendOutput) {
+  async cancelProjectCreation(projectId, projectPath, repoFolderName, shouldDeleteFiles, sendOutput) {
     try {
-      // Terminate active processes for this project
-      if (activeProcesses[projectId]) {
-        const process = activeProcesses[projectId];
-        if (process.pid) {
-          this.removeDocumentalProcess(process.pid);
+      await this.terminateProcessesForProject(projectId);
+
+      if (!shouldDeleteFiles) {
+        if (sendOutput) {
+          sendOutput('ℹ️ Project creation canceled. Files preserved as requested.\n');
         }
-        delete activeProcesses[projectId];
-      }
-      
-      if (activeProcesses[`dev-${projectId}`]) {
-        const process = activeProcesses[`dev-${projectId}`];
-        if (process.pid) {
-          this.removeDocumentalProcess(process.pid);
-        }
-        delete activeProcesses[`dev-${projectId}`];
+        return;
       }
 
-      // Clean up repository folder if it exists
-      if (repoFolderName) {
-        const repoPath = path.join(projectPath, repoFolderName);
-        if (fs.existsSync(repoPath)) {
+      const repoPath = this.resolveRepoPath(projectPath, repoFolderName);
+      if (repoPath && fs.existsSync(repoPath)) {
+        if (sendOutput) {
           sendOutput(`🗑️ Removing repository folder: ${repoPath}\n`);
-          const rimraf = require('rimraf');
-          await rimraf(repoPath);
-          sendOutput(`✅ Repository folder removed successfully\n`);
+        }
+        await rimraf(repoPath);
+        if (sendOutput) {
+          sendOutput('✅ Repository folder removed successfully\n');
+        }
+      } else {
+        this.logger.warn(`Repository path not found for project ${projectId}, skipping removal`);
+        if (sendOutput) {
+          sendOutput('⚠️ Repository folder not found, nothing to remove.\n');
         }
       }
     } catch (error) {
@@ -518,6 +628,7 @@ class ProcessManager {
       throw error;
     }
   }
+
 }
 
 module.exports = { ProcessManager };

@@ -13,10 +13,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeProject: (projectId) => ipcRenderer.invoke('remove-project', projectId),
   checkProjectExists: (folderPath) => ipcRenderer.invoke('checkProjectExists', folderPath),
   getFolderInfo: (folderPath) => ipcRenderer.invoke('getFolderInfo', folderPath),
-  startProjectCreation: (projectId, projectPath, githubUrl) => ipcRenderer.invoke('start-project-creation', projectId, projectPath, githubUrl),
+  startProjectCreation: (projectId, projectPath, githubUrl, isExistingGitRepo = false, isEmptyFolder = false) =>
+    ipcRenderer.invoke('start-project-creation', projectId, projectPath, githubUrl, isExistingGitRepo, isEmptyFolder),
   reopenProject: (projectId, projectPath, githubUrl, repoFolderName) => ipcRenderer.invoke('reopen-project', projectId, projectPath, githubUrl, repoFolderName),
   openProjectOnlyPreviewAndServer: (projectId, projectPath, githubUrl, repoFolderName) => ipcRenderer.invoke('open-project-only-preview-and-server', projectId, projectPath, githubUrl, repoFolderName),
-  cancelProjectCreation: (projectId, projectPath, repoFolderName) => ipcRenderer.invoke('cancel-project-creation', projectId, projectPath, repoFolderName),
+  cancelProjectCreation: (projectId, projectPath, repoFolderName, shouldDeleteFiles = false) =>
+    ipcRenderer.invoke('cancel-project-creation', projectId, projectPath, repoFolderName, shouldDeleteFiles),
+
   onCommandOutput: (callback) => ipcRenderer.on('command-output', (event, ...args) => callback(...args)),
   onCommandStatus: (callback) => ipcRenderer.on('command-status', (event, ...args) => callback(...args)),
   onDevServerUrl: (callback) => ipcRenderer.on('dev-server-url', (event, ...args) => callback(...args)),
