@@ -150,33 +150,46 @@
 
             // Removed activeStepId watcher to allow expanding completed steps
 
-            window.electronAPI.onCommandOutput((output) => {
-                const activeStepIndex = this.steps.findIndex(s => s.status === 'active');
-                if (activeStepIndex !== -1) {
-                    this.steps[activeStepIndex].log += output;
+            window.electronAPI.onCommandOutput((payload) => {
+                const normalized = typeof payload === 'object' && payload !== null
+                    ? { stepId: payload.stepId || null, message: payload.message || '' }
+                    : { stepId: null, message: payload || '' };
+                if (!normalized.message) {
+                    return;
+                }
+                const targetIndex = normalized.stepId
+                    ? this.steps.findIndex(s => s.id === normalized.stepId)
+                    : this.steps.findIndex(s => s.status === 'active');
+                if (targetIndex !== -1) {
+                    this.steps[targetIndex].log += normalized.message;
                 }
             });
 
-            window.electronAPI.onCommandStatus((status) => {
-                const activeStepIndex = this.steps.findIndex(s => s.status === 'active');
-                if (activeStepIndex !== -1) {
-                    if (status === 'success') {
-                        this.steps[activeStepIndex].status = 'success';
-                        if (activeStepIndex + 1 < this.steps.length) {
-                            this.steps[activeStepIndex + 1].status = 'active';
-                            this.activeStepId = this.steps[activeStepIndex + 1].id;
+            window.electronAPI.onCommandStatus((payload) => {
+                const normalized = typeof payload === 'object' && payload !== null
+                    ? { stepId: payload.stepId || null, status: payload.status || '' }
+                    : { stepId: null, status: payload };
+                const targetIndex = normalized.stepId
+                    ? this.steps.findIndex(s => s.id === normalized.stepId)
+                    : this.steps.findIndex(s => s.status === 'active');
+                if (targetIndex !== -1) {
+                    if (normalized.status === 'success') {
+                        this.steps[targetIndex].status = 'success';
+                        const nextIndex = this.steps.findIndex((step, index) => index > targetIndex && step.status === 'pending');
+                        if (nextIndex !== -1) {
+                            this.steps[nextIndex].status = 'active';
+                            this.activeStepId = this.steps[nextIndex].id;
                         } else {
-                            // If it's the last step and it succeeded, mark process as finished
                             this.processFinished = true;
                         }
-                    } else if (status === 'failure') {
-                        this.steps[activeStepIndex].status = 'failure';
+                    } else if (normalized.status === 'failure') {
+                        this.steps[targetIndex].status = 'failure';
                         this.processFinished = true;
                         this.processFailed = true;
-                    } else if (status === 'cancelled') {
+                    } else if (normalized.status === 'cancelled') {
                         this.processFinished = true;
                         this.processFailed = true; // Mark as failed for UI purposes
-                        this.steps[activeStepIndex].log += '\nProcesso cancelado pelo usuário.';
+                        this.steps[targetIndex].log += '\nProcesso cancelado pelo usuário.';
                     }
                 }
                 // Special handling for the last step (npm run dev)
@@ -192,15 +205,18 @@
                 console.log('Dev server URL saved to session storage:', url);
             });
 
-            window.electronAPI.onServerOutput((output) => {
-                // Store server output in sessionStorage for persistence
+            window.electronAPI.onServerOutput((payload) => {
+                const normalized = typeof payload === 'object' && payload !== null
+                    ? { stepId: payload.stepId || null, message: payload.message || '' }
+                    : { stepId: null, message: payload || '' };
                 const currentServerOutput = sessionStorage.getItem('serverOutput') || '';
-                sessionStorage.setItem('serverOutput', currentServerOutput + output);
+                sessionStorage.setItem('serverOutput', currentServerOutput + normalized.message);
                 
-                // Also add to the active step log if there's an active step
-                const activeStepIndex = this.steps.findIndex(s => s.status === 'active');
-                if (activeStepIndex !== -1) {
-                    this.steps[activeStepIndex].log += output;
+                const targetIndex = normalized.stepId
+                    ? this.steps.findIndex(s => s.id === normalized.stepId)
+                    : this.steps.findIndex(s => s.status === 'active');
+                if (targetIndex !== -1 && normalized.message) {
+                    this.steps[targetIndex].log += normalized.message;
                 }
             });
 

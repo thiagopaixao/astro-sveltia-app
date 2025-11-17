@@ -790,11 +790,12 @@ clearingCache: false,
             });
         });
 
-        window.electronAPI.onServerOutput((output) => {
-            this.serverOutput += output;
-            // Persist to sessionStorage
+        window.electronAPI.onServerOutput((payload) => {
+            const message = typeof payload === 'object' && payload !== null
+                ? payload.message || ''
+                : payload || '';
+            this.serverOutput += message;
             sessionStorage.setItem('serverOutput', this.serverOutput);
-            // Trigger UI update with auto-scroll if this tab is active
             this.$nextTick(() => {
                 const activeTab = this.consoleTabs.find(tab => tab.id === this.activeConsoleTab);
                 if (activeTab && activeTab.type === 'server') {
@@ -803,11 +804,12 @@ clearingCache: false,
             });
         });
 
-        window.electronAPI.onCommandOutput((output) => {
-            this.commandOutput += output;
-            // Persist to sessionStorage
+        window.electronAPI.onCommandOutput((payload) => {
+            const message = typeof payload === 'object' && payload !== null
+                ? payload.message || ''
+                : payload || '';
+            this.commandOutput += message;
             sessionStorage.setItem('commandOutput', this.commandOutput);
-            // Trigger UI update with auto-scroll if this tab is active
             this.$nextTick(() => {
                 const activeTab = this.consoleTabs.find(tab => tab.id === this.activeConsoleTab);
                 if (activeTab && activeTab.type === 'commands') {

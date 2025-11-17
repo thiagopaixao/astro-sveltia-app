@@ -184,35 +184,64 @@ class ProjectCreationHandler {
     try {
       this.logger.info('Starting complete project creation:', { projectId, projectPath, repoUrl, isExistingGitRepo, isEmptyFolder });
       
-      const sendOutput = (output) => {
-        // Send to all windows for synchronization
+      const broadcastToWindows = (channel, payload) => {
+        const normalizedPayload = typeof payload === 'object' && payload !== null
+          ? payload
+          : { message: String(payload) };
+
         const { BrowserWindow } = require('electron');
         BrowserWindow.getAllWindows().forEach(window => {
           if (!window.isDestroyed()) {
-            window.webContents.send('command-output', output);
+            window.webContents.send(channel, normalizedPayload);
           }
         });
       };
 
-      const sendServerOutput = (output) => {
-        // Send to all windows for synchronization
-        const { BrowserWindow } = require('electron');
-        BrowserWindow.getAllWindows().forEach(window => {
-          if (!window.isDestroyed()) {
-            window.webContents.send('server-output', output);
+      const sendOutput = (stepOrPayload, maybeMessage) => {
+        let payload;
+        if (typeof maybeMessage === 'undefined') {
+          if (typeof stepOrPayload === 'object' && stepOrPayload !== null) {
+            payload = stepOrPayload;
+          } else {
+            payload = { message: String(stepOrPayload) };
           }
-        });
+        } else {
+          payload = { stepId: stepOrPayload, message: maybeMessage };
+        }
+        broadcastToWindows('command-output', payload);
       };
 
-      const sendStatus = (status) => {
-        // Send to all windows for synchronization
-        const { BrowserWindow } = require('electron');
-        BrowserWindow.getAllWindows().forEach(window => {
-          if (!window.isDestroyed()) {
-            window.webContents.send('command-status', status);
+      const sendServerOutput = (stepOrPayload, maybeMessage) => {
+        let payload;
+        if (typeof maybeMessage === 'undefined') {
+          if (typeof stepOrPayload === 'object' && stepOrPayload !== null) {
+            payload = stepOrPayload;
+          } else {
+            payload = { message: String(stepOrPayload) };
           }
-        });
+        } else {
+          payload = { stepId: stepOrPayload, message: maybeMessage };
+        }
+        broadcastToWindows('server-output', payload);
       };
+
+      const sendStatus = (stepOrPayload, maybeStatus) => {
+        let payload;
+        if (typeof maybeStatus === 'undefined') {
+          if (typeof stepOrPayload === 'object' && stepOrPayload !== null) {
+            payload = stepOrPayload;
+          } else {
+            payload = { status: String(stepOrPayload) };
+          }
+        } else {
+          payload = { stepId: stepOrPayload, status: maybeStatus };
+        }
+        broadcastToWindows('command-status', payload);
+      };
+
+      const getStepOutput = (stepId) => (message) => sendOutput(stepId, message);
+      const getStepServerOutput = (stepId) => (message) => sendServerOutput(stepId, message);
+      const getStepStatusSender = (stepId) => (status) => sendStatus(stepId, status);
 
       const { repoDirPath, repoFolderName, shouldClone } = this.determineRepositoryTarget(
         projectPath,
@@ -221,31 +250,42 @@ class ProjectCreationHandler {
         isEmptyFolder
       );
 
+      const step1Output = getStepOutput(1);
+      const step2Output = getStepOutput(2);
+      const step3Output = getStepOutput(3);
+      const step4Output = getStepOutput(4);
+      const step5ServerOutput = getStepServerOutput(5);
+      const step1Status = getStepStatusSender(1);
+      const step2Status = getStepStatusSender(2);
+      const step3Status = getStepStatusSender(3);
+      const step4Status = getStepStatusSender(4);
+      const step5Status = getStepStatusSender(5);
+
       if (repoFolderName) {
         await this.updateRepoFolderName(projectId, repoFolderName);
       }
       
       if (isExistingGitRepo) {
-        sendOutput(`📁 Using existing repository at ${repoDirPath}\n`);
-        sendStatus('success');
+        step1Output(`📁 Using existing repository at ${repoDirPath}\n`);
+        step1Status('success');
         await this.processManager.delay(3000);
       } else {
         const cloneMessage = isEmptyFolder
           ? '📥 Cloning repository directly into selected folder...\n'
           : '📥 Cloning repository...\n';
-        sendOutput(cloneMessage);
+        step1Output(cloneMessage);
 
         if (shouldClone) {
           try {
-            await this.gitClone(repoUrl, repoDirPath, sendOutput);
-            sendOutput(`✅ Repository cloned into ${repoDirPath}\n`);
-            sendStatus('success');
+            await this.gitClone(repoUrl, repoDirPath, step1Output);
+            step1Output(`✅ Repository cloned into ${repoDirPath}\n`);
+            step1Status('success');
           } catch (error) {
-            sendOutput(`❌ Error cloning repository: ${error.message}\n`);
+            step1Output(`❌ Error cloning repository: ${error.message}\n`);
             throw error;
           }
         } else {
-          sendStatus('success');
+          step1Status('success');
         }
 
         await this.processManager.delay(3000);
@@ -254,68 +294,71 @@ class ProjectCreationHandler {
 
       // Step 2: ensure preview branch exists and checkout it (skip if existing git repo)
       if (!isExistingGitRepo) {
-        sendOutput('🔍 Checking out preview branch...\n');
+        step2Output('🔍 Checking out preview branch...\n');
         try {
-          await this.gitOps.gitEnsurePreviewBranch(repoDirPath, sendOutput);
-          sendOutput('✅ Preview branch checked out.\n');
-          sendStatus('success');
+          await this.gitOps.gitEnsurePreviewBranch(repoDirPath, step2Output);
+          step2Output('✅ Preview branch checked out.\n');
+          step2Status('success');
         } catch (error) {
-          sendOutput(`❌ Error checking out preview branch: ${error.message}\n`);
+          step2Output(`❌ Error checking out preview branch: ${error.message}\n`);
           // Don't throw error for checkout failure, continue with setup
-          sendStatus('success');
+          step2Status('success');
         }
         await this.processManager.delay(3000);
       } else {
-        sendOutput('⏭️ Skipping checkout for existing repository.\n');
-        sendStatus('success');
+        step2Output('⏭️ Skipping checkout for existing repository.\n');
+        step2Status('success');
         await this.processManager.delay(3000);
       }
 
       // Configure git user for this repository
-      sendOutput('🔧 Configuring git user...\n');
+      step2Output('🔧 Configuring git user...\n');
       try {
         const configured = await this.gitOps.configureGitForUser(repoDirPath);
         if (configured) {
-          sendOutput('✅ Git user configured successfully.\n');
+          step2Output('✅ Git user configured successfully.\n');
         } else {
-          sendOutput('⚠️ Could not configure git user, using default configuration.\n');
+          step2Output('⚠️ Could not configure git user, using default configuration.\n');
         }
       } catch (error) {
-        sendOutput(`⚠️ Warning: Could not configure git user: ${error.message}\n`);
+        step2Output(`⚠️ Warning: Could not configure git user: ${error.message}\n`);
       }
 
       // Step 3: npm install
-      sendOutput('📦 Installing dependencies...\n');
+      step3Output('📦 Installing dependencies...\n');
       try {
-        await this.processManager.executeCommand('npm', ['install'], repoDirPath, projectId, sendOutput);
-        sendOutput('✅ Dependencies installed.\n');
-        sendStatus('success');
+        await this.processManager.executeCommand('npm', ['install'], repoDirPath, projectId, step3Output);
+        step3Output('✅ Dependencies installed.\n');
+        step3Status('success');
       } catch (error) {
-        sendOutput(`❌ Error installing dependencies: ${error.message}\n`);
+        step3Output(`❌ Error installing dependencies: ${error.message}\n`);
         throw error;
       }
       await this.processManager.delay(3000);
 
       // Step 4: npm run build
-      sendOutput('🔨 Building project...\n');
+      step4Output('🔨 Building project...\n');
       try {
-        await this.processManager.executeCommand('npm', ['run', 'build'], repoDirPath, `build-${projectId}`, sendOutput);
-        sendOutput('✅ Project built.\n');
-        sendStatus('success');
+        await this.processManager.executeCommand('npm', ['run', 'build'], repoDirPath, `build-${projectId}`, step4Output);
+        step4Output('✅ Project built.\n');
+        step4Status('success');
       } catch (error) {
-        sendOutput(`❌ Error building project: ${error.message}\n`);
+        step4Output(`❌ Error building project: ${error.message}\n`);
         throw error;
       }
       await this.processManager.delay(3000);
 
       // Step 5: npm run dev (keep in background)
-      sendServerOutput('🚀 Starting development server...\n');
+      step5ServerOutput('🚀 Starting development server...\n');
       try {
-        await this.processManager.startDevServer(repoDirPath, projectId, sendServerOutput, sendStatus);
+        await this.processManager.startDevServer(repoDirPath, projectId, step5ServerOutput, step5Status);
       } catch (error) {
-        sendOutput(`❌ Error starting development server: ${error.message}\n`);
+        step5ServerOutput(`❌ Error starting development server: ${error.message}\n`);
         throw error;
       }
+
+      
+
 
       return { success: true };
       
@@ -337,35 +380,65 @@ class ProjectCreationHandler {
     try {
       this.logger.info('Opening project with preview and server only:', { projectId, projectPath, repoUrl, repoFolderName });
       
-      const sendOutput = (output) => {
-        // Send to all windows for synchronization
+      const broadcastToWindows = (channel, payload) => {
+        const normalizedPayload = typeof payload === 'object' && payload !== null
+          ? payload
+          : { message: String(payload) };
+
         const { BrowserWindow } = require('electron');
         BrowserWindow.getAllWindows().forEach(window => {
           if (!window.isDestroyed()) {
-            window.webContents.send('command-output', output);
+            window.webContents.send(channel, normalizedPayload);
           }
         });
       };
 
-      const sendServerOutput = (output) => {
-        // Send to all windows for synchronization
-        const { BrowserWindow } = require('electron');
-        BrowserWindow.getAllWindows().forEach(window => {
-          if (!window.isDestroyed()) {
-            window.webContents.send('server-output', output);
+      const sendOutput = (stepOrPayload, maybeMessage) => {
+        let payload;
+        if (typeof maybeMessage === 'undefined') {
+          if (typeof stepOrPayload === 'object' && stepOrPayload !== null) {
+            payload = stepOrPayload;
+          } else {
+            payload = { message: String(stepOrPayload) };
           }
-        });
+        } else {
+          payload = { stepId: stepOrPayload, message: maybeMessage };
+        }
+        broadcastToWindows('command-output', payload);
       };
 
-      const sendStatus = (status) => {
-        // Send to all windows for synchronization
-        const { BrowserWindow } = require('electron');
-        BrowserWindow.getAllWindows().forEach(window => {
-          if (!window.isDestroyed()) {
-            window.webContents.send('command-status', status);
+      const sendServerOutput = (stepOrPayload, maybeMessage) => {
+        let payload;
+        if (typeof maybeMessage === 'undefined') {
+          if (typeof stepOrPayload === 'object' && stepOrPayload !== null) {
+            payload = stepOrPayload;
+          } else {
+            payload = { message: String(stepOrPayload) };
           }
-        });
+        } else {
+          payload = { stepId: stepOrPayload, message: maybeMessage };
+        }
+        broadcastToWindows('server-output', payload);
       };
+
+      const sendStatus = (stepOrPayload, maybeStatus) => {
+        let payload;
+        if (typeof maybeStatus === 'undefined') {
+          if (typeof stepOrPayload === 'object' && stepOrPayload !== null) {
+            payload = stepOrPayload;
+          } else {
+            payload = { status: String(stepOrPayload) };
+          }
+        } else {
+          payload = { stepId: stepOrPayload, status: maybeStatus };
+        }
+        broadcastToWindows('command-status', payload);
+      };
+
+      const step2Output = (message) => sendOutput(2, message);
+      const step2Status = (status) => sendStatus(2, status);
+      const step5ServerOutput = (message) => sendServerOutput(5, message);
+      const step5Status = (status) => sendStatus(5, status);
 
       // For empty folders that were cloned directly, repoFolderName might be folder name itself
       let repoDirPath;
@@ -381,24 +454,24 @@ class ProjectCreationHandler {
       }
 
       // Step 2: ensure preview branch exists and checkout it
-      sendOutput('🔍 Verificando e garantindo branch preview...\n');
+      step2Output('🔍 Verificando e garantindo branch preview...\n');
       try {
-        await this.gitOps.gitEnsurePreviewBranch(repoDirPath, sendOutput);
-        sendOutput('✅ Branch preview verificada.\n');
-        sendStatus('success');
+        await this.gitOps.gitEnsurePreviewBranch(repoDirPath, step2Output);
+        step2Output('✅ Branch preview verificada.\n');
+        step2Status('success');
       } catch (error) {
-        sendOutput(`❌ Erro ao verificar branch preview: ${error.message}\n`);
+        step2Output(`❌ Erro ao verificar branch preview: ${error.message}\n`);
         // Don't throw error for checkout failure, continue with setup
-        sendStatus('success');
+        step2Status('success');
       }
       await this.processManager.delay(3000);
 
       // Step 5: npm run dev (keep in background)
-      sendServerOutput('🚀 Executando servidor do modo dev...\n');
+      step5ServerOutput('🚀 Executando servidor do modo dev...\n');
       try {
-        await this.processManager.startDevServer(repoDirPath, projectId, sendServerOutput, sendStatus);
+        await this.processManager.startDevServer(repoDirPath, projectId, step5ServerOutput, step5Status);
       } catch (error) {
-        sendOutput(`❌ Erro ao iniciar servidor de desenvolvimento: ${error.message}\n`);
+        step5ServerOutput(`❌ Erro ao iniciar servidor de desenvolvimento: ${error.message}\n`);
         throw error;
       }
 
@@ -422,35 +495,65 @@ class ProjectCreationHandler {
     try {
       this.logger.info('Reopening project:', { projectId, projectPath, repoUrl, repoFolderName });
       
-      const sendOutput = (output) => {
-        // Send to all windows for synchronization
+      const broadcastToWindows = (channel, payload) => {
+        const normalizedPayload = typeof payload === 'object' && payload !== null
+          ? payload
+          : { message: String(payload) };
+
         const { BrowserWindow } = require('electron');
         BrowserWindow.getAllWindows().forEach(window => {
           if (!window.isDestroyed()) {
-            window.webContents.send('command-output', output);
+            window.webContents.send(channel, normalizedPayload);
           }
         });
       };
 
-      const sendServerOutput = (output) => {
-        // Send to all windows for synchronization
-        const { BrowserWindow } = require('electron');
-        BrowserWindow.getAllWindows().forEach(window => {
-          if (!window.isDestroyed()) {
-            window.webContents.send('server-output', output);
+      const sendOutput = (stepOrPayload, maybeMessage) => {
+        let payload;
+        if (typeof maybeMessage === 'undefined') {
+          if (typeof stepOrPayload === 'object' && stepOrPayload !== null) {
+            payload = stepOrPayload;
+          } else {
+            payload = { message: String(stepOrPayload) };
           }
-        });
+        } else {
+          payload = { stepId: stepOrPayload, message: maybeMessage };
+        }
+        broadcastToWindows('command-output', payload);
       };
 
-      const sendStatus = (status) => {
-        // Send to all windows for synchronization
-        const { BrowserWindow } = require('electron');
-        BrowserWindow.getAllWindows().forEach(window => {
-          if (!window.isDestroyed()) {
-            window.webContents.send('command-status', status);
+      const sendServerOutput = (stepOrPayload, maybeMessage) => {
+        let payload;
+        if (typeof maybeMessage === 'undefined') {
+          if (typeof stepOrPayload === 'object' && stepOrPayload !== null) {
+            payload = stepOrPayload;
+          } else {
+            payload = { message: String(stepOrPayload) };
           }
-        });
+        } else {
+          payload = { stepId: stepOrPayload, message: maybeMessage };
+        }
+        broadcastToWindows('server-output', payload);
       };
+
+      const sendStatus = (stepOrPayload, maybeStatus) => {
+        let payload;
+        if (typeof maybeStatus === 'undefined') {
+          if (typeof stepOrPayload === 'object' && stepOrPayload !== null) {
+            payload = stepOrPayload;
+          } else {
+            payload = { status: String(stepOrPayload) };
+          }
+        } else {
+          payload = { stepId: stepOrPayload, status: maybeStatus };
+        }
+        broadcastToWindows('command-status', payload);
+      };
+
+      const step4Output = (message) => sendOutput(4, message);
+      const step4Status = (status) => sendStatus(4, status);
+      const step5ServerOutput = (message) => sendServerOutput(5, message);
+      const step5Status = (status) => sendStatus(5, status);
 
       // For empty folders that were cloned directly, repoFolderName might be folder name itself
       let repoDirPath;
@@ -466,23 +569,23 @@ class ProjectCreationHandler {
       }
 
       // Step 4: npm run build
-      sendOutput('🔨 Building project...\n');
+      step4Output('🔨 Building project...\n');
       try {
-        await this.processManager.executeCommand('npm', ['run', 'build'], repoDirPath, `reopen-${projectId}`, sendOutput);
-        sendOutput('✅ Project built.\n');
-        sendStatus('success');
+        await this.processManager.executeCommand('npm', ['run', 'build'], repoDirPath, `reopen-${projectId}`, step4Output);
+        step4Output('✅ Project built.\n');
+        step4Status('success');
       } catch (error) {
-        sendOutput(`❌ Error building project: ${error.message}\n`);
+        step4Output(`❌ Error building project: ${error.message}\n`);
         throw error;
       }
       await this.processManager.delay(3000);
 
       // Step5: npm run dev (keep in background)
-      sendServerOutput('🚀 Starting development server...\n');
+      step5ServerOutput('🚀 Starting development server...\n');
       try {
-        await this.processManager.startDevServer(repoDirPath, projectId, sendServerOutput, sendStatus);
+        await this.processManager.startDevServer(repoDirPath, projectId, step5ServerOutput, step5Status);
       } catch (error) {
-        sendOutput(`❌ Error starting development server: ${error.message}\n`);
+        step5ServerOutput(`❌ Error starting development server: ${error.message}\n`);
         throw error;
       }
 
