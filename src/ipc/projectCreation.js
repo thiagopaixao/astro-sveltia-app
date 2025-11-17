@@ -27,20 +27,99 @@ class ProjectCreationHandler {
     this.logger = logger;
     this.databaseManager = databaseManager;
     this.nodeDetectionService = nodeDetectionService;
-    this.gitOps = new GitOperations({ logger });
+    this.gitOps = new GitOperations({ logger, databaseManager });
     this.processManager = new ProcessManager({ logger, nodeDetectionService });
   }
 
   /**
-   * Clone repository using isomorphic-git
+   * Check if directory has partial .git (config without HEAD)
+   * @param {string} dir - Directory to check
+   * @returns {Promise<boolean>} Whether directory has partial .git
+   */
+  async hasPartialGit(dir) {
+    try {
+      const gitDir = path.join(dir, '.git');
+      if (!fs.existsSync(gitDir)) {
+        return false;
+      }
+
+      // Check for essential git files
+      const headPath = path.join(gitDir, 'HEAD');
+      const configPath = path.join(gitDir, 'config');
+      
+      const hasConfig = fs.existsSync(configPath);
+      const hasHead = fs.existsSync(headPath);
+      
+      // If config exists but no HEAD, it's likely a partial git setup
+      return hasConfig && !hasHead;
+    } catch (error) {
+      this.logger.warn('Error checking for partial git:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clean partial .git directory
+   * @param {string} dir - Directory to clean
+   * @returns {Promise<void>}
+   */
+  async cleanPartialGit(dir) {
+    try {
+      const gitDir = path.join(dir, '.git');
+      if (fs.existsSync(gitDir)) {
+        this.logger.info(`🧹 Cleaning partial .git directory: ${gitDir}`);
+        
+        // Simple recursive removal
+        const { execSync } = require('child_process');
+        const isWindows = process.platform === 'win32';
+        const rmCommand = isWindows ? 'rmdir /s /q' : 'rm -rf';
+        
+        try {
+          execSync(`${rmCommand} "${gitDir}"`, { stdio: 'ignore' });
+        } catch (execError) {
+          // Fallback to manual removal if command fails
+          const removeRecursive = (dirPath) => {
+            if (fs.existsSync(dirPath)) {
+              const files = fs.readdirSync(dirPath);
+              for (const file of files) {
+                const curPath = path.join(dirPath, file);
+                const stat = fs.lstatSync(curPath);
+                if (stat.isDirectory()) {
+                  removeRecursive(curPath);
+                } else {
+                  fs.unlinkSync(curPath);
+                }
+              }
+              fs.rmdirSync(dirPath);
+            }
+          };
+          removeRecursive(gitDir);
+        }
+        
+        this.logger.info('✅ Partial .git directory cleaned');
+      }
+    } catch (error) {
+      this.logger.error('Error cleaning partial git:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clone repository
    * @param {string} url - Repository URL
-   * @param {string} dir - Target directory
-   * @param {Function} sendOutput - Output callback
-   * @returns {Promise<boolean>} Success status
+   * @param {string} dir - Directory to clone into
+   * @param {Function} sendOutput - Output function
+   * @returns {Promise<void>}
    */
   async gitClone(url, dir, sendOutput) {
     try {
       this.logger.info(`Cloning repository from ${url} to ${dir}`);
+      
+      // Check for and clean partial .git before cloning
+      if (await this.hasPartialGit(dir)) {
+        sendOutput('🧹 Found partial git setup, cleaning before clone...\n');
+        await this.cleanPartialGit(dir);
+      }
       
       const token = await this.gitOps.getGitHubToken();
       const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
@@ -49,7 +128,7 @@ class ProjectCreationHandler {
       const http = require('isomorphic-git/http/node');
       
       await git.clone({
-        fs,
+        fs: require('fs'),
         http,
         dir,
         url,
@@ -64,8 +143,8 @@ class ProjectCreationHandler {
     }
   }
 
-  /**
-   * Update repo folder name in database
+   /**
+    * Update repo folder name in database
    * @param {number} projectId - Project ID
    * @param {string} folderName - Folder name
    * @returns {Promise<void>}
@@ -264,12 +343,32 @@ class ProjectCreationHandler {
       if (repoFolderName) {
         await this.updateRepoFolderName(projectId, repoFolderName);
       }
-      
+
       if (isExistingGitRepo) {
         step1Output(`📁 Using existing repository at ${repoDirPath}\n`);
+        
+        // Configure git user for existing repos
+        step1Output('🔧 Configuring git user for existing repository...\n');
+        try {
+          const configured = await this.gitOps.configureGitForUser(repoDirPath);
+          if (configured) {
+            step1Output('✅ Git user configured successfully.\n');
+          } else {
+            step1Output('⚠️ Could not configure git user, using default configuration.\n');
+            step1Output('💡 This may happen if:\n');
+            step1Output('   • No GitHub authentication is set up\n');
+            step1Output('   • No internet connection is available\n');
+            step1Output('   • GitHub API is temporarily unavailable\n');
+          }
+        } catch (error) {
+          step1Output(`⚠️ Warning: Could not configure git user: ${error.message}\n`);
+          step1Output('💡 Git operations will use system default configuration\n');
+        }
+        
         step1Status('success');
         await this.processManager.delay(3000);
       } else {
+        // For new repos: clone first, then configure git user
         const cloneMessage = isEmptyFolder
           ? '📥 Cloning repository directly into selected folder...\n'
           : '📥 Cloning repository...\n';
@@ -279,6 +378,25 @@ class ProjectCreationHandler {
           try {
             await this.gitClone(repoUrl, repoDirPath, step1Output);
             step1Output(`✅ Repository cloned into ${repoDirPath}\n`);
+            
+            // Now configure git user in the cloned repository
+            step1Output('🔧 Configuring git user for cloned repository...\n');
+            try {
+              const configured = await this.gitOps.configureGitForUser(repoDirPath);
+              if (configured) {
+                step1Output('✅ Git user configured successfully.\n');
+              } else {
+                step1Output('⚠️ Could not configure git user, using default configuration.\n');
+                step1Output('💡 This may happen if:\n');
+                step1Output('   • No GitHub authentication is set up\n');
+                step1Output('   • No internet connection is available\n');
+                step1Output('   • GitHub API is temporarily unavailable\n');
+              }
+            } catch (error) {
+              step1Output(`⚠️ Warning: Could not configure git user: ${error.message}\n`);
+              step1Output('💡 Git operations will use system default configuration\n');
+            }
+            
             step1Status('success');
           } catch (error) {
             step1Output(`❌ Error cloning repository: ${error.message}\n`);
@@ -294,7 +412,7 @@ class ProjectCreationHandler {
 
       // Step 2: ensure preview branch exists and checkout it (skip if existing git repo)
       if (!isExistingGitRepo) {
-        step2Output('🔍 Checking out preview branch...\n');
+        step2Output('🔍 Verificando e garantindo branch preview...\n');
         try {
           await this.gitOps.gitEnsurePreviewBranch(repoDirPath, step2Output);
           step2Output('✅ Preview branch checked out.\n');
@@ -309,19 +427,6 @@ class ProjectCreationHandler {
         step2Output('⏭️ Skipping checkout for existing repository.\n');
         step2Status('success');
         await this.processManager.delay(3000);
-      }
-
-      // Configure git user for this repository
-      step2Output('🔧 Configuring git user...\n');
-      try {
-        const configured = await this.gitOps.configureGitForUser(repoDirPath);
-        if (configured) {
-          step2Output('✅ Git user configured successfully.\n');
-        } else {
-          step2Output('⚠️ Could not configure git user, using default configuration.\n');
-        }
-      } catch (error) {
-        step2Output(`⚠️ Warning: Could not configure git user: ${error.message}\n`);
       }
 
       // Step 3: npm install

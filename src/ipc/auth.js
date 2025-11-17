@@ -804,6 +804,52 @@ class AuthHandlers {
   }
 
   /**
+   * Get user information from database (cache)
+   * @returns {Promise<Object|null>} User information or null if not found
+   */
+  async getUserInfoFromDatabase() {
+    try {
+      const db = await this.databaseManager.getDatabase();
+      
+      const userInfo = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT githubId, login, name, email, avatarUrl, updatedAt 
+           FROM users 
+           ORDER BY updatedAt DESC 
+           LIMIT 1`,
+          (err, row) => {
+            if (err) {
+              this.logger.error('Error getting user info from database:', err.message);
+              reject(err);
+            } else {
+              resolve(row);
+            }
+          }
+        );
+      });
+      
+      if (userInfo) {
+        this.logger.info('✅ User info retrieved from database cache');
+        return {
+          id: userInfo.githubId,
+          login: userInfo.login,
+          name: userInfo.name,
+          email: userInfo.email,
+          avatar_url: userInfo.avatarUrl,
+          cached: true,
+          cachedAt: userInfo.updatedAt
+        };
+      }
+      
+      this.logger.info('ℹ️ No user info found in database cache');
+      return null;
+    } catch (error) {
+      this.logger.error('Error getting user info from database:', error);
+      return null;
+    }
+  }
+
+  /**
    * Save user information to database
    * @param {Object} userInfo - GitHub user information
    * @returns {Promise<boolean>} Success status

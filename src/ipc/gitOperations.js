@@ -23,9 +23,11 @@ class GitOperations {
    * Create an instance of GitOperations
    * @param {Object} dependencies - Dependency injection container
    * @param {Object} dependencies.logger - Logger instance
+   * @param {Object} dependencies.databaseManager - Database manager instance
    */
-  constructor({ logger }) {
+  constructor({ logger, databaseManager }) {
     this.logger = logger;
+    this.databaseManager = databaseManager;
   }
 
   /**
@@ -42,24 +44,105 @@ class GitOperations {
   }
 
   /**
-   * Get GitHub user information
+   * Get cached user information from database (no API calls)
+   * @returns {Promise<Object|null>} Cached user info or null
+   */
+  async getCachedUserInfo() {
+    try {
+      if (!this.databaseManager) {
+        this.logger.warn('⚠️ No databaseManager available for cache lookup');
+        return null;
+      }
+
+      const db = await this.databaseManager.getDatabase();
+      const cachedUserInfo = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT githubId, login, name, email, avatarUrl, updatedAt 
+           FROM users 
+           ORDER BY updatedAt DESC 
+           LIMIT 1`,
+          (err, row) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve(row);
+            }
+          }
+        );
+      });
+      
+      if (cachedUserInfo) {
+        const userInfo = {
+          id: cachedUserInfo.githubId,
+          login: cachedUserInfo.login,
+          name: cachedUserInfo.name,
+          email: cachedUserInfo.email,
+          avatar_url: cachedUserInfo.avatarUrl,
+          cached: true,
+          cachedAt: cachedUserInfo.updatedAt
+        };
+        
+        this.logger.info(`✅ Retrieved cached user info: ${userInfo.login}`);
+        return userInfo;
+      }
+      
+      this.logger.info('ℹ️ No cached user info found');
+      return null;
+    } catch (error) {
+      this.logger.error('❌ Error getting cached user info:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get GitHub user information with cache fallback
    * @returns {Promise<Object|null>} User info or null
    */
   async getGitHubUserInfo() {
     try {
       const token = await this.getGitHubToken();
-      if (!token) return null;
+      if (!token) {
+        this.logger.warn('⚠️ No GitHub token available for user info lookup');
+        return null;
+      }
 
-      const octokit = new Octokit({ auth: token });
-      const { data: user } = await octokit.rest.users.getAuthenticated();
+      this.logger.info('🔍 Fetching GitHub user information...');
       
-      return {
-        login: user.login,
-        name: user.name,
-        email: user.email,
-        avatar_url: user.avatar_url,
-        id: user.id
-      };
+      try {
+        // Dynamic import for Octokit only when needed
+        if (!Octokit) {
+          const octokitModule = await import('@octokit/rest');
+          Octokit = octokitModule.Octokit;
+        }
+        
+        // Try to get fresh data from GitHub API
+        const octokit = new Octokit({ auth: token });
+        const { data: user } = await octokit.rest.users.getAuthenticated();
+        
+        const userInfo = {
+          login: user.login,
+          name: user.name,
+          email: user.email,
+          avatar_url: user.avatar_url,
+          id: user.id,
+          cached: false,
+          fetchedAt: new Date().toISOString()
+        };
+        
+        this.logger.info(`✅ GitHub user info fetched: ${userInfo.login}`);
+        return userInfo;
+      } catch (apiError) {
+        this.logger.warn('⚠️ Failed to fetch from GitHub API, trying cache fallback:', apiError.message);
+        
+        // Fallback to database cache
+        const cachedUserInfo = await this.getCachedUserInfo();
+        if (cachedUserInfo) {
+          return cachedUserInfo;
+        }
+        
+        this.logger.error('❌ No user info available from API or cache');
+        return null;
+      }
     } catch (error) {
       this.logger.error('Error getting GitHub user info:', error);
       return null;
@@ -351,6 +434,56 @@ class GitOperations {
         sendOutput(`💡 Sugestão: Verifique sua conexão com a internet\n`);
       }
       
+      throw error;
+    }
+  }
+
+  /**
+   * Configure git user for repository using GitHub authentication
+   * @param {string} dir - Repository directory
+   * @returns {Promise<boolean>} Success status
+   */
+  async configureGitForUser(dir) {
+    try {
+      this.logger.info('🔧 Configuring git user for repository...');
+      
+      // Step 1: Check for GitHub token
+      this.logger.info('🔍 Checking for GitHub token...');
+      const token = await this.getGitHubToken();
+      if (!token) {
+        this.logger.warn('⚠️ No GitHub token found, cannot configure git user');
+        return false;
+      }
+      this.logger.info('✅ GitHub token found');
+
+      // Step 2: Get GitHub user information
+      this.logger.info('👤 Getting GitHub user information...');
+      const userInfo = await this.getGitHubUserInfo();
+      if (!userInfo) {
+        this.logger.warn('⚠️ Could not get GitHub user info, cannot configure git user');
+        return false;
+      }
+
+      // Step 3: Prepare user configuration
+      const userName = userInfo.name || userInfo.login;
+      const userEmail = userInfo.email || `${userInfo.login}@users.noreply.github.com`;
+      const source = userInfo.cached ? 'cache' : 'API';
+
+      this.logger.info(`👤 Configuring git user: ${userName} <${userEmail}> (source: ${source})`);
+
+      // Step 4: Configure git user in repository
+      this.logger.info('⚙️ Applying git configuration...');
+      await this.gitSetUserConfig(dir, userName, userEmail);
+      
+      this.logger.info(`✅ Git user configured successfully: ${userName} <${userEmail}>`);
+      return true;
+    } catch (error) {
+      this.logger.error('❌ Error configuring git user:', error);
+      this.logger.error('🔍 Error details:', {
+        message: error.message,
+        stack: error.stack,
+        directory: dir
+      });
       throw error;
     }
   }
