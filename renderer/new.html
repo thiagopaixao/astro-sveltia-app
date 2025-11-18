@@ -58,11 +58,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('Creating from folder:', selectedProjectPath);
     
     // Small delay to ensure script.js has finished
-    setTimeout(() => {
+    setTimeout(async () => {
       // Pre-fill the project path
       const projectPathInput = document.getElementById('project-path');
       if (projectPathInput) {
-        projectPathInput.value = selectedProjectPath;
+        // Normalize the path using the same utility as script.js
+        let normalizedPath = selectedProjectPath;
+        if (window.electronAPI && window.electronAPI.normalizePath) {
+          try {
+            normalizedPath = await window.electronAPI.normalizePath(selectedProjectPath);
+          } catch (error) {
+            console.warn('Failed to normalize path:', error);
+          }
+        }
+        
+        projectPathInput.value = normalizedPath;
         console.log('Project path set to:', projectPathInput.value);
         
         // Trigger input event to ensure any listeners are notified

@@ -6,6 +6,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   const projectNameInput = document.getElementById('project-name');
   const githubUrlInput = document.getElementById('github-url');
 
+  // Cross-platform path utility functions
+  const PathUtils = {
+    join: async (...segments) => {
+      if (window.electronAPI && window.electronAPI.joinPath) {
+        return await window.electronAPI.joinPath(...segments);
+      }
+      // Fallback for development/testing
+      return segments.join('/').replace(/\/+/g, '/');
+    },
+    
+    normalize: async (filePath) => {
+      if (window.electronAPI && window.electronAPI.normalizePath) {
+        return await window.electronAPI.normalizePath(filePath);
+      }
+      // Fallback for development/testing
+      return filePath.replace(/\\/g, '/');
+    }
+  };
+
   // Load recent projects
   await loadRecentProjects();
   
@@ -36,14 +55,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Set default project path only if empty
-  if (window.electronAPI && window.electronAPI.getHomeDirectory && projectPathInput) {
-    if (!projectPathInput.value) {
-      const homeDir = await window.electronAPI.getHomeDirectory();
-      projectPathInput.value = `${homeDir}/Workspaces/`;
-    }
-  } else {
-    // Don't log error if elements don't exist (they may not be on this page)
+  // Set default project path only if empty and we're on the new project page
+  const isNewProjectPage = window.location.pathname.includes('new.html') || window.location.href.includes('new.html');
+  
+  if (isNewProjectPage) {
+    // Wait a bit for DOM to be fully ready
+    setTimeout(async () => {
+      // Re-get the element to make sure it exists
+      const projectPathInputRetry = document.getElementById('project-path');
+      
+      if (window.electronAPI && window.electronAPI.getHomeDirectory && projectPathInputRetry) {
+        if (!projectPathInputRetry.value) {
+          try {
+            const homeDir = await window.electronAPI.getHomeDirectory();
+            const defaultPath = await PathUtils.join(homeDir, 'Workspaces');
+            const normalizedPath = await PathUtils.normalize(defaultPath);
+            projectPathInputRetry.value = normalizedPath;
+          } catch (error) {
+            console.error('Error setting default project path:', error);
+          }
+        }
+      }
+    }, 100); // Small delay to ensure DOM is ready
   }
 
   // Handle folder selection
@@ -51,7 +84,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectFolderButton.addEventListener('click', async () => {
       const selectedPath = await window.electronAPI.openDirectoryDialog();
       if (selectedPath && projectPathInput) {
-        projectPathInput.value = selectedPath;
+        const normalizedPath = await PathUtils.normalize(selectedPath);
+        projectPathInput.value = normalizedPath;
       }
     });
   } else {
@@ -81,7 +115,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           isEmptyFolder = info.isEmpty;
         }
         
-        const projectId = await window.electronAPI.saveProject({ projectName, repoUrl: githubUrl, projectPath });
+        // Normalize project path before saving
+        const normalizedProjectPath = await PathUtils.normalize(projectPath);
+        const projectId = await window.electronAPI.saveProject({ projectName, repoUrl: githubUrl, projectPath: normalizedProjectPath });
         sessionStorage.setItem('currentProjectId', projectId);
         sessionStorage.setItem('isExistingGitRepo', isExistingGitRepo.toString());
         sessionStorage.setItem('isEmptyFolder', isEmptyFolder.toString());
@@ -115,20 +151,26 @@ document.addEventListener('DOMContentLoaded', async () => {
           return;
         }
 
-        recentProjectsContainer.innerHTML = recentProjects.map(project => `
-          <div class="flex items-center justify-between bg-surface-dark p-4 rounded-lg hover:bg-gray-800 cursor-pointer recent-project-item" data-project-id="${project.id}">
-            <div class="flex items-center gap-4">
-              <span class="material-symbols-outlined text-muted-dark">description</span>
-              <div>
-                <p class="font-semibold text-text-dark">${project.projectName}</p>
-                <p class="text-sm text-muted-dark">${project.projectPath}${project.repoFolderName ? '/' + project.repoFolderName : ''}</p>
+        recentProjectsContainer.innerHTML = await Promise.all(recentProjects.map(async (project) => {
+          const fullPath = project.repoFolderName 
+            ? await PathUtils.join(project.projectPath, project.repoFolderName)
+            : project.projectPath;
+          
+          return `
+            <div class="flex items-center justify-between bg-surface-dark p-4 rounded-lg hover:bg-gray-800 cursor-pointer recent-project-item" data-project-id="${project.id}">
+              <div class="flex items-center gap-4">
+                <span class="material-symbols-outlined text-muted-dark">description</span>
+                <div>
+                  <p class="font-semibold text-text-dark">${project.projectName}</p>
+                  <p class="text-sm text-muted-dark">${fullPath}</p>
+                </div>
               </div>
+              <button class="p-2 rounded-full hover:bg-gray-700 remove-project" data-project-id="${project.id}">
+                <span class="material-symbols-outlined text-muted-dark text-xl">close</span>
+              </button>
             </div>
-            <button class="p-2 rounded-full hover:bg-gray-700 remove-project" data-project-id="${project.id}">
-              <span class="material-symbols-outlined text-muted-dark text-xl">close</span>
-            </button>
-          </div>
-        `).join('');
+          `;
+        })).then(htmlArray => htmlArray.join(''));
 
         // Add click handlers for recent projects
         document.querySelectorAll('.recent-project-item').forEach(item => {
@@ -230,26 +272,32 @@ document.addEventListener('DOMContentLoaded', async () => {
           return;
         }
 
-        allProjectsContainer.innerHTML = allProjects.map(project => `
-          <div class="flex items-center justify-between bg-gray-900/50 p-4 rounded-lg hover:bg-gray-800 cursor-pointer all-project-item" data-project-id="${project.id}">
-            <div class="flex items-center gap-4">
-              <span class="material-symbols-outlined text-muted-dark">description</span>
-              <div>
-                <p class="font-semibold text-text-dark">${project.projectName}</p>
-                <p class="text-sm text-muted-dark">${project.projectPath}${project.repoFolderName ? '/' + project.repoFolderName : ''}</p>
-                <p class="text-xs text-muted-dark mt-1">Criado em: ${new Date(project.createdAt).toLocaleDateString('pt-BR')}</p>
+        allProjectsContainer.innerHTML = await Promise.all(allProjects.map(async (project) => {
+          const fullPath = project.repoFolderName 
+            ? await PathUtils.join(project.projectPath, project.repoFolderName)
+            : project.projectPath;
+          
+          return `
+            <div class="flex items-center justify-between bg-gray-900/50 p-4 rounded-lg hover:bg-gray-800 cursor-pointer all-project-item" data-project-id="${project.id}">
+              <div class="flex items-center gap-4">
+                <span class="material-symbols-outlined text-muted-dark">description</span>
+                <div>
+                  <p class="font-semibold text-text-dark">${project.projectName}</p>
+                  <p class="text-sm text-muted-dark">${fullPath}</p>
+                  <p class="text-xs text-muted-dark mt-1">Criado em: ${new Date(project.createdAt).toLocaleDateString('pt-BR')}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="p-2 rounded-full hover:bg-gray-700 open-project" data-project-id="${project.id}" title="Abrir projeto">
+                  <span class="material-symbols-outlined text-primary text-xl">folder_open</span>
+                </button>
+                <button class="p-2 rounded-full hover:bg-gray-700 remove-project" data-project-id="${project.id}" title="Remover projeto">
+                  <span class="material-symbols-outlined text-red-400 text-xl">delete</span>
+                </button>
               </div>
             </div>
-            <div class="flex items-center gap-2">
-              <button class="p-2 rounded-full hover:bg-gray-700 open-project" data-project-id="${project.id}" title="Abrir projeto">
-                <span class="material-symbols-outlined text-primary text-xl">folder_open</span>
-              </button>
-              <button class="p-2 rounded-full hover:bg-gray-700 remove-project" data-project-id="${project.id}" title="Remover projeto">
-                <span class="material-symbols-outlined text-red-400 text-xl">delete</span>
-              </button>
-            </div>
-          </div>
-        `).join('');
+          `;
+        })).then(htmlArray => htmlArray.join(''));
 
         // Add click handlers for all projects
         document.querySelectorAll('.all-project-item').forEach(item => {
@@ -302,8 +350,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Function to handle folder selection
   async function handleFolderSelection(folderPath) {
     try {
+      // Normalize the folder path before processing
+      const normalizedPath = await PathUtils.normalize(folderPath);
+      
       if (window.electronAPI && window.electronAPI.checkProjectExists) {
-        const projectExists = await window.electronAPI.checkProjectExists(folderPath);
+        const projectExists = await window.electronAPI.checkProjectExists(normalizedPath);
         
         if (projectExists.exists) {
           // Project exists, open it
@@ -311,7 +362,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           window.electronAPI.navigateTo('open.html');
         } else {
           // Project doesn't exist, show modal
-          showFolderModal(folderPath, projectExists.folderInfo);
+          showFolderModal(normalizedPath, projectExists.folderInfo);
         }
       }
     } catch (error) {

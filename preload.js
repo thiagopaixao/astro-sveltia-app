@@ -68,7 +68,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pullFromPreview: (projectId) => ipcRenderer.invoke('git:pull-from-preview', projectId),
   pushToBranch: (projectId, targetBranch) => ipcRenderer.invoke('git:push-to-branch', projectId, targetBranch),
   listRemoteBranches: (projectId) => ipcRenderer.invoke('git:list-remote-branches', projectId),
-  openInFileExplorer: (path) => ipcRenderer.invoke('open-file-explorer', path)
+  openInFileExplorer: (path) => ipcRenderer.invoke('open-file-explorer', path),
+  // Path utility functions
+  joinPath: (...segments) => ipcRenderer.invoke('join-path', ...segments),
+  normalizePath: (filePath) => ipcRenderer.invoke('normalizePath', filePath),
+  getDirName: (filePath) => ipcRenderer.invoke('get-dir-name', filePath),
+  getBaseName: (filePath) => ipcRenderer.invoke('get-base-name', filePath)
 });
 
 console.log('✅ electronAPI exposed to renderer successfully');

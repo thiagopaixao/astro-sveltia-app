@@ -260,6 +260,21 @@ class FileHandlers {
   }
 
   /**
+   * Handle normalize path
+   * @param {Object} event - IPC event object
+   * @param {string} filePath - File path
+   * @returns {string} Normalized path
+   */
+  normalizePath(event, filePath) {
+    try {
+      return this.fileService.normalizePath(filePath);
+    } catch (error) {
+      this.logger.error('Error in normalize path handler:', error);
+      return '';
+    }
+  }
+
+  /**
    * Handle get extension
    * @param {Object} event - IPC event object
    * @param {string} filePath - File path
@@ -390,6 +405,13 @@ class FileHandlers {
      */
     ipcMain.handle('get-base-name', (event, filePath) => {
       return this.getBaseName(event, filePath);
+    });
+
+    /**
+     * Normalize path
+     */
+    ipcMain.handle('normalizePath', (event, filePath) => {
+      return this.normalizePath(event, filePath);
     });
 
     /**
