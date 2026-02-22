@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onBrowserViewLoaded: (callback) => ipcRenderer.on('browser-view-loaded', (event, payload) => callback(payload)),
   confirmExitApp: () => ipcRenderer.invoke('confirm-exit-app'),
   onShowExitConfirmation: (callback) => ipcRenderer.on('show-exit-confirmation', callback),
+  onAppExiting: (callback) => ipcRenderer.on('app-exiting', callback),
   sendExitConfirmationResponse: (confirmed) => ipcRenderer.send('exit-confirmation-response', confirmed),
   // GitHub authentication functions
   checkGitHubAuth: () => ipcRenderer.invoke('checkGitHubAuth'),

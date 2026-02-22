@@ -10,7 +10,7 @@ require('dotenv').config();
 'use strict';
 
 // Core Electron imports
-const { app } = require('electron');
+const { app, BrowserWindow } = require('electron');
 
 // Import modular components
 const { getLogger } = require('./src/main/logging/logger.js');
@@ -286,14 +286,16 @@ function setupAppEventHandlers() {
 
   // Window all closed event
   app.on('window-all-closed', () => {
-    logger.info('🪟 All windows closed');
-    // Add delay to prevent immediate quit during navigation
-    setTimeout(() => {
-      if (process.platform !== 'darwin') {
-        logger.info('🚪 Quitting app after delay');
-        app.quit();
-      }
-    }, 1000); // 1 second delay
+    const windowCount = windowManager ? windowManager.getAllWindows().length : 0;
+    logger.info(`🪟 Window-all-closed event triggered. Current window count: ${windowCount}`);
+    
+    // Only quit if there are actually no windows (safeguard)
+    if (windowCount === 0) {
+      logger.info('🚪 No windows remaining, quitting app...');
+      app.quit();
+    } else {
+      logger.info(`⚠️ Window-all-closed triggered but ${windowCount} windows still exist. Not quitting.`);
+    }
   });
 
   // Activate event (for macOS)
@@ -302,39 +304,87 @@ function setupAppEventHandlers() {
     if (windowManager && windowManager.getAllWindows().length === 0) {
       await createMainWindow();
     }
+
+  // Track individual window close events for debugging
+  app.on('browser-window-created', (event, window) => {
+    logger.info(`🪟 Browser window created: ID ${window.id}`);
+    
+    window.on('closed', () => {
+      const windowCount = windowManager ? windowManager.getAllWindows().length : 0;
+      logger.info(`🪟 Window ID ${window.id} closed. Remaining windows: ${windowCount}`);
+    });
+  });
+
   });
 
   // Before quit event
-  app.on('before-quit', async () => {
+  app.on('before-quit', async (event) => {
     if (isCleaningUp) {
+      logger.info('🚫 Cleanup already in progress, skipping duplicate before-quit');
       return; // Prevent multiple cleanup attempts
     }
 
-    logger.info('👋 App quitting - cleaning up...');
-    isCleaningUp = true;
+    // Check if this is a real app quit or just a secondary window closing
+    const windowCount = BrowserWindow.getAllWindows().length;
+    logger.info(`👋 before-quit triggered. Windows remaining: ${windowCount}`);
+    
+    if (windowCount > 1) {
+      // More than 1 window still open - this is likely just a secondary window closing
+      // Don't proceed with full cleanup yet
+      logger.info(`⏸️ Deferring cleanup: ${windowCount} windows still open (secondary window close detected)`);
+      return;
+    }
+    
+    // If there's exactly 1 window, check if it's in the process of closing
+    if (windowCount === 1) {
+      const remainingWindow = BrowserWindow.getAllWindows()[0];
+      if (!remainingWindow.isDestroyed() && remainingWindow.isVisible()) {
+        logger.info('⏸️ Deferring cleanup: main window still active');
+        return;
+      }
+    }
 
+    logger.info('✅ Confirmed app quit - proceeding with cleanup...');
+    isCleaningUp = true;
     try {
+      // FIRST: Close all windows to prevent IPC calls from renderer
+      if (windowManager) {
+        logger.info('🪟 Closing all windows before cleanup...');
+        windowManager.closeAllWindows();
+        logger.info('✅ All windows closed');
+      }
+
+      // Add a small delay to ensure all windows are fully closed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Double-check no windows remain after explicit close
+      const finalWindowCount = BrowserWindow.getAllWindows().length;
+      if (finalWindowCount > 0) {
+        logger.warn(`⚠️ ${finalWindowCount} windows still open after closeAllWindows, forcing destroy...`);
+        BrowserWindow.getAllWindows().forEach(win => {
+          if (!win.isDestroyed()) {
+            win.destroy();
+          }
+        });
+      }
       // Cleanup services in reverse order
       if (ipcRegistry) {
+        logger.info('🔌 Unregistering IPC handlers...');
         ipcRegistry.unregisterIpcHandlers();
         logger.info('✅ IPC handlers unregistered');
       }
-
       if (menuManager) {
         menuManager.cleanup();
         logger.info('✅ Menu manager cleaned up');
       }
-
       if (appTracker) {
         await appTracker.saveProcesses();
         logger.info('✅ Process tracking data saved');
       }
-
       if (databaseManager) {
         await databaseManager.close();
         logger.info('✅ Database closed');
       }
-
       logger.info('✅ Application cleanup completed successfully');
     } catch (error) {
       logger.error('❌ Error during cleanup:', error);

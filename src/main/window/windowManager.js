@@ -300,6 +300,20 @@ class WindowManager {
     }
     return false;
   }
+  /**
+   * Close all open windows
+   */
+  closeAllWindows() {
+    const windows = BrowserWindow.getAllWindows();
+    this.logger.info(`Closing all windows (${windows.length} found)`);
+    windows.forEach(window => {
+      if (!window.isDestroyed()) {
+        window.close();
+      }
+    });
+    this.mainWindow = null;
+    this.logger.info('All windows closed');
+  }
 }
 
 module.exports = {

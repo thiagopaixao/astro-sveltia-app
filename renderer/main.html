@@ -730,8 +730,11 @@ clearingCache: false,
         // Check if this window was opened with state parameters
         const urlParams = new URLSearchParams(window.location.search);
         const stateParam = urlParams.get('state');
-        console.log('🔍 URL params check - stateParam:', stateParam);
+        const isSecondary = urlParams.get('isSecondary') === 'true';
+        console.log('🔍 URL params check - stateParam:', stateParam, 'isSecondary:', isSecondary);
         
+        // Store secondary window flag for later use
+        this.isSecondaryWindow = isSecondary;
         if (stateParam) {
             try {
                 // Decode and apply the window state
@@ -1030,24 +1033,34 @@ clearingCache: false,
             });
         }
 
+        // Listen for app exiting event (broadcast to all windows before quit)
+        if (window.electronAPI && window.electronAPI.onAppExiting) {
+            window.electronAPI.onAppExiting(() => {
+                console.log('Received app-exiting event - setting programmatic exit flag');
+                this.isExitingProgrammatically = true;
+            });
+        }
+
         // Handle beforeunload event to catch window close attempts
-        window.addEventListener('beforeunload', (e) => {
+        // Only register for main window, secondary windows should close normally
+        if (!this.isSecondaryWindow) {
+            window.addEventListener('beforeunload', (e) => {
             console.log('beforeunload event triggered, isExitingProgrammatically:', this.isExitingProgrammatically);
-            
-            // If we're exiting programmatically (after user confirmation), allow it
-            if (this.isExitingProgrammatically) {
-                console.log('Programmatic exit detected - allowing window to close');
-                return true;
-            }
-            
+                if (this.isExitingProgrammatically) {
+                    console.log('Programmatic exit detected - allowing window to close');
+                    return true;
+                }
             // Otherwise, prevent default and show confirmation dialog
-            console.log('Manual close attempt detected - showing confirmation');
-            e.preventDefault();
-            if (window.electronAPI && window.electronAPI.confirmExitApp) {
-                window.electronAPI.confirmExitApp();
-            }
-            return false;
-        });
+                console.log('Manual close attempt detected - showing confirmation');
+                e.preventDefault();
+                if (window.electronAPI && window.electronAPI.confirmExitApp) {
+                    window.electronAPI.confirmExitApp();
+                }
+                return false;
+            });
+        } else {
+            console.log('Secondary window detected - skipping beforeunload handler');
+        }
 
         // Reset flag when window gains focus again (in case user cancelled)
         window.addEventListener('focus', () => {

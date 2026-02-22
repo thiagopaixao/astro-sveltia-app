@@ -76,12 +76,38 @@ constructor({ logger, windowManager, processManager }) {
           nodeIntegration: false
         }
       });
+      
+      // Track this window to prevent issues when it's closed
+      const windowId = newWindow.id;
+      this.logger.info(`🪟 New window created with ID: ${windowId}`);
+      
+      // Handle window closed event
+      newWindow.on('closed', () => {
+        this.logger.info(`🪟 Secondary window ${windowId} closed`);
+        // Note: We intentionally don't call any app-level cleanup here
+        // The window should close independently without affecting other windows
+      });
+      
+      // Handle window close event (before it's closed)
+      newWindow.on('close', (event) => {
+        this.logger.info(`🪟 Secondary window ${windowId} is closing`);
+        // Don't prevent default - let it close normally
+      });
+      
       const stateEncoded = Buffer.from(JSON.stringify(windowState)).toString('base64');
       const mainHtmlPath = path.join(process.cwd(), 'renderer', 'main.html');
-      await newWindow.loadFile(mainHtmlPath, { query: { state: stateEncoded } });
+      
+      // Mark as secondary window so renderer knows not to trigger app exit
+      this.logger.info(`🪟 Loading secondary window ${windowId} with isSecondary=true`);
+      await newWindow.loadFile(mainHtmlPath, { 
+        query: { 
+          state: stateEncoded,
+          isSecondary: 'true'
+        } 
+      });
       newWindow.show();
       newWindow.maximize();
-      this.logger.info('✅ New window created successfully');
+      this.logger.info(`✅ New window ${windowId} created and shown successfully`);
       return { success: true };
     } catch (error) {
       this.logger.error('❌ Error creating new window:', error);
@@ -825,8 +851,18 @@ async verifyNodeInstallation() {
           this.logger.info('🚪 Exit confirmation response received:', confirmed);
           
           if (confirmed) {
-            this.logger.info('🚪 User confirmed exit - quitting app');
-            app.quit();
+            const windowCount = BrowserWindow.getAllWindows().length;
+            this.logger.info(`🚪 User confirmed exit. Total windows: ${windowCount}`);
+            
+            if (windowCount > 1) {
+              // Multiple windows open - close only this window, keep others running
+              this.logger.info(`🚪 Closing only window ${window.id}, keeping ${windowCount - 1} other window(s) open`);
+              window.close();
+            } else {
+              // Last window - quit the app
+              this.logger.info('🚪 Last window closing - quitting app');
+              app.quit();
+            }
           }
           
           resolve(confirmed);
