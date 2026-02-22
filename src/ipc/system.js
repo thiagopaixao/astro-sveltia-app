@@ -55,6 +55,45 @@ constructor({ logger, windowManager, processManager }) {
   }
 
   /**
+   * Create a new window with the given state
+   * @param {Object} windowState - Window state to replicate
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  async createNewWindowWithState(windowState) {
+    try {
+      this.logger.info('🪟 Creating new window with state');
+      const { BrowserWindow } = require('electron');
+      const path = require('path');
+      const currentWindow = BrowserWindow.getFocusedWindow();
+      const bounds = currentWindow ? currentWindow.getBounds() : { width: 1400, height: 900 };
+      const newWindow = new BrowserWindow({
+        width: bounds.width,
+        height: bounds.height,
+        show: false,
+        webPreferences: {
+          preload: path.resolve(__dirname, '..', '..', 'preload.js'),
+          contextIsolation: true,
+          nodeIntegration: false
+        }
+      });
+      const stateEncoded = Buffer.from(JSON.stringify(windowState)).toString('base64');
+      const mainHtmlPath = path.join(process.cwd(), 'renderer', 'main.html');
+      await newWindow.loadFile(mainHtmlPath, { query: { state: stateEncoded } });
+      newWindow.show();
+      newWindow.maximize();
+      this.logger.info('✅ New window created successfully');
+      return { success: true };
+    } catch (error) {
+      this.logger.error('❌ Error creating new window:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+ 
+
+ 
+
+  /**
    * Get home directory
    * @returns {Promise<string>} Home directory path
    */
@@ -907,6 +946,13 @@ async verifyNodeInstallation() {
       return this.completeWelcomeSetup(event);
     });
 
+    /**
+     * Create new window with state
+     */
+    ipcMain.handle('create-new-window-with-state', async (event, windowState) => {
+      return await this.createNewWindowWithState(windowState);
+    });
+
     this.logger.info('✅ System operations IPC handlers registered');
   }
 
@@ -924,6 +970,7 @@ async verifyNodeInstallation() {
     ipcMain.removeHandler('get-dev-server-url-from-main');
     ipcMain.removeHandler('confirm-exit-app');
     ipcMain.removeHandler('open-file-explorer');
+    ipcMain.removeHandler('create-new-window-with-state');
     
     // Remove all listeners for event-based handlers
     ipcMain.removeAllListeners('clear-console-output');
