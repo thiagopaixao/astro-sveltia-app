@@ -136,6 +136,18 @@ class BrowserHandlers {
       this.logger.info(`🌐 ${viewName} navigated to: ${url}`);
     });
 
+    // Monitor SPA navigation (for Sveltia CMS)
+    view.webContents.on('did-navigate-in-page', (event, url, isMainFrame) => {
+      if (!isMainFrame) return;
+      
+      BrowserWindow.getAllWindows().forEach(w => {
+        if (!w.isDestroyed()) {
+          w.webContents.send('browser-view-navigated', { viewName, url });
+        }
+      });
+      this.logger.info(`🌐 ${viewName} navigated in-page to: ${url}`);
+    });
+
     // Set timeout for loading
     loadingTimeout = setTimeout(() => {
       handleError(new Error('Loading timeout after 8 seconds'));
@@ -282,7 +294,15 @@ class BrowserHandlers {
     
     if (view && !view.webContents.isDestroyed()) {
       this.trackBrowserViewLoad(view, viewName, window);
-      view.webContents.reload();
+      
+      // For editor (Sveltia), use reloadIgnoringCache to prevent "Loading site data..." freeze
+      // This clears HTTP cache but PRESERVES localStorage/sessionStorage (user settings)
+      if (viewName === 'editor') {
+        view.webContents.reloadIgnoringCache();
+      } else {
+        view.webContents.reload();
+      }
+      
       return true;
     }
     return false;
