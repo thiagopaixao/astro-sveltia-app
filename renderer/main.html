@@ -139,6 +139,8 @@ clearingCache: false,
     helpModalOpen: false,
     aboutModalOpen: false,
     exitModalOpen: false,
+    closeProjectModalOpen: false,
+    isNavigating: false,
     isExitingProgrammatically: false,
     selectedBranch: 'stage',
     newBranchName: '',
@@ -176,7 +178,7 @@ clearingCache: false,
         return this.devServerUrl || sessionStorage.getItem('devServerUrl') || this.baseURL;
     },
     get isAnyOverlayOpen() {
-        return this.menuOpen || this.publishModalOpen || this.branchModalOpen || this.updateModalOpen || this.clearCacheModalOpen || this.helpModalOpen || this.aboutModalOpen || this.exitModalOpen;
+        return this.menuOpen || this.publishModalOpen || this.branchModalOpen || this.updateModalOpen || this.clearCacheModalOpen || this.helpModalOpen || this.aboutModalOpen || this.exitModalOpen || this.closeProjectModalOpen;
     },
     startResize(event) {
         this.isResizing = true;
@@ -401,6 +403,35 @@ clearingCache: false,
         if (window.electronAPI && window.electronAPI.sendExitConfirmationResponse) {
             window.electronAPI.sendExitConfirmationResponse(false);
         }
+    },
+
+    closeProject() {
+        this.menuOpen = false;
+        this.closeProjectModalOpen = true;
+    },
+    confirmCloseProject() {
+        this.closeProjectModalOpen = false;
+        
+        // Limpar sessionStorage do projeto atual
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (projectId) {
+            sessionStorage.removeItem(`projectCreationState-${projectId}`);
+            sessionStorage.removeItem(`projectOpenState-${projectId}`);
+        }
+        sessionStorage.removeItem('currentProjectId');
+        sessionStorage.removeItem('devServerUrl');
+        sessionStorage.removeItem('appLogOutput');
+        sessionStorage.removeItem('serverOutput');
+        sessionStorage.removeItem('commandOutput');
+        
+        // ESTRATÉGIA RADICAL: Fechar janela atual e abrir nova com index.html
+        // Isso garante estado 100% limpo, eliminando BrowserViews e estado Alpine.js
+        if (window.electronAPI && window.electronAPI.closeAndReopenToIndex) {
+            window.electronAPI.closeAndReopenToIndex();
+        }
+    },
+    cancelCloseProject() {
+        this.closeProjectModalOpen = false;
     },
     addTerminalTab() {
         const newId = Date.now();
@@ -1046,8 +1077,8 @@ clearingCache: false,
         if (!this.isSecondaryWindow) {
             window.addEventListener('beforeunload', (e) => {
             console.log('beforeunload event triggered, isExitingProgrammatically:', this.isExitingProgrammatically);
-                if (this.isExitingProgrammatically) {
-                    console.log('Programmatic exit detected - allowing window to close');
+                if (this.isExitingProgrammatically || this.isNavigating) {
+                    console.log('Programmatic exit or navigation detected - allowing window to close/navigate');
                     return true;
                 }
             // Otherwise, prevent default and show confirmation dialog
@@ -1674,6 +1705,13 @@ clearingCache: false,
     </a>
   </li>
 
+  <li>
+    <a @click.prevent="closeProject()" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+      <span class="material-icons mr-3">folder_off</span>
+      <span>Fechar Projeto</span>
+    </a>
+  </li>
+
   <li class="border-t border-gray-700 my-2"></li>
   <li>
     <a class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#" data-navigate="config.html">
@@ -1860,6 +1898,18 @@ Publicando...
 </div>
 </div>
 </div>
+
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="closeProjectModalOpen">
+  <div @click.outside="closeProjectModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
+    <h3 class="text-lg font-medium text-text-dark">Fechar Projeto</h3>
+    <p class="mt-2 text-sm text-muted-dark">Tem certeza de que deseja fechar o projeto atual? Você será redirecionado para a tela de seleção de projetos.</p>
+    <div class="mt-4 flex justify-end space-x-2">
+      <button @click="cancelCloseProject()" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
+      <button @click="confirmCloseProject()" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-500">Fechar Projeto</button>
+    </div>
+  </div>
+</div>
+
 </div>
 
 </body></html>

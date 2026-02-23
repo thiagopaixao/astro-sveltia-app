@@ -772,6 +772,54 @@ async verifyNodeInstallation() {
   }
 
   /**
+   * Close current window and open new one with index.html
+   * @param {Object} event - IPC event object
+   * @returns {Promise<{success: boolean, error?: string}>} Result of the operation
+   */
+  async closeAndReopenToIndex(event) {
+    try {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (window && !window.isDestroyed()) {
+        this.logger.info('🔄 Closing window and reopening with index.html');
+        
+        // Get current window bounds to preserve size
+        const { width, height, x, y } = window.getBounds();
+        
+        // Create new window FIRST (to prevent app from quitting if this is the last window)
+        const newWindow = new BrowserWindow({
+          width,
+          height,
+          x,
+          y,
+          show: false, // Create hidden initially
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, '../../preload.js')
+          }
+        });
+        
+        // Load index.html
+        const indexPath = path.join(process.cwd(), 'renderer', 'index.html');
+        await newWindow.loadFile(indexPath);
+        
+        // Show new window
+        newWindow.show();
+        
+        // Now close the old window
+        window.close();
+        
+        this.logger.info('✅ Window closed and new one opened with index.html');
+        return { success: true };
+      }
+      return { success: false, error: 'Window not found or destroyed' };
+    } catch (error) {
+      this.logger.error('❌ Error in closeAndReopenToIndex:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Complete welcome setup
    * @param {Object} event - IPC event object
    */
@@ -987,6 +1035,13 @@ async verifyNodeInstallation() {
      */
     ipcMain.handle('create-new-window-with-state', async (event, windowState) => {
       return await this.createNewWindowWithState(windowState);
+    });
+
+    /**
+     * Close and reopen to index
+     */
+    ipcMain.handle('close-and-reopen-to-index', async (event) => {
+      return await this.closeAndReopenToIndex(event);
     });
 
     this.logger.info('✅ System operations IPC handlers registered');
