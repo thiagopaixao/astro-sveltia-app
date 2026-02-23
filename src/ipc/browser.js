@@ -125,6 +125,17 @@ class BrowserHandlers {
       handleError(new Error(`${errorDescription} (${errorCode})`));
     });
 
+    // Monitor continuous navigation
+    view.webContents.on('did-navigate', (event, url) => {
+      // Broadcast navigation to all windows
+      BrowserWindow.getAllWindows().forEach(w => {
+        if (!w.isDestroyed()) {
+          w.webContents.send('browser-view-navigated', { viewName, url });
+        }
+      });
+      this.logger.info(`🌐 ${viewName} navigated to: ${url}`);
+    });
+
     // Set timeout for loading
     loadingTimeout = setTimeout(() => {
       handleError(new Error('Loading timeout after 8 seconds'));

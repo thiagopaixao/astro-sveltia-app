@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createNewWindowWithState: (windowState) => ipcRenderer.invoke('create-new-window-with-state', windowState),
   closeAndReopenToIndex: () => ipcRenderer.invoke('close-and-reopen-to-index'),
   onBrowserViewLoaded: (callback) => ipcRenderer.on('browser-view-loaded', (event, payload) => callback(payload)),
+  onBrowserViewNavigated: (callback) => ipcRenderer.on('browser-view-navigated', (event, payload) => callback(payload)),
   confirmExitApp: () => ipcRenderer.invoke('confirm-exit-app'),
   onShowExitConfirmation: (callback) => ipcRenderer.on('show-exit-confirmation', callback),
   onAppExiting: (callback) => ipcRenderer.on('app-exiting', callback),

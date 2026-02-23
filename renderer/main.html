@@ -1042,6 +1042,15 @@ clearingCache: false,
             });
         }
 
+        // Listen for navigation events from BrowserViews
+        if (window.electronAPI && window.electronAPI.onBrowserViewNavigated) {
+            window.electronAPI.onBrowserViewNavigated(({ viewName, url }) => {
+                console.log(`🌐 BrowserView navigated: ${viewName} to ${url}`);
+                const target = viewName === 'editor' ? 'editor' : 'view';
+                this.updateAddressFromBrowser(target, url);
+            });
+        }
+
         this.updateAddressFromBrowser('view');
 
         // Fallback timeout to ensure loading animation doesn't get stuck
