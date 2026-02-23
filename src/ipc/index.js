@@ -31,9 +31,16 @@ class IpcRegistry {
     this.authHandlers = new AuthHandlers(dependencies);
     this.projectHandlers = new ProjectHandlers(dependencies);
     this.gitHandlers = new GitHandlers(dependencies);
-    this.browserHandlers = new BrowserHandlers(dependencies);
-    this.fileHandlers = new FileHandlers(dependencies);
+    
+    // Initialize projectCreationHandler FIRST (needed by browserHandlers and systemHandlers)
     this.projectCreationHandler = new ProjectCreationHandler(dependencies);
+    
+    // Initialize BrowserHandlers with ProcessManager from projectCreationHandler
+    this.browserHandlers = new BrowserHandlers({
+      ...dependencies,
+      processManager: this.projectCreationHandler.processManager
+    });
+    this.fileHandlers = new FileHandlers(dependencies);
     
     // Initialize SystemHandlers with ProcessManager from ProjectCreationHandler
     this.systemHandlers = new SystemHandlers({

@@ -7,6 +7,7 @@
 'use strict';
 
 const { ipcMain, BrowserView, BrowserWindow } = require('electron');
+const path = require('path');
 
 /**
  * @typedef {Object} BrowserViewBounds
@@ -26,10 +27,12 @@ class BrowserHandlers {
    * @param {Object} dependencies.logger - Logger instance
    * @param {Object} dependencies.windowManager - Window manager instance
    */
-  constructor({ logger, windowManager }) {
+  constructor({ logger, windowManager, processManager }) {
     this.logger = logger;
     this.windowManager = windowManager;
+    this.processManager = processManager;
     this.windowBrowserViews = new Map(); // Store BrowserViews per window
+    this.windowSlugMap = new Map(); // Store page slugs per window for preview sync
   }
 
   /**
@@ -41,8 +44,11 @@ class BrowserHandlers {
     if (!this.windowBrowserViews.has(window)) {
       const editorView = new BrowserView({
         webPreferences: {
+          // Preload script for Sveltia CMS integration (file picker, deep links)
+          preload: path.join(__dirname, '../preload/sveltia-cms-preload.js'),
           nodeIntegration: false,
           contextIsolation: true,
+          sandbox: false,  // Required for preload script to access IPC
           enableRemoteModule: false,
           webSecurity: true
         }
@@ -379,6 +385,55 @@ class BrowserHandlers {
       this.windowBrowserViews.delete(window);
       this.logger.info(`Cleaned up BrowserViews for window ${window.id}`);
     }
+    
+    // Clean up slug mapping for this window
+    if (this.windowSlugMap.has(window.id)) {
+      this.windowSlugMap.delete(window.id);
+      this.logger.info(`Cleaned up slug mapping for window ${window.id}`);
+    }
+  }
+
+  /**
+   * Validate and sanitize slug value
+   * @param {string} slug - Raw slug value
+   * @returns {string|null} Sanitized slug or null if invalid
+   * @private
+   */
+  _validateAndSanitizeSlug(slug) {
+    // Check for null, undefined, or non-string values
+    if (slug === null || slug === undefined) {
+      this.logger.warn('⚠️  Invalid slug received: null or undefined');
+      return null;
+    }
+
+    // Check for non-string type
+    if (typeof slug !== 'string') {
+      this.logger.warn(`⚠️  Invalid slug type received: ${typeof slug}`);
+      return null;
+    }
+
+    // Check for empty or whitespace-only string
+    const trimmedSlug = slug.trim();
+    if (trimmedSlug === '') {
+      this.logger.warn('⚠️  Invalid slug received: empty string');
+      return null;
+    }
+
+    // Sanitize slug: remove special characters that could cause issues
+    // Allow: alphanumeric, hyphens, underscores, forward slashes (for paths)
+    const sanitizedSlug = trimmedSlug.replace(/[^a-zA-Z0-9-_/]/g, '');
+
+    if (sanitizedSlug !== trimmedSlug) {
+      this.logger.warn(`⚠️  Slug contained special characters, sanitized from "${trimmedSlug}" to "${sanitizedSlug}"`);
+    }
+
+    // Final check after sanitization
+    if (sanitizedSlug === '') {
+      this.logger.warn('⚠️  Slug became empty after sanitization');
+      return null;
+    }
+
+    return sanitizedSlug;
   }
 
   /**
@@ -450,6 +505,124 @@ class BrowserHandlers {
       return await this.clearBrowserCache(event);
     });
 
+
+    /**
+     * Handle CMS page loaded event from Sveltia preload script
+     * Stores the slug and loads preview URL in viewer BrowserView
+     */
+    ipcMain.on('cms:page-loaded', (event, slug) => {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        this.logger.warn('❌ Could not determine window for cms:page-loaded event');
+        return;
+      }
+
+      // Validate and sanitize slug
+      const validatedSlug = this._validateAndSanitizeSlug(slug);
+      if (!validatedSlug) {
+        this.logger.error(`❌ cms:page-loaded rejected: invalid slug "${slug}"`);
+        return;
+      }
+
+      const windowId = window.id;
+      this.windowSlugMap.set(windowId, validatedSlug);
+      this.logger.info(`📄 CMS page loaded - stored slug "${validatedSlug}" for window ${windowId}`);
+
+      // Get dev server URL from processManager (dynamically captured from Astro server)
+      const devServerUrl = this.processManager?.getGlobalDevServerUrl() || 'http://localhost:4321';
+      const previewUrl = `${devServerUrl}${validatedSlug}/`;
+
+      // Load preview URL in viewer BrowserView
+      const { viewerView } = this.getOrCreateBrowserViews(window);
+      if (viewerView) {
+        this.logger.info(`🔗 Loading preview URL in viewer: ${previewUrl}`);
+        this.trackBrowserViewLoad(viewerView, 'viewer', window);
+        viewerView.webContents.loadURL(previewUrl);
+      }
+    });
+
+    /**
+     * Handle CMS content saved event from Sveltia preload script
+     * Only updates preview if the slug has changed
+     */
+    ipcMain.on('cms:content-saved', (event, newSlug) => {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        this.logger.warn('❌ Could not determine window for cms:content-saved event');
+        return;
+      }
+
+      // Validate and sanitize slug
+      const validatedSlug = this._validateAndSanitizeSlug(newSlug);
+      if (!validatedSlug) {
+        this.logger.error(`❌ cms:content-saved rejected: invalid slug "${newSlug}"`);
+        return;
+      }
+
+      const windowId = window.id;
+      const lastSlug = this.windowSlugMap.get(windowId);
+
+      if (validatedSlug !== lastSlug) {
+        this.windowSlugMap.set(windowId, validatedSlug);
+        this.logger.info(`💾 Content saved - slug changed from "${lastSlug}" to "${validatedSlug}" for window ${windowId}`);
+
+        // Get dev server URL from processManager (dynamically captured from Astro server)
+        const devServerUrl = this.processManager?.getGlobalDevServerUrl() || 'http://localhost:4321';
+        const previewUrl = `${devServerUrl}${validatedSlug}/`;
+
+        // Update preview URL in viewer BrowserView
+        const { viewerView } = this.getOrCreateBrowserViews(window);
+        if (viewerView) {
+          this.logger.info(`🔗 Updating preview URL in viewer: ${previewUrl}`);
+          this.trackBrowserViewLoad(viewerView, 'viewer', window);
+          viewerView.webContents.loadURL(previewUrl);
+        }
+      } else {
+        this.logger.info(`💾 Content saved - slug unchanged "${validatedSlug}" for window ${windowId}, skipping preview update`);
+      }
+    });
+    /**
+     * Handle CMS slug changed event from Sveltia preload script
+     * Triggered when user saves a page with a different slug
+     * Works with both Sveltia configurations (default redirect and stay on page)
+     */
+    ipcMain.on('cms:slug-changed', (event, newSlug) => {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window) {
+        this.logger.warn('❌ Could not determine window for cms:slug-changed event');
+        return;
+      }
+
+      // Validate and sanitize slug
+      const validatedSlug = this._validateAndSanitizeSlug(newSlug);
+      if (!validatedSlug) {
+        this.logger.error(`❌ cms:slug-changed rejected: invalid slug "${newSlug}"`);
+        return;
+      }
+
+      const windowId = window.id;
+      const lastSlug = this.windowSlugMap.get(windowId);
+
+      if (validatedSlug !== lastSlug) {
+        this.windowSlugMap.set(windowId, validatedSlug);
+        this.logger.info(`📝 Slug changed from "${lastSlug}" to "${validatedSlug}" for window ${windowId}`);
+
+        // Get dev server URL from processManager (dynamically captured from Astro server)
+        const devServerUrl = this.processManager?.getGlobalDevServerUrl() || 'http://localhost:4321';
+        const previewUrl = `${devServerUrl}${validatedSlug}/`;
+
+        // Update preview URL in viewer BrowserView
+        const { viewerView } = this.getOrCreateBrowserViews(window);
+        if (viewerView) {
+          this.logger.info(`🔗 Updating preview URL after slug change: ${previewUrl}`);
+          this.trackBrowserViewLoad(viewerView, 'viewer', window);
+          viewerView.webContents.loadURL(previewUrl);
+        }
+      } else {
+        this.logger.info(`📝 Slug unchanged "${validatedSlug}" for window ${windowId}, skipping preview update`);
+      }
+    });
+
     this.logger.info('✅ BrowserView management IPC handlers registered');
   }
 
@@ -468,6 +641,11 @@ class BrowserHandlers {
     ipcMain.removeHandler('browser-view-reload');
     ipcMain.removeHandler('get-browser-view-url');
     ipcMain.removeHandler('clear-browser-cache');
+    
+    // Remove CMS event listeners
+    ipcMain.removeAllListeners('cms:page-loaded');
+    ipcMain.removeAllListeners('cms:content-saved');
+    ipcMain.removeAllListeners('cms:slug-changed');
     
     this.logger.info('✅ BrowserView management IPC handlers unregistered');
   }
