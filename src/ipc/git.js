@@ -457,42 +457,104 @@ class GitHandlers {
   }
 
   /**
-   * Pull changes from remote (preview branch)
+   * Get GitHub token from secure storage
+   * @returns {Promise<string|null>} GitHub token or null if not found
+   */
+  async getGitHubToken() {
+    try {
+      const keytar = require('keytar');
+      const { GITHUB_CONFIG } = require('../config/github-config.js');
+      return await keytar.getPassword(GITHUB_CONFIG.SERVICE_NAME, 'github-token');
+    } catch (error) {
+      this.logger.error('Error getting GitHub token:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Broadcast a message to all renderer windows
+   * @param {string} channel - IPC channel name
+   * @param {*} payload - Payload to send
+   */
+  broadcastToWindows(channel, payload) {
+    const normalizedPayload = typeof payload === 'object' && payload !== null
+      ? payload
+      : { message: String(payload) };
+
+    const { BrowserWindow } = require('electron');
+    BrowserWindow.getAllWindows().forEach(window => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(channel, normalizedPayload);
+      }
+    });
+  }
+
+  /**
+   * Pull changes from remote (current branch)
    * @param {string} projectPath - Path to the git repository
+   * @param {Object} [callbacks] - Optional progress callbacks
+   * @param {Function} [callbacks.onOutput] - Callback for output messages
+   * @param {Function} [callbacks.onStatus] - Callback for status updates
    * @returns {Promise<{pulled: boolean, changes: number}>}
    */
-  async gitPullFromPreview(projectPath) {
+  async gitPullFromPreview(projectPath, callbacks = {}) {
+    const { onOutput, onStatus } = callbacks;
+    const fs = require('fs');
+
     try {
-      // Get current branch to switch back to it later
-      const currentBranch = await git.currentBranch({ fs: require('fs'), dir: projectPath });
-      
-      // Switch to preview branch
-      await git.checkout({
-        fs: require('fs'),
-        dir: projectPath,
-        ref: 'preview'
-      });
-      
-      // Pull from remote
+      // Get current branch
+      const currentBranch = await git.currentBranch({ fs, dir: projectPath });
+
+      if (onOutput) {
+        onOutput({ stepId: 'pull', message: `Pulling from branch: ${currentBranch}` });
+      }
+
+      // Broadcast start
+      if (onStatus) {
+        onStatus({ stepId: 'pull', status: 'active' });
+      }
+      this.broadcastToWindows('git:operation-status', { stepId: 'pull', status: 'active' });
+
+      // Get GitHub token for authentication
+      const token = await this.getGitHubToken();
+      const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+
+      if (token && onOutput) {
+        onOutput({ stepId: 'pull', message: 'Using authenticated connection' });
+      }
+
+      // Pull from current branch
       await git.pull({
-        fs: require('fs'),
+        fs,
         http,
         dir: projectPath,
-        ref: 'preview',
-        singleBranch: true
+        ref: currentBranch,
+        singleBranch: true,
+        auth
       });
-      
-      // Switch back to original branch
-      await git.checkout({
-        fs: require('fs'),
-        dir: projectPath,
-        ref: currentBranch
-      });
-      
-      this.logger.info('Pulled changes from preview branch');
+
+      this.logger.info(`Pulled changes from branch: ${currentBranch}`);
+
+      // Broadcast success
+      if (onStatus) {
+        onStatus({ stepId: 'pull', status: 'success' });
+      }
+      this.broadcastToWindows('git:operation-status', { stepId: 'pull', status: 'success' });
+
       return { pulled: true, changes: 0 }; // TODO: Count actual changes
     } catch (error) {
-      this.logger.error('Error pulling from preview:', error);
+      this.logger.error('Error pulling from remote:', error);
+
+      // Broadcast failure
+      if (onStatus) {
+        onStatus({ stepId: 'pull', status: 'failure', error: error.message });
+      }
+      this.broadcastToWindows('git:operation-status', {
+        stepId: 'pull',
+        status: 'failure',
+        error: error.message
+      });
+
       throw error;
     }
   }
@@ -501,22 +563,65 @@ class GitHandlers {
    * Push changes to a specific branch
    * @param {string} projectPath - Path to the git repository
    * @param {string} targetBranch - Target branch name
+   * @param {Object} [callbacks] - Optional progress callbacks
+   * @param {Function} [callbacks.onOutput] - Callback for output messages
+   * @param {Function} [callbacks.onStatus] - Callback for status updates
    * @returns {Promise<{pushed: boolean, changes: number}>}
    */
-  async gitPushToBranch(projectPath, targetBranch) {
+  async gitPushToBranch(projectPath, targetBranch, callbacks = {}) {
+    const { onOutput, onStatus } = callbacks;
+    const fs = require('fs');
+
     try {
+      if (onOutput) {
+        onOutput({ stepId: 'push', message: `Pushing to branch: ${targetBranch}` });
+      }
+
+      // Broadcast start
+      if (onStatus) {
+        onStatus({ stepId: 'push', status: 'active' });
+      }
+      this.broadcastToWindows('git:operation-status', { stepId: 'push', status: 'active' });
+
+      // Get GitHub token for authentication
+      const token = await this.getGitHubToken();
+      const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+
+      if (token && onOutput) {
+        onOutput({ stepId: 'push', message: 'Using authenticated connection' });
+      }
+
       // Push to target branch
       await git.push({
-        fs: require('fs'),
+        fs,
         http,
         dir: projectPath,
-        ref: targetBranch
+        ref: targetBranch,
+        auth
       });
-      
+
       this.logger.info(`Pushed changes to branch: ${targetBranch}`);
+
+      // Broadcast success
+      if (onStatus) {
+        onStatus({ stepId: 'push', status: 'success' });
+      }
+      this.broadcastToWindows('git:operation-status', { stepId: 'push', status: 'success' });
+
       return { pushed: true, changes: 0 }; // TODO: Count actual changes
     } catch (error) {
       this.logger.error('Error pushing to branch:', error);
+
+      // Broadcast failure
+      if (onStatus) {
+        onStatus({ stepId: 'push', status: 'failure', error: error.message });
+      }
+      this.broadcastToWindows('git:operation-status', {
+        stepId: 'push',
+        status: 'failure',
+        error: error.message
+      });
+
       throw error;
     }
   }
@@ -631,7 +736,14 @@ class GitHandlers {
     ipcMain.handle('git:pull-from-preview', async (event, projectId) => {
       try {
         const projectPath = await this.getProjectPath(projectId);
-        const result = await this.gitPullFromPreview(projectPath);
+
+        // Pass callbacks for progress updates
+        const callbacks = {
+          onOutput: (data) => this.broadcastToWindows('git:operation-output', data),
+          onStatus: (data) => this.broadcastToWindows('git:operation-status', data)
+        };
+
+        const result = await this.gitPullFromPreview(projectPath, callbacks);
         return { success: true, ...result };
       } catch (error) {
         this.logger.error('Error in git:pull-from-preview handler:', error);
@@ -645,7 +757,14 @@ class GitHandlers {
     ipcMain.handle('git:push-to-branch', async (event, projectId, targetBranch) => {
       try {
         const projectPath = await this.getProjectPath(projectId);
-        const result = await this.gitPushToBranch(projectPath, targetBranch);
+
+        // Pass callbacks for progress updates
+        const callbacks = {
+          onOutput: (data) => this.broadcastToWindows('git:operation-output', data),
+          onStatus: (data) => this.broadcastToWindows('git:operation-status', data)
+        };
+
+        const result = await this.gitPushToBranch(projectPath, targetBranch, callbacks);
         return { success: true, ...result };
       } catch (error) {
         this.logger.error('Error in git:push-to-branch handler:', error);
