@@ -693,27 +693,33 @@ clearingCache: false,
             return;
         }
         
-        this.pullLoading = true;
+        // Close confirmation modal
         this.updateModalOpen = false;
+        
+        // Start progress modal
+        this.startGitOperation('pull');
+        
+        // Initialize steps
+        this.gitOperationSteps = [
+            { id: 'fetch', title: 'Buscando alterações remotas', status: 'active', log: '', expanded: false },
+            { id: 'merge', title: 'Mesclando alterações', status: 'pending', log: '', expanded: false },
+            { id: 'complete', title: 'Finalizando', status: 'pending', log: '', expanded: false }
+        ];
         
         try {
             const result = await window.electronAPI.pullFromPreview(projectId);
+            
             if (result.success) {
-                console.log('✅ Pull from preview successful:', result.message);
-                alert('✅ ' + result.message);
+                this.finishGitOperation(true);
                 // Refresh repository info after pull
                 await this.loadRepositoryInfo();
-                // Reload branches to update state
                 await this.loadBranches();
             } else {
-                console.error('❌ Error pulling from preview:', result.error);
-                alert('❌ Erro ao atualizar: ' + result.error);
+                this.finishGitOperation(false, result.error || 'Erro ao atualizar');
             }
         } catch (error) {
             console.error('❌ Error pulling from preview:', error);
-            alert('❌ Erro ao atualizar: ' + error.message);
-        } finally {
-            this.pullLoading = false;
+            this.finishGitOperation(false, error.message);
         }
     },
     async pushToBranch() {
@@ -728,25 +734,32 @@ clearingCache: false,
             return;
         }
         
-        this.pushLoading = true;
+        // Close selection modal
         this.publishModalOpen = false;
+        
+        // Start progress modal
+        this.startGitOperation('push');
+        
+        // Initialize steps
+        this.gitOperationSteps = [
+            { id: 'prepare', title: 'Preparando alterações', status: 'active', log: '', expanded: false },
+            { id: 'push', title: 'Enviando para remote', status: 'pending', log: '', expanded: false },
+            { id: 'complete', title: 'Finalizando', status: 'pending', log: '', expanded: false }
+        ];
         
         try {
             const result = await window.electronAPI.pushToBranch(projectId, this.selectedPublishBranch);
+            
             if (result.success) {
-                console.log('✅ Push to branch successful:', result.message);
-                alert('✅ ' + result.message);
+                this.finishGitOperation(true);
                 // Refresh repository info after push
                 await this.loadRepositoryInfo();
             } else {
-                console.error('❌ Error pushing to branch:', result.error);
-                alert('❌ Erro ao publicar: ' + result.error);
+                this.finishGitOperation(false, result.error || 'Erro ao publicar');
             }
         } catch (error) {
             console.error('❌ Error pushing to branch:', error);
-            alert('❌ Erro ao publicar: ' + error.message);
-        } finally {
-            this.pushLoading = false;
+            this.finishGitOperation(false, error.message);
         }
     },
     // Git operation progress modal methods
@@ -1813,7 +1826,7 @@ clearingCache: false,
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="updateModalOpen">
 <div @click.outside="updateModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
 <h3 class="text-lg font-medium text-text-dark">Confirmar Atualização</h3>
-<p class="mt-2 text-sm text-muted-dark">Você tem certeza que deseja atualizar a branch '<span class="font-bold text-primary" x-text="currentBranch"></span>'? Isso buscará atualizações da branch remota 'preview' e mesclará na branch atual.</p>
+            <p class="mt-2 text-sm text-muted-dark">Você tem certeza que deseja atualizar a branch '<span class="font-bold text-primary" x-text="currentBranch"></span>'? Isso buscará atualizações da branch remota '<span x-text="currentBranch"></span>' e mesclará na branch atual.</p>
 <div class="mt-4 flex justify-end space-x-2">
 <button @click="updateModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" :disabled="pullLoading">Cancelar</button>
 <button @click="pullFromPreview()" class="px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-orange-500" :disabled="pullLoading">
