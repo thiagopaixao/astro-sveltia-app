@@ -8,10 +8,14 @@ global.mockElectron = {
   app: {
     getPath: vi.fn(),
     getVersion: vi.fn(),
-    quit: vi.fn()
+    quit: vi.fn(),
+    isPackaged: false,
+    getAppPath: vi.fn()
   },
   BrowserWindow: {
-    getAllWindows: vi.fn(() => [])
+    getAllWindows: vi.fn(() => []),
+    getFocusedWindow: vi.fn(),
+    fromWebContents: vi.fn()
   },
   ipcMain: {
     handle: vi.fn(),

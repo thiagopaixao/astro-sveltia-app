@@ -71,6 +71,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pullFromPreview: (projectId) => ipcRenderer.invoke('git:pull-from-preview', projectId),
   pushToBranch: (projectId, targetBranch) => ipcRenderer.invoke('git:push-to-branch', projectId, targetBranch),
   listRemoteBranches: (projectId) => ipcRenderer.invoke('git:list-remote-branches', projectId),
+  // Git operation progress listeners
+  onGitOperationOutput: (callback) => {
+    const handler = (_, data) => callback(data);
+    ipcRenderer.on('git:operation-output', handler);
+    return () => ipcRenderer.removeListener('git:operation-output', handler);
+  },
+  onGitOperationStatus: (callback) => {
+    const handler = (_, data) => callback(data);
+    ipcRenderer.on('git:operation-status', handler);
+    return () => ipcRenderer.removeListener('git:operation-status', handler);
+  },
   openInFileExplorer: (path) => ipcRenderer.invoke('open-file-explorer', path),
   // Path utility functions
   joinPath: (...segments) => ipcRenderer.invoke('join-path', ...segments),
