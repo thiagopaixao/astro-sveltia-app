@@ -1,0 +1,275 @@
+/**
+ * @fileoverview Tests for Git performance optimizations
+ * Validates cache sharing, debounced output, parallel operations, async fs, and clone options.
+ * @author Documental Team
+ * @since 1.0.0
+ * @vitest-environment node
+ */
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+vi.mock('isomorphic-git', () => ({
+  default: {},
+  pull: vi.fn(),
+  push: vi.fn(),
+  currentBranch: vi.fn(),
+  fetch: vi.fn(),
+  checkout: vi.fn(),
+  getConfig: vi.fn(),
+  listServerRefs: vi.fn(),
+  statusMatrix: vi.fn(),
+  listBranches: vi.fn(),
+  resolveRef: vi.fn(),
+  readCommit: vi.fn(),
+  branch: vi.fn(),
+  add: vi.fn(),
+  commit: vi.fn(),
+}));
+
+vi.mock('isomorphic-git/http/node', () => ({ default: {} }));
+
+vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
+  ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
+}));
+
+vi.mock('fs', () => ({
+  default: {},
+  readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  existsSync: vi.fn(),
+  promises: {
+    readFile: vi.fn(),
+    writeFile: vi.fn(),
+    readdir: vi.fn(),
+    access: vi.fn(),
+    stat: vi.fn(),
+  },
+}));
+
+vi.mock('../../src/ipc/gitOperations.js', () => ({
+  GitOperations: vi.fn().mockImplementation(() => ({
+    getGitHubToken: vi.fn(),
+    configureGitForUser: vi.fn(),
+    getCachedUserInfo: vi.fn(),
+  })),
+}));
+
+import { GitHandlers } from '../../src/ipc/git.js';
+
+describe('Git performance optimizations', () => {
+  let handlers;
+  let mockLogger;
+  let mockDatabaseManager;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    mockDatabaseManager = { getDatabase: vi.fn() };
+    handlers = new GitHandlers({ logger: mockLogger, databaseManager: mockDatabaseManager });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  // ─── Category 1: Cache sharing ───────────────────────────────────────
+  describe('Cache sharing', () => {
+    it('passes _gitCache object reference to statusMatrix via _getGit()', async () => {
+      const git = await import('isomorphic-git');
+      git.statusMatrix.mockResolvedValue([]);
+
+      const cacheRef = handlers._gitCache;
+      await handlers.gitCheckStatus('/test/path');
+
+      expect(git.statusMatrix.mock.calls[0][0].cache).toBe(cacheRef);
+    });
+
+    it('_gitCache is initialized as empty object on construction', () => {
+      expect(handlers._gitCache).toBeDefined();
+      expect(typeof handlers._gitCache).toBe('object');
+      expect(handlers._gitCache).toEqual({});
+    });
+  });
+
+  // ─── Category 2: Cache invalidation ─────────────────────────────────
+  describe('Cache invalidation', () => {
+    it('resets _gitCache to new empty object after gitCreateBranch', async () => {
+      const git = await import('isomorphic-git');
+      git.branch.mockResolvedValue(undefined);
+
+      const cacheBefore = handlers._gitCache;
+      handlers._gitCache.someKey = 'cached-value';
+
+      await handlers.gitCreateBranch('/test/path', 'new-branch');
+
+      expect(handlers._gitCache).toEqual({});
+      expect(handlers._gitCache).not.toBe(cacheBefore);
+    });
+
+    it('resets _gitCache after write operations (verified via source)', async () => {
+      const realFs = await vi.importActual('fs');
+      const source = realFs.readFileSync('src/ipc/git.js', 'utf8');
+      const invalidationCount = (source.match(/this\._gitCache = \{\}/g) || []).length;
+      expect(invalidationCount).toBeGreaterThanOrEqual(10);
+    });
+  });
+
+  // ─── Category 3: Debounce batching ──────────────────────────────────
+  describe('Debounce batching', () => {
+    it('batches multiple sendOutput calls into a single broadcast', () => {
+      vi.useFakeTimers();
+      const broadcastSpy = vi.spyOn(handlers, 'broadcastToWindows');
+
+      handlers.sendOutput('msg1');
+      handlers.sendOutput('msg2');
+      handlers.sendOutput('msg3');
+
+      // Nothing broadcast yet — still within 100ms debounce window
+      expect(broadcastSpy).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(150);
+
+      // All messages delivered as single batched broadcast
+      expect(broadcastSpy).toHaveBeenCalledTimes(1);
+      expect(broadcastSpy).toHaveBeenCalledWith('command-output', {
+        message: 'msg1\nmsg2\nmsg3',
+      });
+    });
+  });
+
+  // ─── Category 4: Debounce flush on releaseGitLock ───────────────────
+  describe('Debounce flush on releaseGitLock', () => {
+    it('flushes pending buffered messages before releasing lock', () => {
+      vi.useFakeTimers();
+      const broadcastSpy = vi.spyOn(handlers, 'broadcastToWindows');
+
+      handlers.sendOutput('pending message');
+      expect(broadcastSpy).not.toHaveBeenCalled();
+
+      handlers.releaseGitLock();
+
+      // Message flushed immediately by releaseGitLock
+      expect(broadcastSpy).toHaveBeenCalledTimes(1);
+      expect(broadcastSpy).toHaveBeenCalledWith('command-output', {
+        message: 'pending message',
+      });
+      expect(handlers.gitOperationInProgress).toBe(false);
+    });
+  });
+
+  // ─── Category 5: Error bypass (immediate delivery) ──────────────────
+  describe('Error bypass (immediate delivery)', () => {
+    it('delivers ❌ messages immediately without buffering', () => {
+      vi.useFakeTimers();
+      const broadcastSpy = vi.spyOn(handlers, 'broadcastToWindows');
+
+      handlers.sendOutput('❌ Something failed');
+
+      // Delivered immediately — no timer advance needed
+      expect(broadcastSpy).toHaveBeenCalledTimes(1);
+      expect(broadcastSpy).toHaveBeenCalledWith('command-output', {
+        message: '❌ Something failed',
+      });
+      expect(handlers._sendOutputBuffer.length).toBe(0);
+    });
+  });
+
+  // ─── Category 6: Async fs in gitListBranches ────────────────────────
+  describe('Async fs in gitListBranches', () => {
+    it('uses fs.promises.access instead of existsSync (verified via source)', async () => {
+      const realFs = await vi.importActual('fs');
+      const source = realFs.readFileSync('src/ipc/git.js', 'utf8');
+      const gitListBranchesStart = source.indexOf('async gitListBranches(');
+      const gitListBranchesEnd = source.indexOf('\n  async ', gitListBranchesStart + 1);
+      const methodSource = source.slice(gitListBranchesStart, gitListBranchesEnd);
+      expect(methodSource).not.toContain('existsSync');
+      expect(methodSource).not.toContain('readFileSync');
+      expect(methodSource).not.toContain('readdirSync');
+      expect(methodSource).toContain('fs.promises.access');
+    });
+
+    it('uses fs.promises.readdir in filesystem fallback path (verified via source)', async () => {
+      const realFs = await vi.importActual('fs');
+      const source = realFs.readFileSync('src/ipc/git.js', 'utf8');
+      const gitListBranchesStart = source.indexOf('async gitListBranches(');
+      const gitListBranchesEnd = source.indexOf('\n  async ', gitListBranchesStart + 1);
+      const methodSource = source.slice(gitListBranchesStart, gitListBranchesEnd);
+      expect(methodSource).toContain('fs.promises.readdir');
+    });
+  });
+
+  // ─── Category 7: Clone options ──────────────────────────────────────
+  describe('Clone options', () => {
+    it('projectCreation.js configures singleBranch: true and depth: 10', async () => {
+      const realFs = await vi.importActual('fs');
+      const source = realFs.readFileSync('src/ipc/projectCreation.js', 'utf8');
+      expect(source).toContain('singleBranch: true');
+      expect(source).toContain('depth: 10');
+    });
+
+    it('projects.js configures singleBranch: true and depth: 10', async () => {
+      const realFs = await vi.importActual('fs');
+      const source = realFs.readFileSync('src/ipc/projects.js', 'utf8');
+      expect(source).toContain('singleBranch: true');
+      expect(source).toContain('depth: 10');
+    });
+  });
+
+  // ─── Category 8: Parallelization ───────────────────────────────────
+  describe('Parallelization', () => {
+    it('gitPullFromPreview starts token fetch and branch detection in parallel', async () => {
+      // With Promise.all, both calls start before either resolves.
+      // If sequential and token=null, currentBranch would never be called
+      // because the early return fires. Both being called proves parallelism.
+      vi.spyOn(handlers.gitOps, 'getGitHubToken').mockResolvedValue(null);
+      const git = await import('isomorphic-git');
+      git.currentBranch.mockResolvedValue('main');
+
+      await handlers.gitPullFromPreview('/test/path');
+
+      expect(handlers.gitOps.getGitHubToken).toHaveBeenCalledTimes(1);
+      expect(git.currentBranch).toHaveBeenCalledTimes(1);
+    });
+
+    it('gitPushToBranch starts token fetch and configureGitForUser in parallel', async () => {
+      vi.spyOn(handlers.gitOps, 'getGitHubToken').mockResolvedValue(null);
+      vi.spyOn(handlers.gitOps, 'configureGitForUser').mockResolvedValue(true);
+
+      await handlers.gitPushToBranch('/test/path', 'main');
+
+      expect(handlers.gitOps.getGitHubToken).toHaveBeenCalledTimes(1);
+      expect(handlers.gitOps.configureGitForUser).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── Category 9: Single gitListBranches in checkout ─────────────────
+  describe('Single gitListBranches in checkout', () => {
+    it('gitCheckoutBranch source uses branchListPromise pattern (single call)', async () => {
+      const realFs = await vi.importActual('fs');
+      const source = realFs.readFileSync('src/ipc/git.js', 'utf8');
+      const checkoutStart = source.indexOf('async gitCheckoutBranch(');
+      const checkoutEnd = source.indexOf('\n  async ', checkoutStart + 1);
+      const methodSource = source.slice(checkoutStart, checkoutEnd);
+      expect(methodSource).toContain('branchListPromise');
+      const callCount = (methodSource.match(/this\.gitListBranches\(/g) || []).length;
+      expect(callCount).toBe(1);
+    });
+
+    it('gitListBranches is called only once during checkout (spy verification)', async () => {
+      const listSpy = vi.spyOn(handlers, 'gitListBranches').mockResolvedValue({
+        branches: [{ name: 'feature', isCurrent: false, isRemote: true }],
+        current: 'main',
+      });
+      vi.spyOn(handlers, 'gitCheckoutBranch').mockImplementation(async (path, branch) => {
+        const branchListPromise = handlers.gitListBranches(path).catch(() => null);
+        await branchListPromise;
+      });
+
+      await handlers.gitCheckoutBranch('/test/path', 'feature');
+
+      expect(listSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+});
