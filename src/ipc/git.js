@@ -57,6 +57,7 @@ class GitHandlers {
     this._sendOutputBuffer = [];
     this._sendOutputTimer = null;
     this._gitModuleCache = null;
+    this.cancelRequested = false;
   }
 
   async _getGit() {
@@ -76,6 +77,7 @@ class GitHandlers {
       return false;
     }
     this.gitOperationInProgress = true;
+    this.cancelRequested = false;
     this._lockTimeout = setTimeout(() => {
       this.logger.warn('Git operation lock auto-released after 60s timeout');
       this.gitOperationInProgress = false;
@@ -96,6 +98,32 @@ class GitHandlers {
       this._lockTimeout = null;
     }
     this.logger.info('Git operation lock released');
+  }
+
+  /**
+   * Request cancellation of the current Git operation
+   * Sets the cancel flag that operations should check between steps
+   */
+  requestCancel() {
+    this.cancelRequested = true;
+    this.logger.info('Git operation cancellation requested');
+  }
+
+  /**
+   * Reset the cancellation flag
+   * Should be called at the start of new operations
+   */
+  resetCancel() {
+    this.cancelRequested = false;
+    this.logger.debug('Git operation cancellation flag reset');
+  }
+
+  /**
+   * Check if cancellation has been requested
+   * @returns {boolean} True if cancellation was requested
+   */
+  isCancelRequested() {
+    return this.cancelRequested;
   }
 
   /**
@@ -696,6 +724,13 @@ class GitHandlers {
         ]);
         const author = { name: authorName, email: authorEmail };
         await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
+
+        // Check for cancellation after auto-commit
+        if (this.isCancelRequested()) {
+          this.logger.info('Pull operation cancelled after commit');
+          this.releaseGitLock();
+          return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+        }
       }
 
       this.sendOutput(`📥 Buscando alterações da branch remota '${currentBranch}'...`);
@@ -711,7 +746,21 @@ class GitHandlers {
       });
       this._gitCache = {};
 
+      // Check for cancellation after fetch
+      if (this.isCancelRequested()) {
+        this.logger.info('Pull operation cancelled after fetch');
+        this.releaseGitLock();
+        return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+      }
+
       this.sendOutput('🔄 Mesclando alterações...');
+
+      // Check for cancellation before merge
+      if (this.isCancelRequested()) {
+        this.logger.info('Pull operation cancelled before merge');
+        this.releaseGitLock();
+        return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+      }
 
       await gitMod.pull({
         fs,
@@ -793,6 +842,13 @@ class GitHandlers {
         const author = { name: authorName, email: authorEmail };
         await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
 
+        // Check for cancellation after auto-commit
+        if (this.isCancelRequested()) {
+          this.logger.info('Push operation cancelled after commit');
+          this.releaseGitLock();
+          return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+        }
+
         // First-push-wins: fetch + pull to integrate remote changes before pushing
         try {
           this.sendOutput(`📥 Integrando alterações remotas de '${targetBranch}'...`);
@@ -806,6 +862,14 @@ class GitHandlers {
             onAuth: () => auth,
           });
           this._gitCache = {};
+
+          // Check for cancellation after fetch
+          if (this.isCancelRequested()) {
+            this.logger.info('Push operation cancelled after fetch');
+            this.releaseGitLock();
+            return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+          }
+
           await gitMod.pull({
             fs,
             http,
@@ -816,6 +880,13 @@ class GitHandlers {
             onAuth: () => auth,
           });
           this._gitCache = {};
+
+          // Check for cancellation after pull
+          if (this.isCancelRequested()) {
+            this.logger.info('Push operation cancelled after pull');
+            this.releaseGitLock();
+            return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+          }
         } catch (fetchPullError) {
           // Branch doesn't exist on remote yet — OK for first push
           if (!fetchPullError.message.includes('Could not find') &&
@@ -828,6 +899,13 @@ class GitHandlers {
             this.logger.warn('Fetch/pull before push warning:', fetchPullError.message);
           }
         }
+      }
+
+      // Check for cancellation before push
+      if (this.isCancelRequested()) {
+        this.logger.info('Push operation cancelled before push');
+        this.releaseGitLock();
+        return { success: false, cancelled: true, message: 'Operation cancelled by user' };
       }
 
       this.sendOutput(`🚀 Publicando alterações na branch: ${targetBranch}...`);
@@ -1038,6 +1116,15 @@ class GitHandlers {
       }
     });
 
+    /**
+     * Cancel current Git operation
+     */
+    ipcMain.handle('git:cancel-operation', async () => {
+      this.logger.info('Cancel operation requested via IPC');
+      this.requestCancel();
+      return { success: true, message: 'Cancellation requested' };
+    });
+
     this.logger.info('✅ Git operations IPC handlers registered');
   }
 
@@ -1056,6 +1143,7 @@ class GitHandlers {
     ipcMain.removeHandler('git:pull-from-preview');
     ipcMain.removeHandler('git:push-to-branch');
     ipcMain.removeHandler('git:list-remote-branches');
+    ipcMain.removeHandler('git:cancel-operation');
     
     this.logger.info('✅ Git operations IPC handlers unregistered');
   }

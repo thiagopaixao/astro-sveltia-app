@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pullFromPreview: (projectId, commitMessage) => ipcRenderer.invoke('git:pull-from-preview', projectId, commitMessage),
   pushToBranch: (projectId, targetBranch, commitMessage) => ipcRenderer.invoke('git:push-to-branch', projectId, targetBranch, commitMessage),
   listRemoteBranches: (projectId) => ipcRenderer.invoke('git:list-remote-branches', projectId),
+  cancelGitOperation: () => ipcRenderer.invoke('git:cancel-operation'),
   openInFileExplorer: (path) => ipcRenderer.invoke('open-file-explorer', path),
   // Path utility functions
   joinPath: (...segments) => ipcRenderer.invoke('join-path', ...segments),
