@@ -54,6 +54,8 @@ class GitHandlers {
     this.LOCK_TIMEOUT_MS = 60000;
     this._lockTimeout = null;
     this._gitCache = {};
+    this._sendOutputBuffer = [];
+    this._sendOutputTimer = null;
     this._gitModuleCache = null;
   }
 
@@ -87,6 +89,7 @@ class GitHandlers {
    * Release the git operation lock
    */
   releaseGitLock() {
+    this._flushSendOutput();
     this.gitOperationInProgress = false;
     if (this._lockTimeout) {
       clearTimeout(this._lockTimeout);
@@ -119,11 +122,41 @@ class GitHandlers {
   }
 
   /**
-   * Send output to the commands console
+   * Send output to the commands console (debounced for performance)
+   * Error messages (❌) are delivered immediately, others are batched
    * @param {string} message - Message to send
    */
   sendOutput(message) {
-    this.broadcastToWindows('command-output', { message });
+    // Error messages bypass debounce — deliver immediately
+    if (typeof message === 'string' && message.includes('❌')) {
+      this._flushSendOutput();
+      this.broadcastToWindows('command-output', { message });
+      return;
+    }
+    // Buffer non-error messages and batch them with 100ms debounce
+    this._sendOutputBuffer.push(message);
+    if (this._sendOutputTimer) {
+      clearTimeout(this._sendOutputTimer);
+    }
+    this._sendOutputTimer = setTimeout(() => {
+      this._sendOutputTimer = null;
+      this._flushSendOutput();
+    }, 100);
+  }
+
+  /**
+   * Flush the sendOutput buffer — deliver all pending messages immediately
+   * @private
+   */
+  _flushSendOutput() {
+    if (this._sendOutputTimer) {
+      clearTimeout(this._sendOutputTimer);
+      this._sendOutputTimer = null;
+    }
+    if (this._sendOutputBuffer.length > 0) {
+      const messages = this._sendOutputBuffer.splice(0);
+      this.broadcastToWindows('command-output', { message: messages.join('\n') });
+    }
   }
 
   /**
