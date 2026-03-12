@@ -53,6 +53,14 @@ class GitHandlers {
     this.gitOperationInProgress = false;
     this.LOCK_TIMEOUT_MS = 60000;
     this._lockTimeout = null;
+    this._gitModuleCache = null;
+  }
+
+  async _getGit() {
+    if (!this._gitModuleCache) {
+      this._gitModuleCache = await import('isomorphic-git');
+    }
+    return this._gitModuleCache;
   }
 
   /**
@@ -543,7 +551,9 @@ class GitHandlers {
         return { success: false, error: 'Autenticação GitHub necessária. Faça login novamente.' };
       }
 
-      const currentBranch = await git.currentBranch({ fs, dir: projectPath });
+      const gitMod = await this._getGit();
+
+      const currentBranch = await gitMod.currentBranch({ fs, dir: projectPath });
       if (!currentBranch) {
         this.sendOutput('❌ Nenhuma branch selecionada (detached HEAD). Selecione uma branch para atualizar.');
         return { success: false, error: 'Nenhuma branch selecionada (detached HEAD). Selecione uma branch primeiro.' };
@@ -553,7 +563,7 @@ class GitHandlers {
 
       this.sendOutput(`📥 Buscando alterações da branch remota '${currentBranch}'...`);
 
-      await git.fetch({
+      await gitMod.fetch({
         fs,
         http,
         dir: projectPath,
@@ -565,7 +575,7 @@ class GitHandlers {
 
       this.sendOutput('🔄 Mesclando alterações...');
 
-      await git.pull({
+      await gitMod.pull({
         fs,
         http,
         dir: projectPath,
@@ -604,23 +614,70 @@ class GitHandlers {
    * Push changes to a specific branch
    * @param {string} projectPath - Path to the git repository
    * @param {string} targetBranch - Target branch name
-   * @returns {Promise<{pushed: boolean, changes: number}>}
+   * @returns {Promise<{success: boolean, pushed?: boolean, branch?: string, error?: string}>}
    */
   async gitPushToBranch(projectPath, targetBranch) {
+    // Acquire lock
+    if (!this.acquireGitLock()) {
+      this.sendOutput('⚠️ Operação Git já em andamento. Aguarde...');
+      return { success: false, error: 'Git operation already in progress. Please wait.' };
+    }
+
+    const fs = require('fs');
+
     try {
-      // Push to target branch
-      await git.push({
-        fs: require('fs'),
+      // Get auth token
+      const token = await this.gitOps.getGitHubToken();
+      if (!token) {
+        this.sendOutput('❌ Autenticação GitHub necessária. Faça login novamente.');
+        return { success: false, error: 'Autenticação GitHub necessária. Faça login novamente.' };
+      }
+
+      // Configure git user (best-effort)
+      this.sendOutput('⚙️ Configurando usuário git...');
+      const userConfigured = await this.gitOps.configureGitForUser(projectPath);
+      if (!userConfigured) {
+        this.sendOutput('⚠️ Não foi possível configurar usuário git. Continuando com configuração existente...');
+        this.logger.warn('Could not configure git user, proceeding with existing config');
+      }
+
+      const auth = { username: token, password: 'x-oauth-basic' };
+
+      const gitMod = await this._getGit();
+
+      this.sendOutput(`🚀 Publicando alterações na branch: ${targetBranch}...`);
+
+      await gitMod.push({
+        fs,
         http,
         dir: projectPath,
-        ref: targetBranch
+        remote: 'origin',
+        ref: targetBranch,
+        auth,
       });
-      
-      this.logger.info(`Pushed changes to branch: ${targetBranch}`);
-      return { pushed: true, changes: 0 }; // TODO: Count actual changes
+
+      this.sendOutput(`✅ Push concluído com sucesso na branch: ${targetBranch}`);
+      this.logger.info(`Successfully pushed to branch: ${targetBranch}`);
+      return { success: true, pushed: true, branch: targetBranch };
+
     } catch (error) {
       this.logger.error('Error pushing to branch:', error);
-      throw error;
+
+      let errorMessage = error.message || 'Erro desconhecido ao publicar';
+
+      if (error.message && error.message.includes('non-fast-forward')) {
+        errorMessage = 'Push rejeitado. Faça pull antes de publicar (non-fast-forward).';
+      } else if (error.message && (error.message.includes('401') || error.message.includes('403') || error.message.includes('authentication'))) {
+        errorMessage = 'Erro de autenticação. Faça login novamente.';
+      } else if (error.message && (error.message.includes('network') || error.message.includes('ECONNREFUSED') || error.message.includes('ETIMEDOUT'))) {
+        errorMessage = 'Erro de rede. Verifique sua conexão.';
+      }
+
+      this.sendOutput(`❌ Erro ao publicar: ${errorMessage}`);
+      return { success: false, error: errorMessage };
+
+    } finally {
+      this.releaseGitLock();
     }
   }
 
@@ -749,7 +806,7 @@ class GitHandlers {
       try {
         const projectPath = await this.getProjectPath(projectId);
         const result = await this.gitPushToBranch(projectPath, targetBranch);
-        return { success: true, ...result };
+        return result;
       } catch (error) {
         this.logger.error('Error in git:push-to-branch handler:', error);
         return { success: false, error: error.message };
