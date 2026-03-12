@@ -144,7 +144,23 @@ async getHomeDirectory() {
    */
   async openDirectoryDialog() {
     try {
-      const result = await dialog.showOpenDialog(this.windowManager.getMainWindow(), {
+      const window = this.windowManager.getMainWindow();
+      
+      // Validate window
+      if (!window || window.isDestroyed()) {
+        this.logger.error('No valid window available for dialog');
+        return null;
+      }
+
+      // Windows-specific: restore and focus
+      if (process.platform === 'win32') {
+        if (window.isMinimized()) {
+          window.restore();
+        }
+        window.focus();
+      }
+
+      const result = await dialog.showOpenDialog(window, {
         properties: ['openDirectory'],
         title: 'Select Directory'
       });

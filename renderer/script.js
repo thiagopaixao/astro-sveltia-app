@@ -36,9 +36,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (openFolderButton) {
     openFolderButton.addEventListener('click', async () => {
       if (window.electronAPI && window.electronAPI.openDirectoryDialog) {
-        const selectedPath = await window.electronAPI.openDirectoryDialog();
-        if (selectedPath) {
-          await handleFolderSelection(selectedPath);
+        try {
+          openFolderButton.disabled = true;
+          const selectedPath = await window.electronAPI.openDirectoryDialog();
+          if (selectedPath) {
+            await handleFolderSelection(selectedPath);
+          }
+        } catch (error) {
+          console.error('Error opening directory dialog:', error);
+        } finally {
+          openFolderButton.disabled = false;
         }
       }
     });
@@ -82,10 +89,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Handle folder selection
   if (selectFolderButton && window.electronAPI && window.electronAPI.openDirectoryDialog) {
     selectFolderButton.addEventListener('click', async () => {
-      const selectedPath = await window.electronAPI.openDirectoryDialog();
-      if (selectedPath && projectPathInput) {
-        const normalizedPath = await PathUtils.normalize(selectedPath);
-        projectPathInput.value = normalizedPath;
+      try {
+        selectFolderButton.disabled = true;
+        const selectedPath = await window.electronAPI.openDirectoryDialog();
+        if (selectedPath && projectPathInput) {
+          const normalizedPath = await PathUtils.normalize(selectedPath);
+          projectPathInput.value = normalizedPath;
+        }
+      } catch (error) {
+        console.error('Error opening directory dialog:', error);
+      } finally {
+        selectFolderButton.disabled = false;
       }
     });
   } else {

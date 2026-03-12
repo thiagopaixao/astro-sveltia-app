@@ -6,7 +6,7 @@
 
 'use strict';
 
-const { ipcMain } = require('electron');
+const { ipcMain, BrowserWindow } = require('electron');
 
 /**
  * File Operations IPC Handlers
@@ -33,11 +33,13 @@ class FileHandlers {
 
   /**
    * Handle open directory dialog
+   * @param {Object} event - IPC event object
    * @returns {Promise<string|null>} Selected directory path or null
    */
-  async openDirectoryDialog() {
+  async openDirectoryDialog(event) {
     try {
-      const selectedPath = await this.fileService.showOpenDirectoryDialog();
+      const senderWindow = event ? BrowserWindow.fromWebContents(event.sender) : null;
+      const selectedPath = await this.fileService.showOpenDirectoryDialog(senderWindow);
       return selectedPath;
     } catch (error) {
       this.logger.error('Error in open directory dialog handler:', error);
@@ -305,8 +307,8 @@ class FileHandlers {
     /**
      * Open directory dialog
      */
-    ipcMain.handle('open-directory-dialog', async () => {
-      return await this.openDirectoryDialog();
+    ipcMain.handle('open-directory-dialog', async (event) => {
+      return await this.openDirectoryDialog(event);
     });
 
     /**

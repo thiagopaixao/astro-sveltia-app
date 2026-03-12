@@ -48,8 +48,18 @@ class FileService {
     try {
       const window = parentWindow || this.windowManager.getMainWindow();
       
-      if (!window) {
-        throw new Error('No valid window available for dialog');
+      // Validate window
+      if (!window || window.isDestroyed()) {
+        this.logger.error('No valid window available for dialog');
+        return null;
+      }
+
+      // Windows-specific: restore and focus
+      if (process.platform === 'win32') {
+        if (window.isMinimized()) {
+          window.restore();
+        }
+        window.focus();
       }
 
       const result = await dialog.showOpenDialog(window, {
@@ -67,7 +77,7 @@ class FileService {
       return selectedPath;
     } catch (error) {
       this.logger.error('Error showing open directory dialog:', error);
-      throw error;
+      return null;
     }
   }
 

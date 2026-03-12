@@ -3,6 +3,9 @@
 
 import { vi } from 'vitest';
 
+// Create mutable dialog mock that tests can control
+global.dialogMockImpl = vi.fn();
+
 // Mock Electron APIs
 global.mockElectron = {
   app: {
@@ -24,6 +27,10 @@ global.mockElectron = {
   },
   contextBridge: {
     exposeInMainWorld: vi.fn()
+  },
+  dialog: {
+    showOpenDialog: vi.fn((...args) => global.dialogMockImpl(...args)),
+    showSaveDialog: vi.fn()
   }
 };
 
