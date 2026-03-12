@@ -10,6 +10,7 @@ const { ipcMain } = require('electron');
 const path = require('path');
 const git = require('isomorphic-git');
 const http = require('isomorphic-git/http/node');
+const { GitOperations } = require('./gitOperations.js');
 
 /**
  * @typedef {Object} GitOperationResult
@@ -48,6 +49,66 @@ class GitHandlers {
   constructor({ logger, databaseManager }) {
     this.logger = logger;
     this.databaseManager = databaseManager;
+    this.gitOps = new GitOperations({ logger, databaseManager });
+    this.gitOperationInProgress = false;
+    this.LOCK_TIMEOUT_MS = 60000;
+    this._lockTimeout = null;
+  }
+
+  /**
+   * Acquire the git operation lock
+   * @returns {boolean} True if lock was acquired, false if already in progress
+   */
+  acquireGitLock() {
+    if (this.gitOperationInProgress) {
+      this.logger.warn('Git operation already in progress');
+      return false;
+    }
+    this.gitOperationInProgress = true;
+    this._lockTimeout = setTimeout(() => {
+      this.logger.warn('Git operation lock auto-released after 60s timeout');
+      this.gitOperationInProgress = false;
+      this._lockTimeout = null;
+    }, this.LOCK_TIMEOUT_MS);
+    this.logger.info('Git operation lock acquired');
+    return true;
+  }
+
+  /**
+   * Release the git operation lock
+   */
+  releaseGitLock() {
+    this.gitOperationInProgress = false;
+    if (this._lockTimeout) {
+      clearTimeout(this._lockTimeout);
+      this._lockTimeout = null;
+    }
+    this.logger.info('Git operation lock released');
+  }
+
+  /**
+   * Broadcast a message to all renderer windows
+   * @param {string} channel - IPC channel name
+   * @param {*} payload - Payload to send
+   */
+  broadcastToWindows(channel, payload) {
+    const normalizedPayload = typeof payload === 'object' && payload !== null
+      ? payload
+      : { message: String(payload) };
+    const { BrowserWindow } = require('electron');
+    BrowserWindow.getAllWindows().forEach(window => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(channel, normalizedPayload);
+      }
+    });
+  }
+
+  /**
+   * Send output to the commands console
+   * @param {string} message - Message to send
+   */
+  sendOutput(message) {
+    this.broadcastToWindows('command-output', { message });
   }
 
   /**
