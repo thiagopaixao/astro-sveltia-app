@@ -250,12 +250,16 @@ class GitHandlers {
       
       // Check if directory exists and is a git repository
       const fs = require('fs');
-      if (!fs.existsSync(projectPath)) {
+      try {
+        await fs.promises.access(projectPath);
+      } catch {
         throw new Error(`Repository path does not exist: ${projectPath}`);
       }
       
       const gitDir = require('path').join(projectPath, '.git');
-      if (!fs.existsSync(gitDir)) {
+      try {
+        await fs.promises.access(gitDir);
+      } catch {
         throw new Error(`Not a git repository: ${projectPath}`);
       }
       
@@ -270,18 +274,20 @@ class GitHandlers {
         try {
           const refs = await git.listRefs({ fs, dir: projectPath, cache: this._gitCache });
           const headRef = refs.find(ref => ref === 'HEAD');
-          if (headRef) {
-            // Try to resolve HEAD manually
-            const headFile = require('path').join(gitDir, 'HEAD');
-            if (fs.existsSync(headFile)) {
-              const headContent = fs.readFileSync(headFile, 'utf8');
-              const match = headContent.match(/ref: refs\/heads\/(.+)/);
-              if (match) {
-                currentBranch = match[1].trim();
-                this.logger.info(`✅ Current branch resolved from HEAD file: ${currentBranch}`);
-              }
-            }
-          }
+           if (headRef) {
+             // Try to resolve HEAD manually
+             const headFile = require('path').join(gitDir, 'HEAD');
+             try {
+               const headContent = await fs.promises.readFile(headFile, 'utf8');
+               const match = headContent.match(/ref: refs\/heads\/(.+)/);
+               if (match) {
+                 currentBranch = match[1].trim();
+                 this.logger.info(`✅ Current branch resolved from HEAD file: ${currentBranch}`);
+               }
+             } catch {
+               // HEAD file doesn't exist or can't be read, continue with fallback
+             }
+           }
         } catch (fallbackError) {
           this.logger.warn(`⚠️ Could not resolve current branch from HEAD: ${fallbackError.message}`);
         }
@@ -323,24 +329,26 @@ class GitHandlers {
     } catch (error) {
       this.logger.error(`Failed to list branches via git.listBranches(): ${error.message}`);
       
-      // Fallback to filesystem method if git.listBranches() fails
-      this.logger.warn('Falling back to filesystem method...');
-      try {
-        const headsDir = require('path').join(gitDir, 'refs', 'heads');
-        if (fs.existsSync(headsDir)) {
-          const branchFiles = fs.readdirSync(headsDir);
-          for (const branchName of branchFiles) {
-            branches.push({
-              name: branchName,
-              isCurrent: branchName === currentBranch,
-              isRemote: false
-            });
-          }
-          this.logger.info(`Fallback: Found ${branchFiles.length} local branches via filesystem`);
-        }
-      } catch (fallbackError) {
-        this.logger.error(`Filesystem fallback also failed: ${fallbackError.message}`);
-      }
+       // Fallback to filesystem method if git.listBranches() fails
+       this.logger.warn('Falling back to filesystem method...');
+       try {
+         const headsDir = require('path').join(gitDir, 'refs', 'heads');
+         try {
+           const branchFiles = await fs.promises.readdir(headsDir);
+           for (const branchName of branchFiles) {
+             branches.push({
+               name: branchName,
+               isCurrent: branchName === currentBranch,
+               isRemote: false
+             });
+           }
+           this.logger.info(`Fallback: Found ${branchFiles.length} local branches via filesystem`);
+         } catch {
+           // headsDir doesn't exist or can't be read
+         }
+       } catch (fallbackError) {
+         this.logger.error(`Filesystem fallback also failed: ${fallbackError.message}`);
+       }
     }
       
       const result = {
