@@ -92,15 +92,21 @@ class GitHandlers {
    * @param {*} payload - Payload to send
    */
   broadcastToWindows(channel, payload) {
-    const normalizedPayload = typeof payload === 'object' && payload !== null
-      ? payload
-      : { message: String(payload) };
-    const { BrowserWindow } = require('electron');
-    BrowserWindow.getAllWindows().forEach(window => {
-      if (!window.isDestroyed()) {
-        window.webContents.send(channel, normalizedPayload);
+    try {
+      const normalizedPayload = typeof payload === 'object' && payload !== null
+        ? payload
+        : { message: String(payload) };
+      const { BrowserWindow } = require('electron');
+      if (BrowserWindow && typeof BrowserWindow.getAllWindows === 'function') {
+        BrowserWindow.getAllWindows().forEach(window => {
+          if (!window.isDestroyed()) {
+            window.webContents.send(channel, normalizedPayload);
+          }
+        });
       }
-    });
+    } catch (error) {
+      this.logger.debug('broadcastToWindows failed (expected in tests):', error.message);
+    }
   }
 
   /**
@@ -518,43 +524,79 @@ class GitHandlers {
   }
 
   /**
-   * Pull changes from remote (preview branch)
+   * Pull changes from remote for current branch
    * @param {string} projectPath - Path to the git repository
-   * @returns {Promise<{pulled: boolean, changes: number}>}
+   * @returns {Promise<{success: boolean, pulled?: boolean, branch?: string, error?: string}>}
    */
   async gitPullFromPreview(projectPath) {
+    if (!this.acquireGitLock()) {
+      this.sendOutput('⚠️ Operação Git já em andamento. Aguarde...');
+      return { success: false, error: 'Git operation already in progress. Please wait.' };
+    }
+
+    const fs = require('fs');
+
     try {
-      // Get current branch to switch back to it later
-      const currentBranch = await git.currentBranch({ fs: require('fs'), dir: projectPath });
-      
-      // Switch to preview branch
-      await git.checkout({
-        fs: require('fs'),
-        dir: projectPath,
-        ref: 'preview'
-      });
-      
-      // Pull from remote
-      await git.pull({
-        fs: require('fs'),
+      const token = await this.gitOps.getGitHubToken();
+      if (!token) {
+        this.sendOutput('❌ Autenticação GitHub necessária. Faça login novamente.');
+        return { success: false, error: 'Autenticação GitHub necessária. Faça login novamente.' };
+      }
+
+      const currentBranch = await git.currentBranch({ fs, dir: projectPath });
+      if (!currentBranch) {
+        this.sendOutput('❌ Nenhuma branch selecionada (detached HEAD). Selecione uma branch para atualizar.');
+        return { success: false, error: 'Nenhuma branch selecionada (detached HEAD). Selecione uma branch primeiro.' };
+      }
+
+      const auth = { username: token, password: 'x-oauth-basic' };
+
+      this.sendOutput(`📥 Buscando alterações da branch remota '${currentBranch}'...`);
+
+      await git.fetch({
+        fs,
         http,
         dir: projectPath,
-        ref: 'preview',
-        singleBranch: true
+        remote: 'origin',
+        ref: currentBranch,
+        singleBranch: true,
+        auth,
       });
-      
-      // Switch back to original branch
-      await git.checkout({
-        fs: require('fs'),
+
+      this.sendOutput('🔄 Mesclando alterações...');
+
+      await git.pull({
+        fs,
+        http,
         dir: projectPath,
-        ref: currentBranch
+        ref: currentBranch,
+        singleBranch: true,
+        author: { name: 'documental', email: 'documental@app' },
+        auth,
       });
-      
-      this.logger.info('Pulled changes from preview branch');
-      return { pulled: true, changes: 0 }; // TODO: Count actual changes
+
+      this.sendOutput(`✅ Pull concluído com sucesso na branch: ${currentBranch}`);
+      this.logger.info(`Successfully pulled from branch: ${currentBranch}`);
+      return { success: true, pulled: true, branch: currentBranch };
+
     } catch (error) {
-      this.logger.error('Error pulling from preview:', error);
-      throw error;
+      this.logger.error('Error pulling from branch:', error);
+
+      let errorMessage = error.message || 'Erro desconhecido ao atualizar';
+
+      if (error.message && (error.message.includes('merge') || error.message.includes('conflict'))) {
+        errorMessage = 'Conflito de merge detectado. Resolva manualmente.';
+      } else if (error.message && (error.message.includes('network') || error.message.includes('ECONNREFUSED') || error.message.includes('ETIMEDOUT'))) {
+        errorMessage = 'Erro de rede. Verifique sua conexão.';
+      } else if (error.message && (error.message.includes('401') || error.message.includes('403') || error.message.includes('authentication'))) {
+        errorMessage = 'Erro de autenticação. Faça login novamente.';
+      }
+
+      this.sendOutput(`❌ Erro ao atualizar: ${errorMessage}`);
+      return { success: false, error: errorMessage };
+
+    } finally {
+      this.releaseGitLock();
     }
   }
 
@@ -693,7 +735,7 @@ class GitHandlers {
       try {
         const projectPath = await this.getProjectPath(projectId);
         const result = await this.gitPullFromPreview(projectPath);
-        return { success: true, ...result };
+        return result;
       } catch (error) {
         this.logger.error('Error in git:pull-from-preview handler:', error);
         return { success: false, error: error.message };
