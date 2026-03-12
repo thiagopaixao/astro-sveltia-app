@@ -688,23 +688,40 @@ class GitHandlers {
    */
   async gitListRemoteBranches(projectPath) {
     try {
-      const refs = await git.listServerRefs({
-        http,
-        url: await git.getConfig({
-          fs: require('fs'),
-          dir: projectPath,
-          path: 'remote.origin.url'
-        })
+      this.sendOutput('🔍 Buscando branches remotas...');
+
+      // Get auth token for private repo support
+      const token = await this.gitOps.getGitHubToken();
+      const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+
+      const url = await git.getConfig({
+        fs: require('fs'),
+        dir: projectPath,
+        path: 'remote.origin.url'
       });
-      
+
+      const listServerRefsConfig = {
+        http,
+        url,
+      };
+
+      if (auth) {
+        listServerRefsConfig.auth = auth;
+      }
+
+      const refs = await git.listServerRefs(listServerRefsConfig);
+
       const branches = refs
         .filter(ref => ref.ref.startsWith('refs/heads/'))
         .map(ref => ref.ref.replace('refs/heads/', ''))
         .filter(name => name !== 'HEAD');
-      
+
       return branches;
     } catch (error) {
       this.logger.error('Error listing remote branches:', error);
+      if (!error.message?.includes('auth') && !(await this.gitOps.getGitHubToken())) {
+        throw new Error('Autenticação necessária para repositórios privados');
+      }
       throw error;
     }
   }
