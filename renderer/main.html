@@ -164,9 +164,15 @@ clearingCache: false,
      pushBranches: [],
      pushSelectedBranch: '',
      pushBranchesLoading: false,
-     pushLogs: [],
-     pushResult: null,
-     initialLoading: true,
+      pushLogs: [],
+      pushResult: null,
+      pullIsDirty: false,
+      pullCommitMessage: '',
+      pullDirtyFiles: [],
+      pushIsDirty: false,
+      pushCommitMessage: '',
+      pushDirtyFiles: [],
+      initialLoading: true,
      contentLoading: false,
      contentReady: false,
      viewerLoaded: false,
@@ -751,11 +757,21 @@ clearingCache: false,
         this.pullLogs = [];
         this.pullResult = null;
         this.pullCurrentBranch = '';
+        this.pullIsDirty = false;
+        this.pullCommitMessage = '';
+        this.pullDirtyFiles = [];
         this.pullModalState = 'confirm';
         const projectId = sessionStorage.getItem('currentProjectId');
         if (projectId) {
-            const branchResult = await window.electronAPI.getCurrentBranch(projectId);
+            const [branchResult, statusResult] = await Promise.all([
+                window.electronAPI.getCurrentBranch(projectId),
+                window.electronAPI.checkGitStatus(projectId)
+            ]);
             if (branchResult && branchResult.success) this.pullCurrentBranch = branchResult.currentBranch;
+            if (statusResult && statusResult.success) {
+                this.pullIsDirty = statusResult.isDirty;
+                this.pullDirtyFiles = statusResult.files || [];
+            }
         }
     },
     async confirmPull() {
@@ -764,7 +780,8 @@ clearingCache: false,
         this.pullModalState = 'progress';
         this.pullLogs = [];
         try {
-            const result = await window.electronAPI.pullFromPreview(projectId);
+            const commitMsg = this.pullIsDirty ? this.pullCommitMessage.trim() : null;
+            const result = await window.electronAPI.pullFromPreview(projectId, commitMsg);
             this.pullResult = result;
         } catch (error) {
             this.pullResult = { success: false, error: error.message };
@@ -780,6 +797,9 @@ clearingCache: false,
         this.pullModalState = 'closed';
         this.pullLogs = [];
         this.pullResult = null;
+        this.pullIsDirty = false;
+        this.pullCommitMessage = '';
+        this.pullDirtyFiles = [];
     },
     async openPushModal() {
         this.pushLogs = [];
@@ -787,16 +807,26 @@ clearingCache: false,
         this.pushSelectedBranch = '';
         this.pushBranches = [];
         this.pushBranchesLoading = true;
+        this.pushIsDirty = false;
+        this.pushCommitMessage = '';
+        this.pushDirtyFiles = [];
         this.pushModalState = 'select';
         const projectId = sessionStorage.getItem('currentProjectId');
         if (projectId) {
             try {
-                const result = await window.electronAPI.listRemoteBranches(projectId);
+                const [branchesResult, statusResult] = await Promise.all([
+                    window.electronAPI.listRemoteBranches(projectId),
+                    window.electronAPI.checkGitStatus(projectId)
+                ]);
                 this.pushBranchesLoading = false;
-                if (result && result.success) this.pushBranches = result.branches;
+                if (branchesResult && branchesResult.success) this.pushBranches = branchesResult.branches;
+                if (statusResult && statusResult.success) {
+                    this.pushIsDirty = statusResult.isDirty;
+                    this.pushDirtyFiles = statusResult.files || [];
+                }
             } catch (error) {
                 this.pushBranchesLoading = false;
-                console.error('❌ Error loading remote branches for push modal:', error);
+                console.error('❌ Error loading push modal data:', error);
             }
         } else {
             this.pushBranchesLoading = false;
@@ -809,7 +839,8 @@ clearingCache: false,
         this.pushModalState = 'progress';
         this.pushLogs = [];
         try {
-            const result = await window.electronAPI.pushToBranch(projectId, this.pushSelectedBranch);
+            const commitMsg = this.pushIsDirty ? this.pushCommitMessage.trim() : null;
+            const result = await window.electronAPI.pushToBranch(projectId, this.pushSelectedBranch, commitMsg);
             this.pushResult = result;
         } catch (error) {
             this.pushResult = { success: false, error: error.message };
@@ -824,6 +855,9 @@ clearingCache: false,
         this.pushModalState = 'closed';
         this.pushLogs = [];
         this.pushResult = null;
+        this.pushIsDirty = false;
+        this.pushCommitMessage = '';
+        this.pushDirtyFiles = [];
     },
     async init() { // Make init an async function
         console.log('🚀 INIT STARTED - Renderer initialization beginning');
@@ -1843,8 +1877,17 @@ clearingCache: false,
       <h3 class="text-lg font-semibold text-white mb-2">Atualizar Projeto</h3>
       <p class="text-gray-300 text-sm mb-4">Deseja atualizar o projeto com as alterações remotas?</p>
       <p class="text-sm text-gray-400 mb-4" x-show="pullCurrentBranch">Branch: <span class="text-green-400 font-mono" x-text="pullCurrentBranch"></span></p>
+      <div x-show="pullIsDirty" class="mb-4 p-3 bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded">
+        <p class="text-yellow-400 text-sm font-medium mb-1">⚠️ Alterações não salvas detectadas</p>
+        <p class="text-gray-400 text-xs mb-2" x-text="`${pullDirtyFiles.length} arquivo(s) modificado(s). Um commit será feito automaticamente antes de atualizar.`"></p>
+        <label class="block text-sm text-gray-300 mb-1">Mensagem do commit <span class="text-red-400">*</span></label>
+        <textarea x-model="pullCommitMessage"
+          class="w-full bg-gray-900 text-gray-200 text-sm rounded border border-gray-600 focus:border-green-500 focus:outline-none p-2 resize-none"
+          rows="2"
+          placeholder="Ex: Atualiza conteúdo da página inicial"></textarea>
+      </div>
       <div class="flex space-x-3">
-        <button @click="confirmPull()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm font-medium">Confirmar</button>
+        <button @click="confirmPull()" :disabled="pullIsDirty && !pullCommitMessage.trim()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Confirmar</button>
         <button @click="closePullModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Cancelar</button>
       </div>
     </div>
@@ -1894,8 +1937,17 @@ clearingCache: false,
         </div>
         <p x-show="!pushBranchesLoading && pushBranches.length === 0" class="mt-1 text-xs text-red-400">Não foi possível carregar as branches remotas.</p>
       </div>
+      <div x-show="pushIsDirty" class="mb-4 p-3 bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded">
+        <p class="text-yellow-400 text-sm font-medium mb-1">⚠️ Alterações não salvas detectadas</p>
+        <p class="text-gray-400 text-xs mb-2" x-text="`${pushDirtyFiles.length} arquivo(s) modificado(s). Um commit será feito automaticamente antes de publicar.`"></p>
+        <label class="block text-sm text-gray-300 mb-1">Mensagem do commit <span class="text-red-400">*</span></label>
+        <textarea x-model="pushCommitMessage"
+          class="w-full bg-gray-900 text-gray-200 text-sm rounded border border-gray-600 focus:border-green-500 focus:outline-none p-2 resize-none"
+          rows="2"
+          placeholder="Ex: Atualiza conteúdo da página inicial"></textarea>
+      </div>
       <div class="flex space-x-3">
-        <button @click="confirmPush()" :disabled="!pushSelectedBranch || pushBranchesLoading" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Publicar</button>
+        <button @click="confirmPush()" :disabled="!pushSelectedBranch || pushBranchesLoading || (pushIsDirty && !pushCommitMessage.trim())" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Publicar</button>
         <button @click="closePushModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Cancelar</button>
       </div>
     </div>
