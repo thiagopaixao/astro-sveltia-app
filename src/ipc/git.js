@@ -53,6 +53,7 @@ class GitHandlers {
     this.gitOperationInProgress = false;
     this.LOCK_TIMEOUT_MS = 60000;
     this._lockTimeout = null;
+    this._gitCache = {};
     this._gitModuleCache = null;
   }
 
@@ -185,7 +186,7 @@ class GitHandlers {
       const fs = require('fs');
       const gitMod = await this._getGit();
 
-      const matrix = await gitMod.statusMatrix({ fs, dir: projectPath });
+      const matrix = await gitMod.statusMatrix({ fs, dir: projectPath, cache: this._gitCache });
       const dirtyFiles = matrix.filter(([, head, workdir, stage]) =>
         !(head === 1 && workdir === 1 && stage === 1)
       );
@@ -213,7 +214,7 @@ class GitHandlers {
    * @private
    */
   async _commitAll(gitMod, fs, projectPath, commitMessage, author) {
-    const matrix = await gitMod.statusMatrix({ fs, dir: projectPath });
+    const matrix = await gitMod.statusMatrix({ fs, dir: projectPath, cache: this._gitCache });
     const dirty = matrix.filter(([, h, w, s]) => !(h === 1 && w === 1 && s === 1));
 
     if (dirty.length === 0) {
@@ -229,9 +230,11 @@ class GitHandlers {
           : gitMod.remove({ fs, dir: projectPath, filepath })
       )
     );
+    this._gitCache = {};
 
     this.sendOutput(`💾 Commitando: "${commitMessage}"`);
     const sha = await gitMod.commit({ fs, dir: projectPath, message: commitMessage, author });
+    this._gitCache = {};
     this.sendOutput(`✅ Commit criado: ${sha.substring(0, 7)}`);
     return sha;
   }
@@ -259,13 +262,13 @@ class GitHandlers {
       // Get current branch with fallback
       let currentBranch = 'master'; // Default fallback
       try {
-        currentBranch = await git.currentBranch({ fs, dir: projectPath });
+        currentBranch = await git.currentBranch({ fs, dir: projectPath, cache: this._gitCache });
         this.logger.info(`✅ Current branch detected: ${currentBranch}`);
       } catch (error) {
         this.logger.warn(`⚠️ Could not determine current branch, using fallback: ${error.message}`);
         // Try to get branches directly as fallback
         try {
-          const refs = await git.listRefs({ fs, dir: projectPath });
+          const refs = await git.listRefs({ fs, dir: projectPath, cache: this._gitCache });
           const headRef = refs.find(ref => ref === 'HEAD');
           if (headRef) {
             // Try to resolve HEAD manually
@@ -290,7 +293,7 @@ class GitHandlers {
     
     try {
       // Get all branches (local and remote) using isomorphic-git's built-in method
-      const allBranches = await git.listBranches({ fs, dir: projectPath });
+      const allBranches = await git.listBranches({ fs, dir: projectPath, cache: this._gitCache });
       
       // Separate local and remote branches (same logic as GitOperations.js)
       const localBranches = allBranches.filter(branch => !branch.includes('origin/'));
@@ -366,6 +369,7 @@ class GitHandlers {
         dir: projectPath,
         ref: branchName
       });
+      this._gitCache = {};
       
       this.logger.info(`Created branch: ${branchName}`);
     } catch (error) {
@@ -393,6 +397,7 @@ class GitHandlers {
           dir: projectPath,
           ref: branchName
         });
+        this._gitCache = {};
         
         this.logger.info(`✅ Successfully checked out branch: ${branchName}`);
         return;
@@ -413,6 +418,7 @@ class GitHandlers {
               dir: projectPath,
               ref: branchName
             });
+            this._gitCache = {};
             this.logger.info(`✅ Successfully checked out local branch: ${branchName}`);
           } else if (remoteBranch) {
             // Remote branch exists, create local tracking branch
@@ -423,6 +429,7 @@ class GitHandlers {
               ref: branchName,
               checkout: true
             });
+            this._gitCache = {};
             this.logger.info(`✅ Created and checked out local branch: ${branchName}`);
           } else {
             throw new Error(`Branch '${branchName}' not found locally or remotely`);
@@ -445,7 +452,7 @@ class GitHandlers {
    */
   async gitGetCurrentBranch(projectPath) {
     try {
-      const currentBranch = await git.currentBranch({ fs: require('fs'), dir: projectPath });
+      const currentBranch = await git.currentBranch({ fs: require('fs'), dir: projectPath, cache: this._gitCache });
       return currentBranch;
     } catch (error) {
       this.logger.error('Error getting current branch:', error);
@@ -467,7 +474,7 @@ class GitHandlers {
       // Get current branch with fallback
       let currentBranch = 'master';
       try {
-        currentBranch = await git.currentBranch({ fs, dir: projectPath });
+        currentBranch = await git.currentBranch({ fs, dir: projectPath, cache: this._gitCache });
         this.logger.info(`✅ Current branch: ${currentBranch}`);
       } catch (error) {
         this.logger.warn(`⚠️ Could not get current branch: ${error.message}`);
@@ -493,7 +500,8 @@ class GitHandlers {
         remoteUrl = await git.getConfig({
           fs,
           dir: projectPath,
-          path: 'remote.origin.url'
+          path: 'remote.origin.url',
+          cache: this._gitCache
         });
       } catch (error) {
         this.logger.debug('Could not get remote URL:', error.message);
@@ -511,7 +519,8 @@ class GitHandlers {
         const commitOid = await git.resolveRef({
           fs,
           dir: projectPath,
-          ref: currentBranch
+          ref: currentBranch,
+          cache: this._gitCache
         });
         
         if (commitOid) {
@@ -519,7 +528,8 @@ class GitHandlers {
           const commit = await git.readCommit({
             fs,
             dir: projectPath,
-            oid: commitOid
+            oid: commitOid,
+            cache: this._gitCache
           });
           
           if (commit && commit.commit) {
@@ -535,14 +545,16 @@ class GitHandlers {
           const headOid = await git.resolveRef({
             fs,
             dir: projectPath,
-            ref: 'HEAD'
+            ref: 'HEAD',
+            cache: this._gitCache
           });
           
           if (headOid) {
             const commit = await git.readCommit({
               fs,
               dir: projectPath,
-              oid: headOid
+              oid: headOid,
+              cache: this._gitCache
             });
             
             if (commit && commit.commit) {
@@ -563,7 +575,8 @@ class GitHandlers {
       try {
         const statusResult = await git.statusMatrix({
           fs,
-          dir: projectPath
+          dir: projectPath,
+          cache: this._gitCache
         });
         
         // Check if there are any unstaged changes
@@ -615,7 +628,7 @@ class GitHandlers {
 
       const gitMod = await this._getGit();
 
-      const currentBranch = await gitMod.currentBranch({ fs, dir: projectPath });
+      const currentBranch = await gitMod.currentBranch({ fs, dir: projectPath, cache: this._gitCache });
       if (!currentBranch) {
         this.sendOutput('❌ Nenhuma branch selecionada (detached HEAD). Selecione uma branch para atualizar.');
         return { success: false, error: 'Nenhuma branch selecionada (detached HEAD). Selecione uma branch primeiro.' };
@@ -627,8 +640,8 @@ class GitHandlers {
       if (commitMessage) {
         this.sendOutput('⚙️ Configurando usuário git para commit...');
         await this.gitOps.configureGitForUser(projectPath);
-        const authorName = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.name' }) || 'documental';
-        const authorEmail = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.email' }) || 'documental@app';
+        const authorName = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }) || 'documental';
+        const authorEmail = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }) || 'documental@app';
         const author = { name: authorName, email: authorEmail };
         await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
       }
@@ -644,6 +657,7 @@ class GitHandlers {
         singleBranch: true,
         onAuth: () => auth,
       });
+      this._gitCache = {};
 
       this.sendOutput('🔄 Mesclando alterações...');
 
@@ -656,6 +670,7 @@ class GitHandlers {
         author: { name: 'documental', email: 'documental@app' },
         onAuth: () => auth,
       });
+      this._gitCache = {};
 
       this.sendOutput(`✅ Pull concluído com sucesso na branch: ${currentBranch}`);
       this.logger.info(`Successfully pulled from branch: ${currentBranch}`);
@@ -716,8 +731,8 @@ class GitHandlers {
 
       // Commit local changes before pushing if commitMessage provided
       if (commitMessage) {
-        const authorName = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.name' }) || 'documental';
-        const authorEmail = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.email' }) || 'documental@app';
+        const authorName = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }) || 'documental';
+        const authorEmail = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }) || 'documental@app';
         const author = { name: authorName, email: authorEmail };
         await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
 
@@ -733,6 +748,7 @@ class GitHandlers {
             singleBranch: true,
             onAuth: () => auth,
           });
+          this._gitCache = {};
           await gitMod.pull({
             fs,
             http,
@@ -742,6 +758,7 @@ class GitHandlers {
             author: { name: authorName, email: authorEmail },
             onAuth: () => auth,
           });
+          this._gitCache = {};
         } catch (fetchPullError) {
           // Branch doesn't exist on remote yet — OK for first push
           if (!fetchPullError.message.includes('Could not find') &&
@@ -766,6 +783,7 @@ class GitHandlers {
         ref: targetBranch,
         onAuth: () => auth,
       });
+      this._gitCache = {};
 
       this.sendOutput(`✅ Push concluído com sucesso na branch: ${targetBranch}`);
       this.logger.info(`Successfully pushed to branch: ${targetBranch}`);
@@ -810,12 +828,14 @@ class GitHandlers {
       const url = await gitMod.getConfig({
         fs: require('fs'),
         dir: projectPath,
-        path: 'remote.origin.url'
+        path: 'remote.origin.url',
+        cache: this._gitCache
       });
 
       const listServerRefsConfig = {
         http,
         url,
+        cache: this._gitCache,
       };
 
       if (auth) {
