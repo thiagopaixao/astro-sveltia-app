@@ -70,7 +70,9 @@ async function gitClone(url, dir, options = {}) {
       dir,
       url,
       auth,
-      ...options
+      ...options,
+      singleBranch: true,
+      depth: 10
     });
     
     console.log(`✅ Repository cloned successfully to ${dir}`);

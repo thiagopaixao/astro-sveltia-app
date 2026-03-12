@@ -132,7 +132,9 @@ class ProjectCreationHandler {
         http,
         dir,
         url,
-        auth
+        auth,
+        singleBranch: true,
+        depth: 10
       });
       
       this.logger.info(`Repository cloned successfully to ${dir}`);
