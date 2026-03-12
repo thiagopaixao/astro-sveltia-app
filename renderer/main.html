@@ -154,6 +154,18 @@ clearingCache: false,
      selectedPublishBranch: 'preview',
      pullLoading: false,
      pushLoading: false,
+     // Pull modal state machine
+     pullModalState: 'closed',
+     pullLogs: [],
+     pullResult: null,
+     pullCurrentBranch: '',
+     // Push modal state machine
+     pushModalState: 'closed',
+     pushBranches: [],
+     pushSelectedBranch: '',
+     pushBranchesLoading: false,
+     pushLogs: [],
+     pushResult: null,
      initialLoading: true,
      contentLoading: false,
      contentReady: false,
@@ -178,7 +190,7 @@ clearingCache: false,
         return this.devServerUrl || sessionStorage.getItem('devServerUrl') || this.baseURL;
     },
     get isAnyOverlayOpen() {
-        return this.menuOpen || this.publishModalOpen || this.branchModalOpen || this.updateModalOpen || this.clearCacheModalOpen || this.helpModalOpen || this.aboutModalOpen || this.exitModalOpen || this.closeProjectModalOpen;
+        return this.menuOpen || this.publishModalOpen || this.branchModalOpen || this.updateModalOpen || this.clearCacheModalOpen || this.helpModalOpen || this.aboutModalOpen || this.exitModalOpen || this.closeProjectModalOpen || this.pullModalState !== 'closed' || this.pushModalState !== 'closed';
     },
     startResize(event) {
         this.isResizing = true;
@@ -269,11 +281,11 @@ clearingCache: false,
                 this.loadViewer(devServerUrl, true);
                 this.loadEditor(`${devServerUrl}admin/index.html`, true);
             } else {
-                alert('Erro ao limpar cache: ' + (result?.error || 'Erro desconhecido'));
+                console.error('Erro ao limpar cache: ' + (result?.error || 'Erro desconhecido'));
             }
         } catch (error) {
             console.error('Error clearing cache:', error);
-            alert('Erro ao limpar cache: ' + error.message);
+            console.error('Erro ao limpar cache: ' + error.message);
         } finally {
             this.clearingCache = false;
         }
@@ -370,7 +382,7 @@ clearingCache: false,
             }
         } catch (error) {
             console.error('Error opening new window:', error);
-            alert('Erro ao abrir nova janela: ' + error.message);
+            console.error('Erro ao abrir nova janela: ' + error.message);
         }
         this.menuOpen = false;
     },
@@ -526,12 +538,12 @@ clearingCache: false,
                 })));
             } else {
                 console.error('❌ Error loading branches:', result.error);
-                alert('Erro ao carregar branches: ' + result.error);
+                console.error('Erro ao carregar branches: ' + result.error);
             }
         } catch (error) {
             console.error('❌ Error loading branches:', error);
             console.error('Stack:', error.stack);
-            alert('Erro ao carregar branches: ' + error.message);
+            console.error('Erro ao carregar branches: ' + error.message);
         } finally {
             this.branchLoading = false;
         }
@@ -619,17 +631,17 @@ clearingCache: false,
                 await this.loadRepositoryInfo();
             } else {
                 console.error('❌ Error changing branch:', result.error);
-                alert('Erro ao mudar de branch: ' + result.error);
+                console.error('Erro ao mudar de branch: ' + result.error);
             }
         } catch (error) {
             console.error('❌ Error changing branch:', error);
-            alert('Erro ao mudar de branch: ' + error.message);
+            console.error('Erro ao mudar de branch: ' + error.message);
         }
     },
     async createBranch() {
         const projectId = sessionStorage.getItem('currentProjectId');
         if (!projectId || !this.newBranchName.trim()) {
-            alert('Por favor, informe um nome para a nova branch');
+            console.warn('Por favor, informe um nome para a nova branch');
             return;
         }
         
@@ -649,11 +661,11 @@ clearingCache: false,
                 await this.loadRepositoryInfo();
             } else {
                 console.error('❌ Error creating branch:', result.error);
-                alert('Erro ao criar branch: ' + result.error);
+                console.error('Erro ao criar branch: ' + result.error);
             }
         } catch (error) {
             console.error('❌ Error creating branch:', error);
-            alert('Erro ao criar branch: ' + error.message);
+            console.error('Erro ao criar branch: ' + error.message);
         }
     },
     async loadRemoteBranches() {
@@ -671,11 +683,11 @@ clearingCache: false,
                 console.log('✅ Remote branches loaded:', { branches: this.remoteBranches, default: this.selectedPublishBranch });
             } else {
                 console.error('❌ Error loading remote branches:', result.error);
-                alert('Erro ao carregar branches remotas: ' + result.error);
+                console.error('Erro ao carregar branches remotas: ' + result.error);
             }
         } catch (error) {
             console.error('❌ Error loading remote branches:', error);
-            alert('Erro ao carregar branches remotas: ' + error.message);
+            console.error('Erro ao carregar branches remotas: ' + error.message);
         }
     },
     async pullFromPreview() {
@@ -692,18 +704,15 @@ clearingCache: false,
             const result = await window.electronAPI.pullFromPreview(projectId);
             if (result.success) {
                 console.log('✅ Pull from preview successful:', result.message);
-                alert('✅ ' + result.message);
                 // Refresh repository info after pull
                 await this.loadRepositoryInfo();
                 // Reload branches to update state
                 await this.loadBranches();
             } else {
                 console.error('❌ Error pulling from preview:', result.error);
-                alert('❌ Erro ao atualizar: ' + result.error);
             }
         } catch (error) {
             console.error('❌ Error pulling from preview:', error);
-            alert('❌ Erro ao atualizar: ' + error.message);
         } finally {
             this.pullLoading = false;
         }
@@ -716,7 +725,7 @@ clearingCache: false,
         }
         
         if (!this.selectedPublishBranch) {
-            alert('Por favor, selecione uma branch para publicar.');
+            console.warn('Por favor, selecione uma branch para publicar.');
             return;
         }
         
@@ -727,19 +736,94 @@ clearingCache: false,
             const result = await window.electronAPI.pushToBranch(projectId, this.selectedPublishBranch);
             if (result.success) {
                 console.log('✅ Push to branch successful:', result.message);
-                alert('✅ ' + result.message);
                 // Refresh repository info after push
                 await this.loadRepositoryInfo();
             } else {
                 console.error('❌ Error pushing to branch:', result.error);
-                alert('❌ Erro ao publicar: ' + result.error);
             }
         } catch (error) {
             console.error('❌ Error pushing to branch:', error);
-            alert('❌ Erro ao publicar: ' + error.message);
         } finally {
             this.pushLoading = false;
         }
+    },
+    async openPullModal() {
+        this.pullLogs = [];
+        this.pullResult = null;
+        this.pullCurrentBranch = '';
+        this.pullModalState = 'confirm';
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (projectId) {
+            const branchResult = await window.electronAPI.getCurrentBranch(projectId);
+            if (branchResult && branchResult.success) this.pullCurrentBranch = branchResult.currentBranch;
+        }
+    },
+    async confirmPull() {
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) return;
+        this.pullModalState = 'progress';
+        this.pullLogs = [];
+        try {
+            const result = await window.electronAPI.pullFromPreview(projectId);
+            this.pullResult = result;
+        } catch (error) {
+            this.pullResult = { success: false, error: error.message };
+        }
+        this.pullModalState = 'result';
+        // Refresh repo info after pull completes
+        if (this.pullResult && this.pullResult.success) {
+            await this.loadRepositoryInfo();
+            await this.loadBranches();
+        }
+    },
+    closePullModal() {
+        this.pullModalState = 'closed';
+        this.pullLogs = [];
+        this.pullResult = null;
+    },
+    async openPushModal() {
+        this.pushLogs = [];
+        this.pushResult = null;
+        this.pushSelectedBranch = '';
+        this.pushBranches = [];
+        this.pushBranchesLoading = true;
+        this.pushModalState = 'select';
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (projectId) {
+            try {
+                const result = await window.electronAPI.listRemoteBranches(projectId);
+                this.pushBranchesLoading = false;
+                if (result && result.success) this.pushBranches = result.branches;
+            } catch (error) {
+                this.pushBranchesLoading = false;
+                console.error('❌ Error loading remote branches for push modal:', error);
+            }
+        } else {
+            this.pushBranchesLoading = false;
+        }
+    },
+    async confirmPush() {
+        if (!this.pushSelectedBranch) return;
+        const projectId = sessionStorage.getItem('currentProjectId');
+        if (!projectId) return;
+        this.pushModalState = 'progress';
+        this.pushLogs = [];
+        try {
+            const result = await window.electronAPI.pushToBranch(projectId, this.pushSelectedBranch);
+            this.pushResult = result;
+        } catch (error) {
+            this.pushResult = { success: false, error: error.message };
+        }
+        this.pushModalState = 'result';
+        // Refresh repo info after push completes
+        if (this.pushResult && this.pushResult.success) {
+            await this.loadRepositoryInfo();
+        }
+    },
+    closePushModal() {
+        this.pushModalState = 'closed';
+        this.pushLogs = [];
+        this.pushResult = null;
     },
     async init() { // Make init an async function
         console.log('🚀 INIT STARTED - Renderer initialization beginning');
@@ -844,6 +928,20 @@ clearingCache: false,
                 : payload || '';
             this.commandOutput += message;
             sessionStorage.setItem('commandOutput', this.commandOutput);
+            // Stream to pull modal if in progress
+            if (this.pullModalState === 'progress') {
+                this.pullLogs.push(message);
+                this.$nextTick(() => {
+                    if (this.$refs.pullLogArea) this.$refs.pullLogArea.scrollTop = this.$refs.pullLogArea.scrollHeight;
+                });
+            }
+            // Stream to push modal if in progress
+            if (this.pushModalState === 'progress') {
+                this.pushLogs.push(message);
+                this.$nextTick(() => {
+                    if (this.$refs.pushLogArea) this.$refs.pushLogArea.scrollTop = this.$refs.pushLogArea.scrollHeight;
+                });
+            }
             this.$nextTick(() => {
                 const activeTab = this.consoleTabs.find(tab => tab.id === this.activeConsoleTab);
                 if (activeTab && activeTab.type === 'commands') {
@@ -900,7 +998,7 @@ clearingCache: false,
                 console.log('✅ Set devServerUrl from sessionStorage:', storedUrl);
             } else {
                 console.log('❌ No devServerUrl found anywhere!');
-                alert('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
+                console.error('Erro: URL do servidor de desenvolvimento não encontrada. Por favor, inicie o projeto novamente.');
                 return;
             }
         }
@@ -1507,20 +1605,8 @@ clearingCache: false,
 </div>
 </div>
 <div class="flex items-center space-x-2">
-<button @click="updateModalOpen = true" class="px-4 py-2 text-sm font-semibold text-white bg-accent-orange rounded-md hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange" :disabled="pullLoading">
-                <span x-show="!pullLoading">Atualizar</span>
-                <span x-show="pullLoading" class="flex items-center">
-                    <div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Atualizando...
-                </span>
-            </button>
-<button @click="publishModalOpen = true" class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-md hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-primary" :disabled="pushLoading">
-                <span x-show="!pushLoading">Publicar</span>
-                <span x-show="pushLoading" class="flex items-center">
-                    <div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Publicando...
-                </span>
-            </button>
+<button @click="openPullModal()" class="px-4 py-2 text-sm font-semibold text-white bg-accent-orange rounded-md hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange">Atualizar</button>
+<button @click="openPushModal()" class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-md hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-primary">Publicar</button>
 <div class="relative">
 <button @click="menuOpen = !menuOpen" class="p-2 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary">
 <span class="material-icons text-muted-dark">menu</span>
@@ -1751,54 +1837,93 @@ clearingCache: false,
 </nav>
 </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="updateModalOpen">
-<div @click.outside="updateModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
-<h3 class="text-lg font-medium text-text-dark">Confirmar Atualização</h3>
-<p class="mt-2 text-sm text-muted-dark">Você tem certeza que deseja atualizar a branch '<span class="font-bold text-primary" x-text="currentBranch"></span>'? Isso buscará atualizações da branch remota 'preview' e mesclará na branch atual.</p>
-<div class="mt-4 flex justify-end space-x-2">
-<button @click="updateModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" :disabled="pullLoading">Cancelar</button>
-<button @click="pullFromPreview()" class="px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-orange-500" :disabled="pullLoading">
-<span x-show="!pullLoading">Atualizar</span>
-<span x-show="pullLoading" class="flex items-center">
-<div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-Atualizando...
-</span>
-</button>
+<div class="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black bg-opacity-50" style="display: none;" x-show="pullModalState !== 'closed'">
+  <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
+    <div x-show="pullModalState === 'confirm'">
+      <h3 class="text-lg font-semibold text-white mb-2">Atualizar Projeto</h3>
+      <p class="text-gray-300 text-sm mb-4">Deseja atualizar o projeto com as alterações remotas?</p>
+      <p class="text-sm text-gray-400 mb-4" x-show="pullCurrentBranch">Branch: <span class="text-green-400 font-mono" x-text="pullCurrentBranch"></span></p>
+      <div class="flex space-x-3">
+        <button @click="confirmPull()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm font-medium">Confirmar</button>
+        <button @click="closePullModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Cancelar</button>
+      </div>
+    </div>
+    <div x-show="pullModalState === 'progress'">
+      <h3 class="text-lg font-semibold text-white mb-4">Atualizando...</h3>
+      <div class="flex items-center mb-3">
+        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-green-400 mr-3"></div>
+        <span class="text-gray-300 text-sm">Operação em andamento...</span>
+      </div>
+      <div x-ref="pullLogArea" class="bg-gray-900 rounded p-3 max-h-48 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
+        <template x-for="(log, i) in pullLogs" :key="i">
+          <div x-text="log"></div>
+        </template>
+      </div>
+    </div>
+    <div x-show="pullModalState === 'result'">
+      <h3 class="text-lg font-semibold text-white mb-4">Resultado</h3>
+      <div x-show="pullResult && pullResult.success" class="flex items-center text-green-400 mb-4">
+        <span class="text-2xl mr-2">✅</span>
+        <span class="text-sm">Atualização concluída com sucesso!</span>
+      </div>
+      <div x-show="pullResult && !pullResult.success" class="flex items-center text-red-400 mb-4">
+        <span class="text-2xl mr-2">❌</span>
+        <span class="text-sm" x-text="pullResult ? (pullResult.error || 'Erro desconhecido') : 'Erro desconhecido'"></span>
+      </div>
+      <button @click="closePullModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Fechar</button>
+    </div>
+  </div>
 </div>
-</div>
-</div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="publishModalOpen">
-<div @click.outside="publishModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
-<h3 class="text-lg font-medium text-text-dark">Publicar Alterações</h3>
-<p class="mt-2 text-sm text-muted-dark">Selecione a branch para publicar.</p>
-<div class="mt-4 space-y-4">
-<div>
-<label class="text-sm font-medium text-text-dark">Selecionar branch remota</label>
-<div class="mt-1 relative">
-<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedPublishBranch" :disabled="pushLoading || remoteBranches.length === 0">
-<template x-for="branch in remoteBranches" :key="branch">
-<option :value="branch" x-text="branch" :selected="branch === selectedPublishBranch"></option>
-</template>
-</select>
-<div x-show="pushLoading || remoteBranches.length === 0" class="absolute inset-0 flex items-center justify-center bg-background-dark bg-opacity-75">
-<div x-show="pushLoading" class="w-4 h-4 border-2 border-gray-600 border-t-primary rounded-full animate-spin"></div>
-<span x-show="!pushLoading && remoteBranches.length === 0" class="text-xs text-muted-dark">Carregando branches...</span>
-</div>
-</div>
-<p class="mt-1 text-xs text-muted-dark">A branch '<span class="font-bold text-primary" x-text="currentBranch"></span>' será publicada para a branch selecionada.</p>
-</div>
-</div>
-<div class="mt-6 flex justify-end space-x-2">
-<button @click="publishModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" :disabled="pushLoading">Cancelar</button>
-<button @click="pushToBranch()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" :disabled="pushLoading || !selectedPublishBranch">
-<span x-show="!pushLoading">Publicar</span>
-<span x-show="pushLoading" class="flex items-center">
-<div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-Publicando...
-</span>
-</button>
-</div>
-</div>
+<div class="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black bg-opacity-50" style="display: none;" x-show="pushModalState !== 'closed'">
+  <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
+    <div x-show="pushModalState === 'select'">
+      <h3 class="text-lg font-semibold text-white mb-2">Publicar Alterações</h3>
+      <p class="text-gray-300 text-sm mb-4">Selecione a branch de destino para publicar.</p>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-300 mb-1">Branch remota</label>
+        <div class="relative">
+          <select x-model="pushSelectedBranch" :disabled="pushBranchesLoading || pushBranches.length === 0" class="block w-full pl-3 pr-10 py-2 text-sm border border-gray-600 bg-gray-900 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50">
+            <option value="" disabled x-show="!pushSelectedBranch">Selecione uma branch...</option>
+            <template x-for="branch in pushBranches" :key="branch">
+              <option :value="branch" x-text="branch"></option>
+            </template>
+          </select>
+          <div x-show="pushBranchesLoading" class="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75 rounded-md">
+            <div class="w-4 h-4 border-2 border-gray-600 border-t-green-400 rounded-full animate-spin"></div>
+          </div>
+        </div>
+        <p x-show="!pushBranchesLoading && pushBranches.length === 0" class="mt-1 text-xs text-red-400">Não foi possível carregar as branches remotas.</p>
+      </div>
+      <div class="flex space-x-3">
+        <button @click="confirmPush()" :disabled="!pushSelectedBranch || pushBranchesLoading" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Publicar</button>
+        <button @click="closePushModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Cancelar</button>
+      </div>
+    </div>
+    <div x-show="pushModalState === 'progress'">
+      <h3 class="text-lg font-semibold text-white mb-4">Publicando...</h3>
+      <div class="flex items-center mb-3">
+        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-green-400 mr-3"></div>
+        <span class="text-gray-300 text-sm">Operação em andamento...</span>
+      </div>
+      <div x-ref="pushLogArea" class="bg-gray-900 rounded p-3 max-h-48 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
+        <template x-for="(log, i) in pushLogs" :key="i">
+          <div x-text="log"></div>
+        </template>
+      </div>
+    </div>
+    <div x-show="pushModalState === 'result'">
+      <h3 class="text-lg font-semibold text-white mb-4">Resultado</h3>
+      <div x-show="pushResult && pushResult.success" class="flex items-center text-green-400 mb-4">
+        <span class="text-2xl mr-2">✅</span>
+        <span class="text-sm">Publicação concluída com sucesso!</span>
+      </div>
+      <div x-show="pushResult && !pushResult.success" class="flex items-center text-red-400 mb-4">
+        <span class="text-2xl mr-2">❌</span>
+        <span class="text-sm" x-text="pushResult ? (pushResult.error || 'Erro desconhecido') : 'Erro desconhecido'"></span>
+      </div>
+      <button @click="closePushModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Fechar</button>
+    </div>
+  </div>
 </div>
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="branchModalOpen">
 <div @click.outside="branchModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
