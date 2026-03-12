@@ -661,15 +661,18 @@ class GitHandlers {
     const fs = require('fs');
 
     try {
-      const token = await this.gitOps.getGitHubToken();
+      const gitMod = await this._getGit();
+
+      const [token, currentBranch] = await Promise.all([
+        this.gitOps.getGitHubToken(),
+        gitMod.currentBranch({ fs, dir: projectPath, cache: this._gitCache })
+      ]);
+
       if (!token) {
         this.sendOutput('❌ Autenticação GitHub necessária. Faça login novamente.');
         return { success: false, error: 'Autenticação GitHub necessária. Faça login novamente.' };
       }
 
-      const gitMod = await this._getGit();
-
-      const currentBranch = await gitMod.currentBranch({ fs, dir: projectPath, cache: this._gitCache });
       if (!currentBranch) {
         this.sendOutput('❌ Nenhuma branch selecionada (detached HEAD). Selecione uma branch para atualizar.');
         return { success: false, error: 'Nenhuma branch selecionada (detached HEAD). Selecione uma branch primeiro.' };
@@ -681,8 +684,10 @@ class GitHandlers {
       if (commitMessage) {
         this.sendOutput('⚙️ Configurando usuário git para commit...');
         await this.gitOps.configureGitForUser(projectPath);
-        const authorName = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }) || 'documental';
-        const authorEmail = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }) || 'documental@app';
+        const [authorName, authorEmail] = await Promise.all([
+          gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }).then(v => v || 'documental'),
+          gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }).then(v => v || 'documental@app')
+        ]);
         const author = { name: authorName, email: authorEmail };
         await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
       }
@@ -754,26 +759,31 @@ class GitHandlers {
     const fs = require('fs');
 
     try {
-      const token = await this.gitOps.getGitHubToken();
+      const gitMod = await this._getGit();
+
+      const [token, userConfigured] = await Promise.all([
+        this.gitOps.getGitHubToken(),
+        this.gitOps.configureGitForUser(projectPath)
+      ]);
+
       if (!token) {
         this.sendOutput('❌ Autenticação GitHub necessária. Faça login novamente.');
         return { success: false, error: 'Autenticação GitHub necessária. Faça login novamente.' };
       }
 
-      this.sendOutput('⚙️ Configurando usuário git...');
-      const userConfigured = await this.gitOps.configureGitForUser(projectPath);
       if (!userConfigured) {
         this.sendOutput('⚠️ Não foi possível configurar usuário git. Continuando com configuração existente...');
         this.logger.warn('Could not configure git user, proceeding with existing config');
       }
 
       const auth = { username: token, password: 'x-oauth-basic' };
-      const gitMod = await this._getGit();
 
       // Commit local changes before pushing if commitMessage provided
       if (commitMessage) {
-        const authorName = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }) || 'documental';
-        const authorEmail = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }) || 'documental@app';
+        const [authorName, authorEmail] = await Promise.all([
+          gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }).then(v => v || 'documental'),
+          gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }).then(v => v || 'documental@app')
+        ]);
         const author = { name: authorName, email: authorEmail };
         await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
 
