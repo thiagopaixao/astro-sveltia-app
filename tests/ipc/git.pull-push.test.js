@@ -121,8 +121,8 @@ describe('GitHandlers pull/push/listRemoteBranches', () => {
       git.pull.mockResolvedValue({});
       await handlers.gitPullFromPreview('/test/path');
       const pullCall = git.pull.mock.calls[0]?.[0];
-      expect(pullCall?.auth?.username).toBe('ghp_test_token');
-      expect(pullCall?.auth?.password).toBe('x-oauth-basic');
+      expect(pullCall?.onAuth).toEqual(expect.any(Function));
+      expect(pullCall?.onAuth()).toEqual({ username: 'ghp_test_token', password: 'x-oauth-basic' });
     });
 
     it('returns error when HEAD is detached (currentBranch returns null)', async () => {
@@ -185,7 +185,8 @@ describe('GitHandlers pull/push/listRemoteBranches', () => {
       git.getConfig.mockResolvedValue('https://github.com/user/repo.git');
       await handlers.gitListRemoteBranches('/test/path').catch(() => {});
       const refCall = git.listServerRefs.mock.calls[0]?.[0];
-      expect(refCall?.auth?.username).toBe('ghp_test_token');
+      expect(refCall?.onAuth).toEqual(expect.any(Function));
+      expect(refCall?.onAuth()).toEqual({ username: 'ghp_test_token', password: 'x-oauth-basic' });
     });
   });
 
@@ -268,7 +269,7 @@ describe('GitHandlers pull/push/listRemoteBranches', () => {
       const result = await handlers.gitListRemoteBranches('/test/path');
       expect(result).toEqual(['main', 'develop']);
       const refCall = git.listServerRefs.mock.calls[0]?.[0];
-      expect(refCall.auth).toBeUndefined();
+      expect(refCall.onAuth).toBeUndefined();
     });
 
     it('releaseGitLock clears the timeout timer', () => {

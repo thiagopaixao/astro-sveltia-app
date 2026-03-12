@@ -570,7 +570,7 @@ class GitHandlers {
         remote: 'origin',
         ref: currentBranch,
         singleBranch: true,
-        auth,
+        onAuth: () => auth,
       });
 
       this.sendOutput('🔄 Mesclando alterações...');
@@ -582,7 +582,7 @@ class GitHandlers {
         ref: currentBranch,
         singleBranch: true,
         author: { name: 'documental', email: 'documental@app' },
-        auth,
+        onAuth: () => auth,
       });
 
       this.sendOutput(`✅ Pull concluído com sucesso na branch: ${currentBranch}`);
@@ -653,7 +653,7 @@ class GitHandlers {
         dir: projectPath,
         remote: 'origin',
         ref: targetBranch,
-        auth,
+        onAuth: () => auth,
       });
 
       this.sendOutput(`✅ Push concluído com sucesso na branch: ${targetBranch}`);
@@ -708,7 +708,7 @@ class GitHandlers {
       };
 
       if (auth) {
-        listServerRefsConfig.auth = auth;
+        listServerRefsConfig.onAuth = () => auth;
       }
 
       const refs = await gitMod.listServerRefs(listServerRefsConfig);
