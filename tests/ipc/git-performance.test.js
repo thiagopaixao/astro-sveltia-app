@@ -86,10 +86,15 @@ describe('Git performance optimizations', () => {
       expect(git.statusMatrix.mock.calls[0][0].cache).toBe(cacheRef);
     });
 
-    it('_gitCache is initialized as empty object on construction', () => {
-      expect(handlers._gitCache).toBeDefined();
-      expect(typeof handlers._gitCache).toBe('object');
-      expect(handlers._gitCache).toEqual({});
+    it('passes _gitCache to currentBranch in gitPullFromPreview', async () => {
+      vi.spyOn(handlers.gitOps, 'getGitHubToken').mockResolvedValue(null);
+      const git = await import('isomorphic-git');
+      git.currentBranch.mockResolvedValue('main');
+
+      const cacheRef = handlers._gitCache;
+      await handlers.gitPullFromPreview('/test/path');
+
+      expect(git.currentBranch.mock.calls[0][0].cache).toBe(cacheRef);
     });
   });
 
@@ -108,11 +113,19 @@ describe('Git performance optimizations', () => {
       expect(handlers._gitCache).not.toBe(cacheBefore);
     });
 
-    it('resets _gitCache after write operations (verified via source)', async () => {
-      const realFs = await vi.importActual('fs');
-      const source = realFs.readFileSync('src/ipc/git.js', 'utf8');
-      const invalidationCount = (source.match(/this\._gitCache = \{\}/g) || []).length;
-      expect(invalidationCount).toBeGreaterThanOrEqual(10);
+    it('resets _gitCache after push operation', async () => {
+      vi.spyOn(handlers.gitOps, 'getGitHubToken').mockResolvedValue('test-token');
+      vi.spyOn(handlers.gitOps, 'configureGitForUser').mockResolvedValue(true);
+      const git = await import('isomorphic-git');
+      git.push.mockResolvedValue({});
+
+      handlers._gitCache.data = 'stale';
+      const cacheBefore = handlers._gitCache;
+
+      await handlers.gitPushToBranch('/test/path', 'main');
+
+      expect(handlers._gitCache).toEqual({});
+      expect(handlers._gitCache).not.toBe(cacheBefore);
     });
   });
 
@@ -257,19 +270,15 @@ describe('Git performance optimizations', () => {
       expect(callCount).toBe(1);
     });
 
-    it('gitListBranches is called only once during checkout (spy verification)', async () => {
-      const listSpy = vi.spyOn(handlers, 'gitListBranches').mockResolvedValue({
-        branches: [{ name: 'feature', isCurrent: false, isRemote: true }],
-        current: 'main',
-      });
-      vi.spyOn(handlers, 'gitCheckoutBranch').mockImplementation(async (path, branch) => {
-        const branchListPromise = handlers.gitListBranches(path).catch(() => null);
-        await branchListPromise;
-      });
+    it('reuses branchListPromise via await (not a second call)', async () => {
+      const realFs = await vi.importActual('fs');
+      const source = realFs.readFileSync('src/ipc/git.js', 'utf8');
+      const checkoutStart = source.indexOf('async gitCheckoutBranch(');
+      const checkoutEnd = source.indexOf('\n  async ', checkoutStart + 1);
+      const methodSource = source.slice(checkoutStart, checkoutEnd);
 
-      await handlers.gitCheckoutBranch('/test/path', 'feature');
-
-      expect(listSpy).toHaveBeenCalledTimes(1);
+      expect(methodSource).toContain('const branchListPromise = this.gitListBranches(projectPath)');
+      expect(methodSource).toContain('await branchListPromise');
     });
   });
 });
