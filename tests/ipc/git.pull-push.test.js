@@ -1,7 +1,6 @@
 /**
- * @fileoverview TDD RED phase tests for GitHandlers pull/push/listRemoteBranches
- * Tests auth integration, lock mechanism, and progress patterns.
- * ALL tests expected to FAIL — implementation doesn't exist yet.
+ * @fileoverview Tests for GitHandlers pull/push/listRemoteBranches
+ * Tests auth integration, lock mechanism, progress patterns, and edge cases.
  * @author Documental Team
  * @since 1.0.0
  * @vitest-environment node
@@ -209,6 +208,77 @@ describe('GitHandlers pull/push/listRemoteBranches', () => {
       const result = await handlers.gitPushToBranch('/test/path', 'main');
       expect(result).toBeDefined();
       expect(result.success).toBe(false);
+    });
+
+    it('pull categorizes 401 authentication errors', async () => {
+      vi.spyOn(handlers.gitOps, 'getGitHubToken').mockResolvedValue('ghp_test_token');
+      const git = await import('isomorphic-git');
+      git.currentBranch.mockResolvedValue('main');
+      git.fetch.mockRejectedValue(new Error('HTTP Error: 401 Unauthorized'));
+      const result = await handlers.gitPullFromPreview('/test/path');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('autenticação');
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('lock auto-releases after 60s timeout', () => {
+      vi.useFakeTimers();
+      handlers.acquireGitLock();
+      expect(handlers.gitOperationInProgress).toBe(true);
+      vi.advanceTimersByTime(60001);
+      expect(handlers.gitOperationInProgress).toBe(false);
+      vi.useRealTimers();
+    });
+
+    it('concurrent pull returns lock error when operation already in progress', async () => {
+      handlers.acquireGitLock();
+      const result = await handlers.gitPullFromPreview('/test/path');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already in progress');
+      handlers.releaseGitLock();
+    });
+
+    it('concurrent push returns lock error when operation already in progress', async () => {
+      handlers.acquireGitLock();
+      const result = await handlers.gitPushToBranch('/test/path', 'main');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already in progress');
+      handlers.releaseGitLock();
+    });
+
+    it('push continues when configureGitForUser returns false (best-effort)', async () => {
+      vi.spyOn(handlers.gitOps, 'getGitHubToken').mockResolvedValue('ghp_test_token');
+      vi.spyOn(handlers.gitOps, 'configureGitForUser').mockResolvedValue(false);
+      const git = await import('isomorphic-git');
+      git.push.mockResolvedValue({});
+      const result = await handlers.gitPushToBranch('/test/path', 'main');
+      expect(result.success).toBe(true);
+      expect(git.push).toHaveBeenCalled();
+    });
+
+    it('listRemoteBranches works without auth token (public repos)', async () => {
+      vi.spyOn(handlers.gitOps, 'getGitHubToken').mockResolvedValue(null);
+      const git = await import('isomorphic-git');
+      git.getConfig.mockResolvedValue('https://github.com/user/repo.git');
+      git.listServerRefs.mockResolvedValue([
+        { ref: 'refs/heads/main' },
+        { ref: 'refs/heads/develop' },
+      ]);
+      const result = await handlers.gitListRemoteBranches('/test/path');
+      expect(result).toEqual(['main', 'develop']);
+      const refCall = git.listServerRefs.mock.calls[0]?.[0];
+      expect(refCall.auth).toBeUndefined();
+    });
+
+    it('releaseGitLock clears the timeout timer', () => {
+      vi.useFakeTimers();
+      handlers.acquireGitLock();
+      expect(handlers._lockTimeout).not.toBeNull();
+      handlers.releaseGitLock();
+      expect(handlers._lockTimeout).toBeNull();
+      expect(handlers.gitOperationInProgress).toBe(false);
+      vi.useRealTimers();
     });
   });
 });
