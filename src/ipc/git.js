@@ -176,6 +176,67 @@ class GitHandlers {
   }
 
   /**
+   * Check if repository has uncommitted changes
+   * @param {string} projectPath - Path to the git repository
+   * @returns {Promise<{success: boolean, isDirty: boolean, fileCount: number, files: string[]}>}
+   */
+  async gitCheckStatus(projectPath) {
+    try {
+      const fs = require('fs');
+      const gitMod = await this._getGit();
+
+      const matrix = await gitMod.statusMatrix({ fs, dir: projectPath });
+      const dirtyFiles = matrix.filter(([, head, workdir, stage]) =>
+        !(head === 1 && workdir === 1 && stage === 1)
+      );
+
+      return {
+        success: true,
+        isDirty: dirtyFiles.length > 0,
+        fileCount: dirtyFiles.length,
+        files: dirtyFiles.map(([filepath]) => filepath)
+      };
+    } catch (error) {
+      this.logger.error('Error checking git status:', error);
+      return { success: false, isDirty: false, fileCount: 0, files: [], error: error.message };
+    }
+  }
+
+  /**
+   * Stage all dirty files and create a commit
+   * @param {Object} gitMod - isomorphic-git module
+   * @param {Object} fs - filesystem module
+   * @param {string} projectPath - Path to the git repository
+   * @param {string} commitMessage - Commit message
+   * @param {Object} author - Author object with name and email
+   * @returns {Promise<string|null>} Commit SHA or null if nothing to commit
+   * @private
+   */
+  async _commitAll(gitMod, fs, projectPath, commitMessage, author) {
+    const matrix = await gitMod.statusMatrix({ fs, dir: projectPath });
+    const dirty = matrix.filter(([, h, w, s]) => !(h === 1 && w === 1 && s === 1));
+
+    if (dirty.length === 0) {
+      this.sendOutput('ℹ️ Nenhuma alteração para commitar.');
+      return null;
+    }
+
+    this.sendOutput(`📝 Preparando ${dirty.length} arquivo(s) para commit...`);
+    await Promise.all(
+      dirty.map(([filepath, , worktreeStatus]) =>
+        worktreeStatus
+          ? gitMod.add({ fs, dir: projectPath, filepath })
+          : gitMod.remove({ fs, dir: projectPath, filepath })
+      )
+    );
+
+    this.sendOutput(`💾 Commitando: "${commitMessage}"`);
+    const sha = await gitMod.commit({ fs, dir: projectPath, message: commitMessage, author });
+    this.sendOutput(`✅ Commit criado: ${sha.substring(0, 7)}`);
+    return sha;
+  }
+
+  /**
    * List all branches in the repository
    * @param {string} projectPath - Path to the git repository
    * @returns {Promise<{branches: Array<BranchInfo>, current: string}>}
@@ -534,9 +595,10 @@ class GitHandlers {
   /**
    * Pull changes from remote for current branch
    * @param {string} projectPath - Path to the git repository
+   * @param {string|null} [commitMessage=null] - If provided, commit all changes before pulling
    * @returns {Promise<{success: boolean, pulled?: boolean, branch?: string, error?: string}>}
    */
-  async gitPullFromPreview(projectPath) {
+  async gitPullFromPreview(projectPath, commitMessage = null) {
     if (!this.acquireGitLock()) {
       this.sendOutput('⚠️ Operação Git já em andamento. Aguarde...');
       return { success: false, error: 'Git operation already in progress. Please wait.' };
@@ -560,6 +622,16 @@ class GitHandlers {
       }
 
       const auth = { username: token, password: 'x-oauth-basic' };
+
+      // Commit local changes before pulling if commitMessage provided
+      if (commitMessage) {
+        this.sendOutput('⚙️ Configurando usuário git para commit...');
+        await this.gitOps.configureGitForUser(projectPath);
+        const authorName = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.name' }) || 'documental';
+        const authorEmail = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.email' }) || 'documental@app';
+        const author = { name: authorName, email: authorEmail };
+        await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
+      }
 
       this.sendOutput(`📥 Buscando alterações da branch remota '${currentBranch}'...`);
 
@@ -611,13 +683,13 @@ class GitHandlers {
   }
 
   /**
-   * Push changes to a specific branch
+   * Push changes to a specific branch with optional commit-before-push and first-push-wins strategy
    * @param {string} projectPath - Path to the git repository
    * @param {string} targetBranch - Target branch name
+   * @param {string|null} [commitMessage=null] - If provided, commit all changes before pushing
    * @returns {Promise<{success: boolean, pushed?: boolean, branch?: string, error?: string}>}
    */
-  async gitPushToBranch(projectPath, targetBranch) {
-    // Acquire lock
+  async gitPushToBranch(projectPath, targetBranch, commitMessage = null) {
     if (!this.acquireGitLock()) {
       this.sendOutput('⚠️ Operação Git já em andamento. Aguarde...');
       return { success: false, error: 'Git operation already in progress. Please wait.' };
@@ -626,14 +698,12 @@ class GitHandlers {
     const fs = require('fs');
 
     try {
-      // Get auth token
       const token = await this.gitOps.getGitHubToken();
       if (!token) {
         this.sendOutput('❌ Autenticação GitHub necessária. Faça login novamente.');
         return { success: false, error: 'Autenticação GitHub necessária. Faça login novamente.' };
       }
 
-      // Configure git user (best-effort)
       this.sendOutput('⚙️ Configurando usuário git...');
       const userConfigured = await this.gitOps.configureGitForUser(projectPath);
       if (!userConfigured) {
@@ -642,8 +712,49 @@ class GitHandlers {
       }
 
       const auth = { username: token, password: 'x-oauth-basic' };
-
       const gitMod = await this._getGit();
+
+      // Commit local changes before pushing if commitMessage provided
+      if (commitMessage) {
+        const authorName = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.name' }) || 'documental';
+        const authorEmail = await gitMod.getConfig({ fs, dir: projectPath, path: 'user.email' }) || 'documental@app';
+        const author = { name: authorName, email: authorEmail };
+        await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
+
+        // First-push-wins: fetch + pull to integrate remote changes before pushing
+        try {
+          this.sendOutput(`📥 Integrando alterações remotas de '${targetBranch}'...`);
+          await gitMod.fetch({
+            fs,
+            http,
+            dir: projectPath,
+            remote: 'origin',
+            ref: targetBranch,
+            singleBranch: true,
+            onAuth: () => auth,
+          });
+          await gitMod.pull({
+            fs,
+            http,
+            dir: projectPath,
+            ref: targetBranch,
+            singleBranch: true,
+            author: { name: authorName, email: authorEmail },
+            onAuth: () => auth,
+          });
+        } catch (fetchPullError) {
+          // Branch doesn't exist on remote yet — OK for first push
+          if (!fetchPullError.message.includes('Could not find') &&
+              !fetchPullError.message.includes('not found') &&
+              !fetchPullError.message.includes('404')) {
+            if (fetchPullError.message.includes('merge') || fetchPullError.message.includes('MERGE_HEAD')) {
+              this.sendOutput('❌ Conflito de merge detectado. Resolva manualmente.');
+              return { success: false, error: 'Conflito de merge. Resolva as diferenças manualmente antes de publicar.' };
+            }
+            this.logger.warn('Fetch/pull before push warning:', fetchPullError.message);
+          }
+        }
+      }
 
       this.sendOutput(`🚀 Publicando alterações na branch: ${targetBranch}...`);
 
@@ -804,13 +915,20 @@ class GitHandlers {
       }
     });
 
-    /**
-     * Pull from preview branch
-     */
-    ipcMain.handle('git:pull-from-preview', async (event, projectId) => {
+    ipcMain.handle('git:check-status', async (event, projectId) => {
       try {
         const projectPath = await this.getProjectPath(projectId);
-        const result = await this.gitPullFromPreview(projectPath);
+        return await this.gitCheckStatus(projectPath);
+      } catch (error) {
+        this.logger.error('Error in git:check-status handler:', error);
+        return { success: false, isDirty: false, fileCount: 0, files: [], error: error.message };
+      }
+    });
+
+    ipcMain.handle('git:pull-from-preview', async (event, projectId, commitMessage) => {
+      try {
+        const projectPath = await this.getProjectPath(projectId);
+        const result = await this.gitPullFromPreview(projectPath, commitMessage || null);
         return result;
       } catch (error) {
         this.logger.error('Error in git:pull-from-preview handler:', error);
@@ -818,13 +936,10 @@ class GitHandlers {
       }
     });
 
-    /**
-     * Push to branch
-     */
-    ipcMain.handle('git:push-to-branch', async (event, projectId, targetBranch) => {
+    ipcMain.handle('git:push-to-branch', async (event, projectId, targetBranch, commitMessage) => {
       try {
         const projectPath = await this.getProjectPath(projectId);
-        const result = await this.gitPushToBranch(projectPath, targetBranch);
+        const result = await this.gitPushToBranch(projectPath, targetBranch, commitMessage || null);
         return result;
       } catch (error) {
         this.logger.error('Error in git:push-to-branch handler:', error);
@@ -860,6 +975,7 @@ class GitHandlers {
     ipcMain.removeHandler('git:checkout-branch');
     ipcMain.removeHandler('git:get-current-branch');
     ipcMain.removeHandler('git:get-repository-info');
+    ipcMain.removeHandler('git:check-status');
     ipcMain.removeHandler('git:pull-from-preview');
     ipcMain.removeHandler('git:push-to-branch');
     ipcMain.removeHandler('git:list-remote-branches');
