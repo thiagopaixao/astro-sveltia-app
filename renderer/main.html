@@ -779,18 +779,28 @@ clearingCache: false,
         }
     },
     async confirmPull() {
+        console.log('🔍 DEBUG: confirmPull() called');
         const projectId = sessionStorage.getItem('currentProjectId');
-        if (!projectId) return;
+        console.log('🔍 DEBUG: projectId =', projectId);
+        if (!projectId) {
+            console.error('❌ DEBUG: No projectId found');
+            return;
+        }
         this.pullModalState = 'progress';
         this.pullLogs = [];
+        console.log('🔍 DEBUG: Calling pullFromPreview...');
         try {
             const commitMsg = this.pullIsDirty ? this.pullCommitMessage.trim() : null;
+            console.log('🔍 DEBUG: commitMsg =', commitMsg);
             const result = await window.electronAPI.pullFromPreview(projectId, commitMsg);
+            console.log('🔍 DEBUG: Result =', result);
             this.pullResult = result;
         } catch (error) {
+            console.error('❌ DEBUG: Error =', error);
             this.pullResult = { success: false, error: error.message };
         }
         this.pullModalState = 'result';
+        console.log('🔍 DEBUG: Modal state changed to result');
         // Refresh repo info after pull completes
         if (this.pullResult && this.pullResult.success) {
             await this.loadRepositoryInfo();
