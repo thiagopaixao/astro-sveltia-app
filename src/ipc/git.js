@@ -694,7 +694,9 @@ class GitHandlers {
       const token = await this.gitOps.getGitHubToken();
       const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
 
-      const url = await git.getConfig({
+      const gitMod = await this._getGit();
+
+      const url = await gitMod.getConfig({
         fs: require('fs'),
         dir: projectPath,
         path: 'remote.origin.url'
@@ -709,7 +711,7 @@ class GitHandlers {
         listServerRefsConfig.auth = auth;
       }
 
-      const refs = await git.listServerRefs(listServerRefsConfig);
+      const refs = await gitMod.listServerRefs(listServerRefsConfig);
 
       const branches = refs
         .filter(ref => ref.ref.startsWith('refs/heads/'))
