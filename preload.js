@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   completeWelcomeSetup: () => ipcRenderer.invoke('completeWelcomeSetup'),
   logoutFromGitHub: () => ipcRenderer.invoke('logoutFromGitHub'),
   writeToClipboard: (text) => ipcRenderer.invoke('writeToClipboard', text),
+  getUserInfo: () => ipcRenderer.invoke('user:get-info'),
+  updateUserInfo: (data) => ipcRenderer.invoke('user:update-info', data),
   // Node.js detection and installation functions
   checkNodeInstallation: () => ipcRenderer.invoke('checkNodeInstallation'),
   installNodeDependencies: (options) => ipcRenderer.invoke('installNodeDependencies', options),
