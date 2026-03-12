@@ -431,6 +431,9 @@ class GitHandlers {
       
       const fs = require('fs');
       
+      // Start branch list fetch in parallel with checkout attempt (avoids redundant call on failure)
+      const branchListPromise = this.gitListBranches(projectPath).catch(() => null);
+      
       // First, try to checkout directly (for local branches)
       try {
         await git.checkout({
@@ -445,9 +448,12 @@ class GitHandlers {
       } catch (directError) {
         this.logger.warn(`⚠️ Direct checkout failed: ${directError.message}`);
         
-        // If direct checkout fails, try to list branches and check if it exists
+        // Use the already-fetched (parallel) branch list
         try {
-          const branchResult = await this.gitListBranches(projectPath);
+          const branchResult = await branchListPromise;
+          if (!branchResult) {
+            throw new Error(`Branch '${branchName}' not found locally or remotely`);
+          }
           const localBranch = branchResult.branches.find(b => b.name === branchName && !b.isRemote);
           const remoteBranch = branchResult.branches.find(b => b.name === branchName && b.isRemote);
           
