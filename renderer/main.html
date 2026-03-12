@@ -148,6 +148,7 @@ clearingCache: false,
     branchAction: 'change',
     branches: [],
      branchLoading: false,
+     branchSwitching: false,
      copySuccess: false,
      // Pull and push functionality
      remoteBranches: [],
@@ -626,6 +627,7 @@ clearingCache: false,
             return;
         }
         
+        this.branchSwitching = true;
         try {
             const result = await window.electronAPI.checkoutBranch(projectId, this.selectedBranch);
             if (result.success) {
@@ -642,6 +644,8 @@ clearingCache: false,
         } catch (error) {
             console.error('❌ Error changing branch:', error);
             console.error('Erro ao mudar de branch: ' + error.message);
+        } finally {
+            this.branchSwitching = false;
         }
     },
     async createBranch() {
@@ -858,6 +862,14 @@ clearingCache: false,
         this.pushIsDirty = false;
         this.pushCommitMessage = '';
         this.pushDirtyFiles = [];
+    },
+    cancelPull() {
+        this.pullLogs.push('Cancelando...');
+        window.electronAPI.cancelGitOperation();
+    },
+    cancelPush() {
+        this.pushLogs.push('Cancelando...');
+        window.electronAPI.cancelGitOperation();
     },
     async init() { // Make init an async function
         console.log('🚀 INIT STARTED - Renderer initialization beginning');
@@ -1783,9 +1795,24 @@ clearingCache: false,
 </div>
 <footer class="flex items-center justify-between h-8 px-4 bg-surface-dark border-t border-gray-700 text-xs text-muted-dark shrink-0">
 <div class="flex items-center space-x-6">
-<button @click="branchModalOpen = true" class="flex items-center space-x-2 hover:text-text-dark">
-<span class="material-icons text-sm">drive_file_move</span>
-<span class="font-bold" x-text="currentBranch"></span>
+<button
+  @click="branchModalOpen = true"
+  class="flex items-center space-x-2 hover:text-text-dark"
+  :disabled="branchSwitching"
+>
+  <span
+    x-show="!branchSwitching"
+    class="material-icons text-sm"
+  >
+    drive_file_move
+  </span>
+  <span
+    x-show="branchSwitching"
+    class="material-icons text-sm animate-spin"
+  >
+    refresh
+  </span>
+  <span class="font-bold" x-text="currentBranch"></span>
 </button>
 <button @click="openProjectDirectory()" class="flex items-center space-x-2 hover:text-text-dark" :title="repoInfo.workingDirectory || 'Abrir diretório do projeto'">
 <span class="material-icons text-sm">folder_open</span>
@@ -1902,6 +1929,14 @@ clearingCache: false,
           <div x-text="log"></div>
         </template>
       </div>
+      <div class="mt-4 flex justify-end">
+        <button
+          @click="cancelPull()"
+          class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors"
+        >
+          Cancelar
+        </button>
+      </div>
     </div>
     <div x-show="pullModalState === 'result'">
       <h3 class="text-lg font-semibold text-white mb-4">Resultado</h3>
@@ -1961,6 +1996,14 @@ clearingCache: false,
         <template x-for="(log, i) in pushLogs" :key="i">
           <div x-text="log"></div>
         </template>
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button
+          @click="cancelPush()"
+          class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors"
+        >
+          Cancelar
+        </button>
       </div>
     </div>
     <div x-show="pushModalState === 'result'">
