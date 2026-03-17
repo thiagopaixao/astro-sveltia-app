@@ -286,21 +286,29 @@ class GitHandlers {
 
       this.sendOutput(`📝 Preparando ${dirty.length} arquivo(s) para commit...`);
 
-      // Stage files com tratamento de erro individual
+      // Stage files em batches com tratamento de erro individual
       const stageErrors = [];
-      await Promise.all(
-        dirty.map(async ([filepath, , worktreeStatus]) => {
-          try {
-            if (worktreeStatus) {
-              await gitMod.add({ fs, dir: projectPath, filepath });
-            } else {
-              await gitMod.remove({ fs, dir: projectPath, filepath });
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < dirty.length; i += BATCH_SIZE) {
+        const batch = dirty.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map(async ([filepath, , worktreeStatus]) => {
+            try {
+              if (worktreeStatus) {
+                await gitMod.add({ fs, dir: projectPath, filepath });
+              } else {
+                await gitMod.remove({ fs, dir: projectPath, filepath });
+              }
+            } catch (fileError) {
+              stageErrors.push({ filepath, error: fileError.message });
             }
-          } catch (fileError) {
-            stageErrors.push({ filepath, error: fileError.message });
-          }
-        })
-      );
+          })
+        );
+
+        // Reportar progresso após cada batch
+        const progress = Math.round(((i + batch.length) / dirty.length) * 100);
+        this.sendOutput(`📊 Progresso: ${progress}% (${i + batch.length}/${dirty.length} arquivos)`);
+      }
 
       if (stageErrors.length > 0) {
         const errorMsg = `Erro ao preparar arquivo(s): ${stageErrors.map(e => e.filepath).join(', ')}`;
@@ -312,7 +320,6 @@ class GitHandlers {
 
       this.sendOutput(`💾 Commitando: "${commitMessage}"`);
       const sha = await gitMod.commit({ fs, dir: projectPath, message: commitMessage, author });
-      this._gitCache = {};
       this.sendOutput(`✅ Commit criado: ${sha.substring(0, 7)}`);
       return sha;
     } catch (error) {
