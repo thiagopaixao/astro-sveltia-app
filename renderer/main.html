@@ -1982,7 +1982,7 @@ clearingCache: false,
 </nav>
 </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black bg-opacity-50" style="display: none;" x-show="pullModalState !== 'closed'">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="pullModalState !== 'closed'">
   <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
     <div x-show="pullModalState === 'confirm'">
       <h3 class="text-lg font-semibold text-white mb-2">Atualizar Projeto</h3>
@@ -2002,22 +2002,36 @@ clearingCache: false,
         <button @click="closePullModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Cancelar</button>
       </div>
     </div>
-    <div x-show="pullModalState === 'progress'">
-      <h3 class="text-lg font-semibold text-white mb-4">Atualizando...</h3>
-      <div class="flex items-center mb-3">
-        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-green-400 mr-3"></div>
-        <span class="text-gray-300 text-sm">Operação em andamento...</span>
+    <div x-show="pullModalState === 'progress'" class="space-y-4">
+      <h3 class="text-lg font-semibold text-white">Atualizando...</h3>
+
+      <!-- Barra de Progresso -->
+      <div class="space-y-2">
+        <div class="flex justify-between items-center text-sm">
+          <span x-text="progress.stage" class="text-gray-300"></span>
+          <span x-text="progress.percentage + '%'" class="text-blue-400 font-mono font-bold"></span>
+        </div>
+
+        <div class="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
+          <div class="bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300 relative overflow-hidden"
+               :style="`width: ${progress.percentage}%`">
+            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
+          </div>
+        </div>
+
+        <div x-text="progress.message" class="text-xs text-gray-400"></div>
       </div>
-      <div x-ref="pullLogArea" class="bg-gray-900 rounded p-3 max-h-48 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
+
+      <!-- Logs com quebra de linha -->
+      <div x-ref="pullLogArea" class="bg-gray-900 rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
         <template x-for="(log, i) in pullLogs" :key="i">
-          <div x-text="log"></div>
+          <div x-text="log" class="break-words whitespace-pre-wrap py-0.5"></div>
         </template>
       </div>
-      <div class="mt-4 flex justify-end">
-        <button
-          @click="cancelPull()"
-          class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors"
-        >
+
+      <!-- Botão Cancelar -->
+      <div class="flex justify-end">
+        <button @click="cancelPull()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors">
           Cancelar
         </button>
       </div>
@@ -2036,7 +2050,7 @@ clearingCache: false,
     </div>
   </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black bg-opacity-50" style="display: none;" x-show="pushModalState !== 'closed'">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="pushModalState !== 'closed'">
   <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
     <div x-show="pushModalState === 'select'">
       <h3 class="text-lg font-semibold text-white mb-2">Publicar Alterações</h3>
@@ -2070,22 +2084,36 @@ clearingCache: false,
         <button @click="closePushModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Cancelar</button>
       </div>
     </div>
-    <div x-show="pushModalState === 'progress'">
-      <h3 class="text-lg font-semibold text-white mb-4">Publicando...</h3>
-      <div class="flex items-center mb-3">
-        <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-green-400 mr-3"></div>
-        <span class="text-gray-300 text-sm">Operação em andamento...</span>
+    <div x-show="pushModalState === 'progress'" class="space-y-4">
+      <h3 class="text-lg font-semibold text-white">Publicando...</h3>
+      
+      <!-- Barra de Progresso -->
+      <div class="space-y-2">
+        <div class="flex justify-between items-center text-sm">
+          <span x-text="progress.stage" class="text-gray-300"></span>
+          <span x-text="progress.percentage + '%'" class="text-blue-400 font-mono font-bold"></span>
+        </div>
+        
+        <div class="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
+          <div class="bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300 relative overflow-hidden"
+               :style="`width: ${progress.percentage}%`">
+            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
+          </div>
+        </div>
+        
+        <div x-text="progress.message" class="text-xs text-gray-400"></div>
       </div>
-      <div x-ref="pushLogArea" class="bg-gray-900 rounded p-3 max-h-48 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
+      
+      <!-- Logs com quebra de linha -->
+      <div x-ref="pushLogArea" class="bg-gray-900 rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
         <template x-for="(log, i) in pushLogs" :key="i">
-          <div x-text="log"></div>
+          <div x-text="log" class="break-words whitespace-pre-wrap py-0.5"></div>
         </template>
       </div>
-      <div class="mt-4 flex justify-end">
-        <button
-          @click="cancelPush()"
-          class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors"
-        >
+      
+      <!-- Botão Cancelar -->
+      <div class="flex justify-end">
+        <button @click="cancelPush()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors">
           Cancelar
         </button>
       </div>
@@ -2220,42 +2248,6 @@ clearingCache: false,
       <button @click="cancelCloseProject()" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
       <button @click="confirmCloseProject()" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-500">Fechar Projeto</button>
     </div>
-  </div>
-</div>
-
-<!-- Progress Bar Container -->
-<div id="progressBar" 
-     x-show="progress.visible" 
-     x-transition:enter="transition ease-out duration-300"
-     x-transition:enter-start="opacity-0 transform translate-y-4"
-     x-transition:enter-end="opacity-100 transform translate-y-0"
-     x-transition:leave="transition ease-in duration-300"
-     x-transition:leave-start="opacity-100 transform translate-y-0"
-     x-transition:leave-end="opacity-0 transform translate-y-4"
-     class="fixed bottom-24 left-4 right-4 bg-gray-800 rounded-lg p-4 shadow-lg border border-gray-700 z-50">
-  
-  <!-- Header: Stage label + Percentage -->
-  <div class="flex justify-between items-center mb-2">
-    <span x-text="progress.stage" class="text-sm text-gray-300 font-medium"></span>
-    <span x-text="progress.percentage + '%'" class="text-sm text-blue-400 font-mono font-bold"></span>
-  </div>
-  
-  <!-- Progress Bar with gradient and shimmer -->
-  <div class="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
-    <div class="bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300 ease-out relative overflow-hidden"
-         :style="`width: ${progress.percentage}%`">
-      <!-- Shimmer effect overlay -->
-      <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
-    </div>
-  </div>
-  
-  <!-- Message detail -->
-  <div x-text="progress.message" class="mt-2 text-xs text-gray-400 truncate"></div>
-  
-  <!-- Footer: Counter + Complete indicator -->
-  <div class="mt-2 flex justify-between text-xs text-gray-500">
-    <span x-text="progress.current + ' / ' + progress.total"></span>
-    <span x-show="progress.stage === 'complete'" class="text-green-400">✓ Concluído</span>
   </div>
 </div>
 
