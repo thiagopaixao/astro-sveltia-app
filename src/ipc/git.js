@@ -827,7 +827,19 @@ class GitHandlers {
         remote: 'origin',
         ref: currentBranch,
         singleBranch: true,
+        depth: 1,
         onAuth: () => auth,
+        onProgress: (evt) => {
+          if (evt.total && evt.loaded) {
+            const percent = Math.round((evt.loaded / evt.total) * 100);
+            this.sendProgress({
+              stage: 'fetching',
+              current: percent,
+              total: 100,
+              message: `Baixando: ${percent}%`
+            });
+          }
+        }
       });
       this._gitCache = {};
 
@@ -838,7 +850,7 @@ class GitHandlers {
         return { success: false, cancelled: true, message: 'Operation cancelled by user' };
       }
 
-      // 5. Pulling (or step 3 if no commitMessage)
+      // 5. Pulling - Check if fast-forward is possible (faster than pull)
       this.sendProgress({
         stage: 'pulling',
         current: commitMessage ? 4 : 2,
@@ -846,24 +858,57 @@ class GitHandlers {
         message: 'Mesclando alterações...'
       });
 
-      this.sendOutput('🔄 Mesclando alterações...');
+      this.sendOutput('🔄 Verificando atualização...');
 
-      // Check for cancellation before merge
+      // Check for cancellation
       if (this.isCancelRequested()) {
         this.logger.info('Pull operation cancelled before merge');
         this.releaseGitLock();
         return { success: false, cancelled: true, message: 'Operation cancelled by user' };
       }
 
-      await gitMod.pull({
-        fs,
-        http,
-        dir: projectPath,
-        ref: currentBranch,
-        singleBranch: true,
-        author: { name: 'documental', email: 'documental@app' },
-        onAuth: () => auth,
-      });
+      // Try fast-forward first (faster than pull)
+      try {
+        const canFastForward = await gitMod.canFastForward({
+          fs,
+          dir: projectPath,
+          ref: `origin/${currentBranch}`,
+          target: currentBranch
+        });
+
+        if (canFastForward) {
+          this.sendOutput('⚡ Fast-forward possível, atualizando...');
+          await gitMod.fastForward({
+            fs,
+            dir: projectPath,
+            ref: currentBranch,
+            onAuth: () => auth,
+          });
+        } else {
+          this.sendOutput('🔄 Mesclando alterações...');
+          await gitMod.pull({
+            fs,
+            http,
+            dir: projectPath,
+            ref: currentBranch,
+            singleBranch: true,
+            author: { name: 'documental', email: 'documental@app' },
+            onAuth: () => auth,
+          });
+        }
+      } catch (ffError) {
+        // Fallback to regular pull if fast-forward check fails
+        this.logger.warn('Fast-forward check failed, using regular pull:', ffError);
+        await gitMod.pull({
+          fs,
+          http,
+          dir: projectPath,
+          ref: currentBranch,
+          singleBranch: true,
+          author: { name: 'documental', email: 'documental@app' },
+          onAuth: () => auth,
+        });
+      }
       this._gitCache = {};
 
       // 6. Complete
