@@ -188,6 +188,25 @@ class GitHandlers {
   }
 
   /**
+   * Send structured progress update to all renderer windows
+   * @param {Object} progress - Progress data
+   * @param {string} progress.stage - Current stage (checking, staging, committing, fetching, pulling, pushing, complete)
+   * @param {number} progress.current - Current item number
+   * @param {number} progress.total - Total items
+   * @param {string} progress.message - Status message
+   */
+  sendProgress(progress) {
+    const percentage = progress.total > 0
+      ? Math.round((progress.current / progress.total) * 100)
+      : 0;
+
+    this.broadcastToWindows('git:progress', {
+      ...progress,
+      percentage
+    });
+  }
+
+  /**
    * Get project path by ID
    * @param {number} projectId - Project ID
    * @returns {Promise<string>} Full project path
@@ -725,6 +744,14 @@ class GitHandlers {
     try {
       const gitMod = await this._getGit();
 
+      // 1. Início - verificando
+      this.sendProgress({
+        stage: 'checking',
+        current: 0,
+        total: commitMessage ? 5 : 3,
+        message: 'Verificando status do repositório...'
+      });
+
       const [token, currentBranch] = await Promise.all([
         this.gitOps.getGitHubToken(),
         gitMod.currentBranch({ fs, dir: projectPath, cache: this._gitCache })
@@ -744,6 +771,14 @@ class GitHandlers {
 
       // Commit local changes before pulling if commitMessage provided
       if (commitMessage) {
+        // 2. Staging
+        this.sendProgress({
+          stage: 'staging',
+          current: 1,
+          total: 5,
+          message: 'Preparando arquivos para commit...'
+        });
+
         this.sendOutput('⚙️ Configurando usuário git para commit...');
         try {
           await this.gitOps.configureGitForUser(projectPath);
@@ -756,6 +791,15 @@ class GitHandlers {
           gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }).then(v => v || 'documental@app')
         ]);
         const author = { name: authorName, email: authorEmail };
+
+        // 3. Committing
+        this.sendProgress({
+          stage: 'committing',
+          current: 2,
+          total: 5,
+          message: 'Criando commit...'
+        });
+
         await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
 
         // Check for cancellation after auto-commit
@@ -765,6 +809,14 @@ class GitHandlers {
           return { success: false, cancelled: true, message: 'Operation cancelled by user' };
         }
       }
+
+      // 4. Fetching (or step 2 if no commitMessage)
+      this.sendProgress({
+        stage: 'fetching',
+        current: commitMessage ? 3 : 1,
+        total: commitMessage ? 5 : 3,
+        message: `Buscando alterações da branch remota '${currentBranch}'...`
+      });
 
       this.sendOutput(`📥 Buscando alterações da branch remota '${currentBranch}'...`);
 
@@ -786,6 +838,14 @@ class GitHandlers {
         return { success: false, cancelled: true, message: 'Operation cancelled by user' };
       }
 
+      // 5. Pulling (or step 3 if no commitMessage)
+      this.sendProgress({
+        stage: 'pulling',
+        current: commitMessage ? 4 : 2,
+        total: commitMessage ? 5 : 3,
+        message: 'Mesclando alterações...'
+      });
+
       this.sendOutput('🔄 Mesclando alterações...');
 
       // Check for cancellation before merge
@@ -805,6 +865,14 @@ class GitHandlers {
         onAuth: () => auth,
       });
       this._gitCache = {};
+
+      // 6. Complete
+      this.sendProgress({
+        stage: 'complete',
+        current: commitMessage ? 5 : 3,
+        total: commitMessage ? 5 : 3,
+        message: 'Pull concluído com sucesso!'
+      });
 
       this.sendOutput(`✅ Pull concluído com sucesso na branch: ${currentBranch}`);
       this.logger.info(`Successfully pulled from branch: ${currentBranch}`);
@@ -849,6 +917,14 @@ class GitHandlers {
     try {
       const gitMod = await this._getGit();
 
+      // 1. Início - verificando
+      this.sendProgress({
+        stage: 'checking',
+        current: 0,
+        total: commitMessage ? 6 : 2,
+        message: 'Verificando status do repositório...'
+      });
+
       const [token, userConfigured] = await Promise.all([
         this.gitOps.getGitHubToken(),
         this.gitOps.configureGitForUser(projectPath)
@@ -868,11 +944,28 @@ class GitHandlers {
 
       // Commit local changes before pushing if commitMessage provided
       if (commitMessage) {
+        // 2. Staging
+        this.sendProgress({
+          stage: 'staging',
+          current: 1,
+          total: 6,
+          message: 'Preparando arquivos para commit...'
+        });
+
         const [authorName, authorEmail] = await Promise.all([
           gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }).then(v => v || 'documental'),
           gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }).then(v => v || 'documental@app')
         ]);
         const author = { name: authorName, email: authorEmail };
+
+        // 3. Committing
+        this.sendProgress({
+          stage: 'committing',
+          current: 2,
+          total: 6,
+          message: 'Criando commit...'
+        });
+
         await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
 
         // Check for cancellation after auto-commit
@@ -884,6 +977,14 @@ class GitHandlers {
 
         // First-push-wins: fetch + pull to integrate remote changes before pushing
         try {
+          // 4. Fetching
+          this.sendProgress({
+            stage: 'fetching',
+            current: 3,
+            total: 6,
+            message: `Buscando alterações remotas de '${targetBranch}'...`
+          });
+
           this.sendOutput(`📥 Integrando alterações remotas de '${targetBranch}'...`);
           await gitMod.fetch({
             fs,
@@ -902,6 +1003,14 @@ class GitHandlers {
             this.releaseGitLock();
             return { success: false, cancelled: true, message: 'Operation cancelled by user' };
           }
+
+          // 5. Pulling
+          this.sendProgress({
+            stage: 'pulling',
+            current: 4,
+            total: 6,
+            message: 'Mesclando alterações remotas...'
+          });
 
           await gitMod.pull({
             fs,
@@ -941,6 +1050,14 @@ class GitHandlers {
         return { success: false, cancelled: true, message: 'Operation cancelled by user' };
       }
 
+      // 6. Pushing (or step 2 if no commitMessage)
+      this.sendProgress({
+        stage: 'pushing',
+        current: commitMessage ? 5 : 1,
+        total: commitMessage ? 6 : 2,
+        message: `Publicando na branch '${targetBranch}'...`
+      });
+
       this.sendOutput(`🚀 Publicando alterações na branch: ${targetBranch}...`);
 
       await gitMod.push({
@@ -952,6 +1069,14 @@ class GitHandlers {
         onAuth: () => auth,
       });
       this._gitCache = {};
+
+      // 7. Complete (or step 3 if no commitMessage)
+      this.sendProgress({
+        stage: 'complete',
+        current: commitMessage ? 6 : 2,
+        total: commitMessage ? 6 : 2,
+        message: 'Push concluído com sucesso!'
+      });
 
       this.sendOutput(`✅ Push concluído com sucesso na branch: ${targetBranch}`);
       this.logger.info(`Successfully pushed to branch: ${targetBranch}`);

@@ -1066,6 +1066,20 @@ clearingCache: false,
             });
         });
 
+        // Listen for git progress events
+        if (window.electronAPI && window.electronAPI.onGitProgress) {
+            window.electronAPI.onGitProgress((data) => {
+                console.log('📊 Git progress event received:', data);
+                this.progress.update(data);
+
+                if (data.stage === 'complete') {
+                    this.progress.complete();
+                } else if (data.stage === 'error') {
+                    this.progress.error(data.message || 'Erro na operação');
+                }
+            });
+        }
+
         // Load initial app logs and restore from sessionStorage
         window.electronAPI.getAppLogs().then(initialLogs => {
             if (initialLogs) {

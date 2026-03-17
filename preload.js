@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   detectNode: () => ipcRenderer.invoke('node:detect'),
   installManagedNode: (options) => ipcRenderer.invoke('node:install', options),
   onNodeInstallProgress: (callback) => ipcRenderer.on('node:install-progress', (event, payload) => callback(payload)),
+  onGitProgress: (callback) => ipcRenderer.on('git:progress', (event, payload) => callback(payload)),
 
   // Git branch management functions
   listBranches: (projectId) => ipcRenderer.invoke('git:list-branches', projectId),
