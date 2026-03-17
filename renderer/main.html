@@ -846,6 +846,14 @@ clearingCache: false,
             console.error('❌ DEBUG: No projectId found');
             return;
         }
+        // MOSTRAR PROGRESSO IMEDIATAMENTE
+        this.progress.update({
+            stage: 'checking',
+            current: 0,
+            total: 100,
+            percentage: 0,
+            message: 'Iniciando...'
+        });
         this.pullModalState = 'progress';
         this.pullLogs = [];
         console.log('🔍 DEBUG: Calling pullFromPreview...');
@@ -910,6 +918,14 @@ clearingCache: false,
         if (!this.pushSelectedBranch) return;
         const projectId = sessionStorage.getItem('currentProjectId');
         if (!projectId) return;
+        // MOSTRAR PROGRESSO IMEDIATAMENTE
+        this.progress.update({
+            stage: 'checking',
+            current: 0,
+            total: 100,
+            percentage: 0,
+            message: 'Iniciando...'
+        });
         this.pushModalState = 'progress';
         this.pushLogs = [];
         try {
@@ -2005,8 +2021,14 @@ clearingCache: false,
     <div x-show="pullModalState === 'progress'" class="space-y-4">
       <h3 class="text-lg font-semibold text-white">Atualizando...</h3>
 
-      <!-- Barra de Progresso -->
-      <div class="space-y-2">
+      <!-- Spinner (quando percentage === 0) -->
+      <div x-show="progress.percentage === 0" class="flex items-center justify-center py-4">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+        <span class="ml-3 text-gray-300 text-sm">Iniciando...</span>
+      </div>
+
+      <!-- Barra de Progresso (quando percentage > 0) -->
+      <div x-show="progress.percentage > 0" class="space-y-2">
         <div class="flex justify-between items-center text-sm">
           <span x-text="progress.stage" class="text-gray-300"></span>
           <span x-text="progress.percentage + '%'" class="text-blue-400 font-mono font-bold"></span>
@@ -2018,18 +2040,14 @@ clearingCache: false,
             <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
           </div>
         </div>
-
-        <div x-text="progress.message" class="text-xs text-gray-400"></div>
       </div>
 
-      <!-- Logs com quebra de linha -->
       <div x-ref="pullLogArea" class="bg-gray-900 rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
         <template x-for="(log, i) in pullLogs" :key="i">
           <div x-text="log" class="break-words whitespace-pre-wrap py-0.5"></div>
         </template>
       </div>
 
-      <!-- Botão Cancelar -->
       <div class="flex justify-end">
         <button @click="cancelPull()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors">
           Cancelar
@@ -2086,32 +2104,35 @@ clearingCache: false,
     </div>
     <div x-show="pushModalState === 'progress'" class="space-y-4">
       <h3 class="text-lg font-semibold text-white">Publicando...</h3>
-      
-      <!-- Barra de Progresso -->
-      <div class="space-y-2">
+
+      <!-- Spinner (quando percentage === 0) -->
+      <div x-show="progress.percentage === 0" class="flex items-center justify-center py-4">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+        <span class="ml-3 text-gray-300 text-sm">Iniciando...</span>
+      </div>
+
+      <!-- Barra de Progresso (quando percentage > 0) -->
+      <div x-show="progress.percentage > 0" class="space-y-2">
         <div class="flex justify-between items-center text-sm">
           <span x-text="progress.stage" class="text-gray-300"></span>
           <span x-text="progress.percentage + '%'" class="text-blue-400 font-mono font-bold"></span>
         </div>
-        
+
         <div class="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
           <div class="bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300 relative overflow-hidden"
                :style="`width: ${progress.percentage}%`">
             <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
           </div>
         </div>
-        
-        <div x-text="progress.message" class="text-xs text-gray-400"></div>
       </div>
-      
-      <!-- Logs com quebra de linha -->
+
+      <!-- Logs -->
       <div x-ref="pushLogArea" class="bg-gray-900 rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
         <template x-for="(log, i) in pushLogs" :key="i">
           <div x-text="log" class="break-words whitespace-pre-wrap py-0.5"></div>
         </template>
       </div>
-      
-      <!-- Botão Cancelar -->
+
       <div class="flex justify-end">
         <button @click="cancelPush()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors">
           Cancelar
