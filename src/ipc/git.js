@@ -275,29 +275,50 @@ class GitHandlers {
    * @private
    */
   async _commitAll(gitMod, fs, projectPath, commitMessage, author) {
-    const matrix = await gitMod.statusMatrix({ fs, dir: projectPath, cache: this._gitCache });
-    const dirty = matrix.filter(([, h, w, s]) => !(h === 1 && w === 1 && s === 1));
+    try {
+      const matrix = await gitMod.statusMatrix({ fs, dir: projectPath, cache: this._gitCache });
+      const dirty = matrix.filter(([, h, w, s]) => !(h === 1 && w === 1 && s === 1));
 
-    if (dirty.length === 0) {
-      this.sendOutput('ℹ️ Nenhuma alteração para commitar.');
-      return null;
+      if (dirty.length === 0) {
+        this.sendOutput('ℹ️ Nenhuma alteração para commitar.');
+        return null;
+      }
+
+      this.sendOutput(`📝 Preparando ${dirty.length} arquivo(s) para commit...`);
+
+      // Stage files com tratamento de erro individual
+      const stageErrors = [];
+      await Promise.all(
+        dirty.map(async ([filepath, , worktreeStatus]) => {
+          try {
+            if (worktreeStatus) {
+              await gitMod.add({ fs, dir: projectPath, filepath });
+            } else {
+              await gitMod.remove({ fs, dir: projectPath, filepath });
+            }
+          } catch (fileError) {
+            stageErrors.push({ filepath, error: fileError.message });
+          }
+        })
+      );
+
+      if (stageErrors.length > 0) {
+        const errorMsg = `Erro ao preparar arquivo(s): ${stageErrors.map(e => e.filepath).join(', ')}`;
+        this.sendOutput(`❌ ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      this._gitCache = {};
+
+      this.sendOutput(`💾 Commitando: "${commitMessage}"`);
+      const sha = await gitMod.commit({ fs, dir: projectPath, message: commitMessage, author });
+      this._gitCache = {};
+      this.sendOutput(`✅ Commit criado: ${sha.substring(0, 7)}`);
+      return sha;
+    } catch (error) {
+      this.sendOutput(`❌ Erro durante commit: ${error.message}`);
+      throw error;
     }
-
-    this.sendOutput(`📝 Preparando ${dirty.length} arquivo(s) para commit...`);
-    await Promise.all(
-      dirty.map(([filepath, , worktreeStatus]) =>
-        worktreeStatus
-          ? gitMod.add({ fs, dir: projectPath, filepath })
-          : gitMod.remove({ fs, dir: projectPath, filepath })
-      )
-    );
-    this._gitCache = {};
-
-    this.sendOutput(`💾 Commitando: "${commitMessage}"`);
-    const sha = await gitMod.commit({ fs, dir: projectPath, message: commitMessage, author });
-    this._gitCache = {};
-    this.sendOutput(`✅ Commit criado: ${sha.substring(0, 7)}`);
-    return sha;
   }
 
   /**
@@ -717,7 +738,12 @@ class GitHandlers {
       // Commit local changes before pulling if commitMessage provided
       if (commitMessage) {
         this.sendOutput('⚙️ Configurando usuário git para commit...');
-        await this.gitOps.configureGitForUser(projectPath);
+        try {
+          await this.gitOps.configureGitForUser(projectPath);
+        } catch (configError) {
+          this.logger.warn('Could not configure git user:', configError);
+          this.sendOutput('⚠️ Não foi possível configurar usuário git. Continuando com configuração existente...');
+        }
         const [authorName, authorEmail] = await Promise.all([
           gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }).then(v => v || 'documental'),
           gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }).then(v => v || 'documental@app')
