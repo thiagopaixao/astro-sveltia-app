@@ -80,6 +80,19 @@
         [x-cloak] {
             display: none !important;
         }
+        /* Permitir seleção de texto no console - usando !important para sobrescrever o body */
+        .console-content,
+        .console-content pre,
+        .console-content code,
+        [x-ref="consoleContentArea"],
+        [x-ref="consoleContentArea"] pre,
+        [x-ref="consoleContentArea"] code,
+        .console-content * {
+            -webkit-user-select: text !important;
+            -ms-user-select: text !important;
+            user-select: text !important;
+            cursor: text !important;
+        }
         .content-loader {
             display: flex;
             align-items: center;
@@ -1901,17 +1914,17 @@ clearingCache: false,
 </button>
 </div>
 </div>
-<div class="p-4 flex-1 overflow-y-auto font-mono text-sm text-muted-dark" x-ref="consoleContentArea">
+<div class="p-4 flex-1 overflow-y-auto font-mono text-sm text-muted-dark console-content" x-ref="consoleContentArea">
 <template :key="tab.id" x-for="tab in consoleTabs">
 <div x-show="activeConsoleTab === tab.id" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
 <div x-show="tab.type === 'log'">
-<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="appLogOutput || '(Sem logs de aplicativo)'"></pre>
+<pre @keydown.prevent class="text-xs text-muted-dark whitespace-pre-wrap font-mono" contenteditable="true" x-text="appLogOutput || '(Sem logs de aplicativo)'"></pre>
 </div>
 <div x-show="tab.type === 'server'">
-<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="serverOutput || '(Sem saída do servidor)'"></pre>
+<pre @keydown.prevent class="text-xs text-muted-dark whitespace-pre-wrap font-mono" contenteditable="true" x-text="serverOutput || '(Sem saída do servidor)'"></pre>
 </div>
 <div x-show="tab.type === 'commands'">
-<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="commandOutput || '(Sem comandos executados)'"></pre>
+<pre @keydown.prevent class="text-xs text-muted-dark whitespace-pre-wrap font-mono" contenteditable="true" x-text="commandOutput || '(Sem comandos executados)'"></pre>
 </div>
 <div x-show="tab.type === 'terminal'">
 <p class="text-green-400">user@documental:~$ <span class="text-gray-400">Terminal interativo (em desenvolvimento)</span></p>
@@ -1998,7 +2011,7 @@ clearingCache: false,
   </li>
 
   <li class="border-t border-gray-700 my-2"></li>
-  <li>
+  <li style="display: none;">
     <a class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#" data-navigate="config.html">
       <span class="material-icons mr-3">settings</span>
       <span>Configurações</span>
