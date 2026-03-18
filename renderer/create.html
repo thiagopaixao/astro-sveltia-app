@@ -391,7 +391,9 @@
 
 <div class="text-center mb-8">
 <div class="flex items-center justify-center gap-4 mb-3">
-<div class="creative-loader" x-show="!allStepsSuccess"></div>
+<template x-if="!allStepsSuccess">
+<div class="creative-loader"></div>
+</template>
 </div>
 <h1 class="text-3xl font-bold text-text-dark" x-text="isReopenMode ? 'Reabrindo Espaço de Trabalho' : 'Criando Espaço de Trabalho'"></h1>
 <p class="text-muted-dark text-base mt-1" x-text="isReopenMode ? 'Aguarde enquanto preparamos seu projeto novamente.' : 'Aguarde enquanto preparamos tudo para você.'"></p>
