@@ -110,9 +110,37 @@
         },
         activeTab: 'geral',
         saveStatus: '',
+        userProfile: { name: '', email: '', login: '', avatarUrl: '' },
+        profileSaveStatus: '',
+        profileLoading: true,
+        async init() {
+            try {
+                const result = await window.electronAPI.getUserInfo();
+                if (result.success) {
+                    this.userProfile = result.user;
+                }
+            } catch (err) {
+                console.error('Failed to load user profile:', err);
+            } finally {
+                this.profileLoading = false;
+            }
+        },
+        async saveProfile() {
+            this.profileSaveStatus = 'saving';
+            try {
+                const result = await window.electronAPI.updateUserInfo({
+                    name: this.userProfile.name,
+                    email: this.userProfile.email
+                });
+                this.profileSaveStatus = result.success ? 'success' : 'error';
+            } catch (err) {
+                console.error('Failed to save profile:', err);
+                this.profileSaveStatus = 'error';
+            }
+            setTimeout(() =&gt; this.profileSaveStatus = '', 3000);
+        },
         saveSettings() {
             this.saveStatus = 'Salvando...';
-            // Simular salvamento
             setTimeout(() =&gt; {
                 this.saveStatus = 'Salvo com sucesso!';
                 setTimeout(() =&gt; this.saveStatus = '', 2000);
@@ -162,6 +190,11 @@
 <a :class="{'bg-gray-700 text-primary': activeTab === 'avancado', 'hover:bg-gray-700 text-text-dark': activeTab !== 'avancado'}" @click.prevent="activeTab = 'avancado'" class="flex items-center px-3 py-2 rounded-md text-sm font-medium cursor-pointer" href="#">
 <span class="material-icons mr-3">build_circle</span>
 <span>Avançado</span>
+</a>
+<h3 class="px-3 pt-4 text-xs font-semibold text-muted-dark uppercase tracking-wider">Conta</h3>
+<a :class="{'bg-gray-700 text-primary': activeTab === 'perfil', 'hover:bg-gray-700 text-text-dark': activeTab !== 'perfil'}" @click.prevent="activeTab = 'perfil'" class="flex items-center px-3 py-2 rounded-md text-sm font-medium cursor-pointer" href="#">
+<span class="material-icons mr-3">person</span>
+<span>Perfil do Usuário</span>
 </a>
 <h3 class="px-3 pt-4 text-xs font-semibold text-muted-dark uppercase tracking-wider">Sistema</h3>
 <a :class="{'bg-gray-700 text-primary': activeTab === 'notificacoes', 'hover:bg-gray-700 text-text-dark': activeTab !== 'notificacoes'}" @click.prevent="activeTab = 'notificacoes'" class="flex items-center px-3 py-2 rounded-md text-sm font-medium cursor-pointer" href="#">
@@ -321,6 +354,53 @@
 <button class="mt-3 px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange">
                             Limpar Cache Agora
                         </button>
+</div>
+</div>
+</div>
+<div x-show="activeTab === 'perfil'">
+<h2 class="text-2xl font-bold text-text-dark mb-1">Perfil do Usuário</h2>
+<p class="text-muted-dark mb-6">Gerencie suas informações de perfil vinculadas ao GitHub.</p>
+<div class="space-y-6">
+<div class="p-6 bg-surface-dark rounded-lg border border-gray-700">
+<div class="flex items-center space-x-4 mb-6">
+<template x-if="userProfile.avatarUrl">
+<img :src="userProfile.avatarUrl" alt="Avatar" class="w-16 h-16 rounded-full border-2 border-gray-600"/>
+</template>
+<template x-if="!userProfile.avatarUrl">
+<div class="w-16 h-16 rounded-full bg-gray-600 flex items-center justify-center">
+<span class="material-icons text-3xl text-muted-dark">person</span>
+</div>
+</template>
+<div>
+<p class="text-lg font-semibold text-text-dark" x-text="userProfile.name || 'Usuário'"></p>
+<p class="text-sm text-muted-dark" x-text="'@' + (userProfile.login || '—')"></p>
+</div>
+</div>
+<div class="space-y-4">
+<div>
+<label class="block text-sm font-medium text-text-dark" for="profile-login">Login do GitHub</label>
+<p class="text-xs text-muted-dark mt-1">Identificador único do GitHub. Não pode ser alterado aqui.</p>
+<input class="mt-2 block w-full bg-background-dark border-gray-600 rounded-md sm:text-sm text-muted-dark cursor-not-allowed" id="profile-login" type="text" :value="userProfile.login" disabled readonly/>
+</div>
+<div>
+<label class="block text-sm font-medium text-text-dark" for="profile-name">Nome</label>
+<p class="text-xs text-muted-dark mt-1">Seu nome de exibição usado nos commits e na interface.</p>
+<input class="mt-2 block w-full bg-background-dark border-gray-600 rounded-md focus:ring-primary focus:border-primary sm:text-sm text-text-dark" id="profile-name" type="text" x-model="userProfile.name"/>
+</div>
+<div>
+<label class="block text-sm font-medium text-text-dark" for="profile-email">E-mail</label>
+<p class="text-xs text-muted-dark mt-1">Endereço de e-mail usado nos commits Git.</p>
+<input class="mt-2 block w-full bg-background-dark border-gray-600 rounded-md focus:ring-primary focus:border-primary sm:text-sm text-text-dark" id="profile-email" type="email" x-model="userProfile.email"/>
+</div>
+</div>
+<div class="mt-6 flex items-center space-x-4">
+<button @click="saveProfile()" :disabled="profileSaveStatus === 'saving'" class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-md hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed">
+<span x-show="profileSaveStatus !== 'saving'">Salvar Perfil</span>
+<span x-show="profileSaveStatus === 'saving'">Salvando...</span>
+</button>
+<span x-show="profileSaveStatus === 'success'" class="text-sm text-green-400 transition-opacity duration-300">Perfil atualizado com sucesso!</span>
+<span x-show="profileSaveStatus === 'error'" class="text-sm text-red-400 transition-opacity duration-300">Erro ao atualizar perfil.</span>
+</div>
 </div>
 </div>
 </div>

@@ -94,8 +94,8 @@ constructor({ logger, windowManager, processManager }) {
         // Don't prevent default - let it close normally
       });
       
-      const stateEncoded = Buffer.from(JSON.stringify(windowState)).toString('base64');
-      const mainHtmlPath = path.join(process.cwd(), 'renderer', 'main.html');
+       const stateEncoded = Buffer.from(JSON.stringify(windowState)).toString('base64');
+       const mainHtmlPath = path.join(app.getAppPath(), 'renderer', 'main.html');
       
       // Mark as secondary window so renderer knows not to trigger app exit
       this.logger.info(`🪟 Loading secondary window ${windowId} with isSecondary=true`);
@@ -144,7 +144,23 @@ async getHomeDirectory() {
    */
   async openDirectoryDialog() {
     try {
-      const result = await dialog.showOpenDialog(this.windowManager.getMainWindow(), {
+      const window = this.windowManager.getMainWindow();
+      
+      // Validate window
+      if (!window || window.isDestroyed()) {
+        this.logger.error('No valid window available for dialog');
+        return null;
+      }
+
+      // Windows-specific: restore and focus
+      if (process.platform === 'win32') {
+        if (window.isMinimized()) {
+          window.restore();
+        }
+        window.focus();
+      }
+
+      const result = await dialog.showOpenDialog(window, {
         properties: ['openDirectory'],
         title: 'Select Directory'
       });
@@ -727,20 +743,12 @@ async verifyNodeInstallation() {
     try {
       const window = BrowserWindow.fromWebContents(event.sender);
       if (window && !window.isDestroyed()) {
-        // Use absolute path - handle both development and packaged environments
-        let rendererPath;
-        if (require('electron').app.isPackaged) {
-          // In packaged app, renderer files are inside app.asar
-          // Use app.getAppPath() which points to the asar in packaged apps
-          rendererPath = path.join(require('electron').app.getAppPath(), 'renderer', page);
-        } else {
-          // In development, use current working directory
-          rendererPath = path.join(process.cwd(), 'renderer', page);
-        }
-        
-        this.logger.info(`🚀 Navigating to page: ${page}`);
-        this.logger.info(`📦 App packaged: ${require('electron').app.isPackaged}`);
-        this.logger.info(`📁 Renderer path: ${rendererPath}`);
+       // Use absolute path - handle both development and packaged environments
+         const rendererPath = path.join(app.getAppPath(), 'renderer', page);
+         
+         this.logger.info(`🚀 Navigating to page: ${page}`);
+         this.logger.info(`📦 App packaged: ${require('electron').app.isPackaged}`);
+         this.logger.info(`📁 Renderer path: ${rendererPath}`);
         
         // Use loadFile() instead of loadURL() - it handles asar files correctly
         // Prevent window from closing during navigation
@@ -799,8 +807,8 @@ async verifyNodeInstallation() {
           }
         });
         
-        // Load index.html
-        const indexPath = path.join(process.cwd(), 'renderer', 'index.html');
+         // Load index.html
+         const indexPath = path.join(app.getAppPath(), 'renderer', 'index.html');
         await newWindow.loadFile(indexPath);
         
         // Show new window

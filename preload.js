@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   completeWelcomeSetup: () => ipcRenderer.invoke('completeWelcomeSetup'),
   logoutFromGitHub: () => ipcRenderer.invoke('logoutFromGitHub'),
   writeToClipboard: (text) => ipcRenderer.invoke('writeToClipboard', text),
+  getUserInfo: () => ipcRenderer.invoke('user:get-info'),
+  updateUserInfo: (data) => ipcRenderer.invoke('user:update-info', data),
   // Node.js detection and installation functions
   checkNodeInstallation: () => ipcRenderer.invoke('checkNodeInstallation'),
   installNodeDependencies: (options) => ipcRenderer.invoke('installNodeDependencies', options),
@@ -59,6 +61,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   detectNode: () => ipcRenderer.invoke('node:detect'),
   installManagedNode: (options) => ipcRenderer.invoke('node:install', options),
   onNodeInstallProgress: (callback) => ipcRenderer.on('node:install-progress', (event, payload) => callback(payload)),
+  onGitProgress: (callback) => ipcRenderer.on('git:progress', (event, payload) => callback(payload)),
 
   // Git branch management functions
   listBranches: (projectId) => ipcRenderer.invoke('git:list-branches', projectId),
@@ -67,21 +70,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCurrentBranch: (projectId) => ipcRenderer.invoke('git:get-current-branch', projectId),
   // Repository information functions
   getRepositoryInfo: (projectId) => ipcRenderer.invoke('git:get-repository-info', projectId),
-  // Git pull and push functions
-  pullFromPreview: (projectId) => ipcRenderer.invoke('git:pull-from-preview', projectId),
-  pushToBranch: (projectId, targetBranch) => ipcRenderer.invoke('git:push-to-branch', projectId, targetBranch),
+  // Git pull, push, and status functions
+  checkGitStatus: (projectId) => ipcRenderer.invoke('git:check-status', projectId),
+  pullFromPreview: (projectId, commitMessage) => ipcRenderer.invoke('git:pull-from-preview', projectId, commitMessage),
+  pushToBranch: (projectId, targetBranch, commitMessage) => ipcRenderer.invoke('git:push-to-branch', projectId, targetBranch, commitMessage),
   listRemoteBranches: (projectId) => ipcRenderer.invoke('git:list-remote-branches', projectId),
-  // Git operation progress listeners
-  onGitOperationOutput: (callback) => {
-    const handler = (_, data) => callback(data);
-    ipcRenderer.on('git:operation-output', handler);
-    return () => ipcRenderer.removeListener('git:operation-output', handler);
-  },
-  onGitOperationStatus: (callback) => {
-    const handler = (_, data) => callback(data);
-    ipcRenderer.on('git:operation-status', handler);
-    return () => ipcRenderer.removeListener('git:operation-status', handler);
-  },
+  cancelGitOperation: () => ipcRenderer.invoke('git:cancel-operation'),
   openInFileExplorer: (path) => ipcRenderer.invoke('open-file-explorer', path),
   // Path utility functions
   joinPath: (...segments) => ipcRenderer.invoke('join-path', ...segments),

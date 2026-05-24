@@ -28,6 +28,7 @@ class GitOperations {
   constructor({ logger, databaseManager }) {
     this.logger = logger;
     this.databaseManager = databaseManager;
+    this._gitCache = {};
   }
 
   /**
@@ -161,18 +162,20 @@ class GitOperations {
       this.logger.info(`Setting git user config: ${name} <${email}>`);
       
       await git.setConfig({
-        fs: require('fs'),
+        fs,
         dir,
         path: 'user.name',
         value: name
       });
+      this._gitCache = {};
       
       await git.setConfig({
-        fs: require('fs'),
+        fs,
         dir,
         path: 'user.email',
         value: email
       });
+      this._gitCache = {};
       
       this.logger.info('Git user config set successfully');
       return true;
@@ -230,7 +233,7 @@ class GitOperations {
       }
       
       sendOutput(`🔍 Verificando se branch já existe...\n`);
-      const existingBranches = await git.listBranches({ fs: require('fs'), dir });
+      const existingBranches = await git.listBranches({ fs, dir, cache: this._gitCache });
       if (existingBranches.includes(branchName)) {
         const errorMsg = `❌ Branch '${branchName}' já existe.\n`;
         sendOutput(errorMsg);
@@ -240,19 +243,21 @@ class GitOperations {
       sendOutput(`📝 Criando branch '${branchName}'...\n`);
       // Create branch
       await git.branch({
-        fs: require('fs'),
+        fs,
         dir,
         ref: branchName
       });
+      this._gitCache = {};
       sendOutput(`✅ Branch '${branchName}' criada com sucesso\n`);
       
       sendOutput(`🔄 Mudando para nova branch '${branchName}'...\n`);
       // Checkout new branch
       await git.checkout({
-        fs: require('fs'),
+        fs,
         dir,
         ref: branchName
       });
+      this._gitCache = {};
       sendOutput(`✅ Branch '${branchName}' selecionada com sucesso\n`);
     } catch (error) {
       this.logger.error('Error creating branch:', error);
@@ -273,7 +278,7 @@ class GitOperations {
       
       // Check if branch exists
       sendOutput(`🔍 Verificando se branch existe...\n`);
-      const branches = await git.listBranches({ fs: require('fs'), dir });
+      const branches = await git.listBranches({ fs, dir, cache: this._gitCache });
       const localBranch = branches.find(b => b === branchName);
       const remoteBranch = branches.find(b => b === `origin/${branchName}`);
       
@@ -287,20 +292,22 @@ class GitOperations {
       if (!localBranch && remoteBranch) {
         sendOutput(`📥 Criando branch local '${branchName}' para rastrear branch remota\n`);
         await git.branch({
-          fs: require('fs'),
+          fs,
           dir,
           ref: branchName,
           checkout: true
         });
+        this._gitCache = {};
         sendOutput(`✅ Branch local '${branchName}' criada e selecionada\n`);
       } else {
         // Checkout existing local branch
         sendOutput(`📂 Selecionando branch local existente '${branchName}'\n`);
         await git.checkout({
-          fs: require('fs'),
+          fs,
           dir,
           ref: branchName
         });
+        this._gitCache = {};
         sendOutput(`✅ Branch '${branchName}' selecionada com sucesso\n`);
       }
     } catch (error) {
@@ -320,7 +327,7 @@ class GitOperations {
       sendOutput(`🔍 Verificando branch 'preview' em ${dir}...\n`);
       
       // List all branches (local and remote)
-      const branches = await git.listBranches({ fs: require('fs'), dir });
+      const branches = await git.listBranches({ fs, dir, cache: this._gitCache });
       const localBranches = branches.filter(branch => !branch.includes('origin/'));
       const remoteBranches = branches.filter(branch => branch.includes('origin/'))
         .map(branch => branch.replace('origin/', ''));
@@ -367,7 +374,7 @@ class GitOperations {
       
       // Check if working directory is clean before creating branch
       try {
-        const status = await git.status({ fs: require('fs'), dir });
+        const status = await git.status({ fs, dir, cache: this._gitCache });
         if (status.files && status.files.length > 0) {
           sendOutput(`⚠️ Existem arquivos não commitados no diretório de trabalho\n`);
           sendOutput(`📋 Arquivos modificados: ${status.files.map(f => f.path).join(', ')}\n`);
@@ -397,7 +404,7 @@ class GitOperations {
             const auth = { username: token, password: 'x-oauth-basic' };
             
             await git.push({
-              fs: require('fs'),
+              fs,
               http,
               dir,
               url: remoteUrl,
@@ -405,6 +412,7 @@ class GitOperations {
               auth,
               force: false
             });
+            this._gitCache = {};
             sendOutput(`✅ Branch 'preview' publicada com sucesso para o repositório remoto\n`);
           } else {
             sendOutput(`⚠️ Autenticação GitHub não configurada\n`);
@@ -496,9 +504,10 @@ class GitOperations {
   async gitGetRemoteUrl(dir) {
     try {
       return await git.getConfig({
-        fs: require('fs'),
+        fs,
         dir,
-        path: 'remote.origin.url'
+        path: 'remote.origin.url',
+        cache: this._gitCache
       });
     } catch (error) {
       this.logger.debug('Could not get git remote URL:', error.message);

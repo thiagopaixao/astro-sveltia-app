@@ -7,6 +7,7 @@
 'use strict';
 
 const { Menu, app, shell } = require('electron');
+const path = require('path');
 
 /**
  * @typedef {Object} MenuTemplate
@@ -246,7 +247,7 @@ class MenuManager {
       const mainWindow = this.windowManager.getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
         // Navigate to create project page
-        mainWindow.loadFile('renderer/create.html');
+        mainWindow.loadFile(path.join(app.getAppPath(), 'renderer', 'create.html'));
       }
     } catch (error) {
       this.logger.error('Error handling new project:', error);

@@ -982,6 +982,83 @@ class AuthHandlers {
       }
     });
 
+    /**
+     * Get user info from database
+     */
+    ipcMain.handle('user:get-info', async () => {
+      try {
+        const db = await this.databaseManager.getDatabase();
+
+        const row = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT githubId, login, name, email, avatarUrl
+             FROM users
+             ORDER BY updatedAt DESC
+             LIMIT 1`,
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+
+        if (!row) {
+          return { success: false, error: 'No user found in database' };
+        }
+
+        return {
+          success: true,
+          user: {
+            name: row.name || '',
+            email: row.email || '',
+            login: row.login || '',
+            avatarUrl: row.avatarUrl || ''
+          }
+        };
+      } catch (error) {
+        this.logger.error('Error getting user info:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    /**
+     * Update user name and email in database
+     */
+    ipcMain.handle('user:update-info', async (event, data) => {
+      try {
+        if (!data || typeof data.name !== 'string' || typeof data.email !== 'string') {
+          return { success: false, error: 'Name and email must be strings' };
+        }
+
+        const name = data.name.trim();
+        const email = data.email.trim();
+
+        if (!name || !email) {
+          return { success: false, error: 'Name and email must not be empty' };
+        }
+
+        const db = await this.databaseManager.getDatabase();
+
+        await new Promise((resolve, reject) => {
+          db.run(
+            `UPDATE users SET name = ?, email = ?
+             WHERE githubId = (SELECT githubId FROM users ORDER BY updatedAt DESC LIMIT 1)`,
+            [name, email],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        });
+
+        this.logger.info('✅ User info updated:', { name, email });
+        return { success: true };
+      } catch (error) {
+        this.logger.error('Error updating user info:', error);
+        return { success: false, error: error.message };
+      }
+    });
+
     this.logger.info('✅ Authentication IPC handlers registered');
   }
 
@@ -1038,6 +1115,8 @@ class AuthHandlers {
       ipcMain.removeHandler('continueGitHubAuth');
       ipcMain.removeHandler('logoutFromGitHub');
       ipcMain.removeHandler('writeToClipboard');
+      ipcMain.removeHandler('user:get-info');
+      ipcMain.removeHandler('user:update-info');
       
       this.logger.info('✅ Authentication IPC handlers unregistered');
     }

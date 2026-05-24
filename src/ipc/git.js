@@ -10,6 +10,7 @@ const { ipcMain } = require('electron');
 const path = require('path');
 const git = require('isomorphic-git');
 const http = require('isomorphic-git/http/node');
+const { GitOperations } = require('./gitOperations.js');
 
 /**
  * @typedef {Object} GitOperationResult
@@ -48,6 +49,161 @@ class GitHandlers {
   constructor({ logger, databaseManager }) {
     this.logger = logger;
     this.databaseManager = databaseManager;
+    this.gitOps = new GitOperations({ logger, databaseManager });
+    this.gitOperationInProgress = false;
+    this.LOCK_TIMEOUT_MS = 60000;
+    this._lockTimeout = null;
+    this._gitCache = {};
+    this._sendOutputBuffer = [];
+    this._sendOutputTimer = null;
+    this._gitModuleCache = null;
+    this.cancelRequested = false;
+  }
+
+  async _getGit() {
+    if (!this._gitModuleCache) {
+      this._gitModuleCache = await import('isomorphic-git');
+    }
+    return this._gitModuleCache;
+  }
+
+  /**
+   * Acquire the git operation lock
+   * @returns {boolean} True if lock was acquired, false if already in progress
+   */
+  acquireGitLock() {
+    if (this.gitOperationInProgress) {
+      this.logger.warn('Git operation already in progress');
+      return false;
+    }
+    this.gitOperationInProgress = true;
+    this.cancelRequested = false;
+    this._lockTimeout = setTimeout(() => {
+      this.logger.warn('Git operation lock auto-released after 60s timeout');
+      this.gitOperationInProgress = false;
+      this._lockTimeout = null;
+    }, this.LOCK_TIMEOUT_MS);
+    this.logger.info('Git operation lock acquired');
+    return true;
+  }
+
+  /**
+   * Release the git operation lock
+   */
+  releaseGitLock() {
+    this._flushSendOutput();
+    this.gitOperationInProgress = false;
+    if (this._lockTimeout) {
+      clearTimeout(this._lockTimeout);
+      this._lockTimeout = null;
+    }
+    this.logger.info('Git operation lock released');
+  }
+
+  /**
+   * Request cancellation of the current Git operation
+   * Sets the cancel flag that operations should check between steps
+   */
+  requestCancel() {
+    this.cancelRequested = true;
+    this.logger.info('Git operation cancellation requested');
+  }
+
+  /**
+   * Reset the cancellation flag
+   * Should be called at the start of new operations
+   */
+  resetCancel() {
+    this.cancelRequested = false;
+    this.logger.debug('Git operation cancellation flag reset');
+  }
+
+  /**
+   * Check if cancellation has been requested
+   * @returns {boolean} True if cancellation was requested
+   */
+  isCancelRequested() {
+    return this.cancelRequested;
+  }
+
+  /**
+   * Broadcast a message to all renderer windows
+   * @param {string} channel - IPC channel name
+   * @param {*} payload - Payload to send
+   */
+  broadcastToWindows(channel, payload) {
+    try {
+      const normalizedPayload = typeof payload === 'object' && payload !== null
+        ? payload
+        : { message: String(payload) };
+      const { BrowserWindow } = require('electron');
+      if (BrowserWindow && typeof BrowserWindow.getAllWindows === 'function') {
+        BrowserWindow.getAllWindows().forEach(window => {
+          if (!window.isDestroyed()) {
+            window.webContents.send(channel, normalizedPayload);
+          }
+        });
+      }
+    } catch (error) {
+      this.logger.debug('broadcastToWindows failed (expected in tests):', error.message);
+    }
+  }
+
+  /**
+   * Send output to the commands console (debounced for performance)
+   * Error messages (❌) are delivered immediately, others are batched
+   * @param {string} message - Message to send
+   */
+  sendOutput(message) {
+    // Error messages bypass debounce — deliver immediately
+    if (typeof message === 'string' && message.includes('❌')) {
+      this._flushSendOutput();
+      this.broadcastToWindows('command-output', { message });
+      return;
+    }
+    // Buffer non-error messages and batch them with 100ms debounce
+    this._sendOutputBuffer.push(message);
+    if (this._sendOutputTimer) {
+      clearTimeout(this._sendOutputTimer);
+    }
+    this._sendOutputTimer = setTimeout(() => {
+      this._sendOutputTimer = null;
+      this._flushSendOutput();
+    }, 100);
+  }
+
+  /**
+   * Flush the sendOutput buffer — deliver all pending messages immediately
+   * @private
+   */
+  _flushSendOutput() {
+    if (this._sendOutputTimer) {
+      clearTimeout(this._sendOutputTimer);
+      this._sendOutputTimer = null;
+    }
+    if (this._sendOutputBuffer.length > 0) {
+      const messages = this._sendOutputBuffer.splice(0);
+      this.broadcastToWindows('command-output', { message: messages.join('\n') });
+    }
+  }
+
+  /**
+   * Send structured progress update to all renderer windows
+   * @param {Object} progress - Progress data
+   * @param {string} progress.stage - Current stage (checking, staging, committing, fetching, pulling, pushing, complete)
+   * @param {number} progress.current - Current item number
+   * @param {number} progress.total - Total items
+   * @param {string} progress.message - Status message
+   */
+  sendProgress(progress) {
+    const percentage = progress.total > 0
+      ? Math.round((progress.current / progress.total) * 100)
+      : 0;
+
+    this.broadcastToWindows('git:progress', {
+      ...progress,
+      percentage
+    });
   }
 
   /**
@@ -101,6 +257,97 @@ class GitHandlers {
   }
 
   /**
+   * Check if repository has uncommitted changes
+   * @param {string} projectPath - Path to the git repository
+   * @returns {Promise<{success: boolean, isDirty: boolean, fileCount: number, files: string[]}>}
+   */
+  async gitCheckStatus(projectPath) {
+    try {
+      const fs = require('fs');
+      const gitMod = await this._getGit();
+
+      const matrix = await gitMod.statusMatrix({ fs, dir: projectPath, cache: this._gitCache });
+      const dirtyFiles = matrix.filter(([, head, workdir, stage]) =>
+        !(head === 1 && workdir === 1 && stage === 1)
+      );
+
+      return {
+        success: true,
+        isDirty: dirtyFiles.length > 0,
+        fileCount: dirtyFiles.length,
+        files: dirtyFiles.map(([filepath]) => filepath)
+      };
+    } catch (error) {
+      this.logger.error('Error checking git status:', error);
+      return { success: false, isDirty: false, fileCount: 0, files: [], error: error.message };
+    }
+  }
+
+  /**
+   * Stage all dirty files and create a commit
+   * @param {Object} gitMod - isomorphic-git module
+   * @param {Object} fs - filesystem module
+   * @param {string} projectPath - Path to the git repository
+   * @param {string} commitMessage - Commit message
+   * @param {Object} author - Author object with name and email
+   * @returns {Promise<string|null>} Commit SHA or null if nothing to commit
+   * @private
+   */
+  async _commitAll(gitMod, fs, projectPath, commitMessage, author) {
+    try {
+      const matrix = await gitMod.statusMatrix({ fs, dir: projectPath, cache: this._gitCache });
+      const dirty = matrix.filter(([, h, w, s]) => !(h === 1 && w === 1 && s === 1));
+
+      if (dirty.length === 0) {
+        this.sendOutput('ℹ️ Nenhuma alteração para commitar.');
+        return null;
+      }
+
+      this.sendOutput(`📝 Preparando ${dirty.length} arquivo(s) para commit...`);
+
+      // Stage files em batches com tratamento de erro individual
+      const stageErrors = [];
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < dirty.length; i += BATCH_SIZE) {
+        const batch = dirty.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map(async ([filepath, , worktreeStatus]) => {
+            try {
+              if (worktreeStatus) {
+                await gitMod.add({ fs, dir: projectPath, filepath });
+              } else {
+                await gitMod.remove({ fs, dir: projectPath, filepath });
+              }
+            } catch (fileError) {
+              stageErrors.push({ filepath, error: fileError.message });
+            }
+          })
+        );
+
+        // Reportar progresso após cada batch
+        const progress = Math.round(((i + batch.length) / dirty.length) * 100);
+        this.sendOutput(`📊 Progresso: ${progress}% (${i + batch.length}/${dirty.length} arquivos)`);
+      }
+
+      if (stageErrors.length > 0) {
+        const errorMsg = `Erro ao preparar arquivo(s): ${stageErrors.map(e => e.filepath).join(', ')}`;
+        this.sendOutput(`❌ ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      this._gitCache = {};
+
+      this.sendOutput(`💾 Commitando: "${commitMessage}"`);
+      const sha = await gitMod.commit({ fs, dir: projectPath, message: commitMessage, author });
+      this.sendOutput(`✅ Commit criado: ${sha.substring(0, 7)}`);
+      return sha;
+    } catch (error) {
+      this.sendOutput(`❌ Erro durante commit: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * List all branches in the repository
    * @param {string} projectPath - Path to the git repository
    * @returns {Promise<{branches: Array<BranchInfo>, current: string}>}
@@ -111,38 +358,44 @@ class GitHandlers {
       
       // Check if directory exists and is a git repository
       const fs = require('fs');
-      if (!fs.existsSync(projectPath)) {
+      try {
+        await fs.promises.access(projectPath);
+      } catch {
         throw new Error(`Repository path does not exist: ${projectPath}`);
       }
       
       const gitDir = require('path').join(projectPath, '.git');
-      if (!fs.existsSync(gitDir)) {
+      try {
+        await fs.promises.access(gitDir);
+      } catch {
         throw new Error(`Not a git repository: ${projectPath}`);
       }
       
       // Get current branch with fallback
       let currentBranch = 'master'; // Default fallback
       try {
-        currentBranch = await git.currentBranch({ fs, dir: projectPath });
+        currentBranch = await git.currentBranch({ fs, dir: projectPath, cache: this._gitCache });
         this.logger.info(`✅ Current branch detected: ${currentBranch}`);
       } catch (error) {
         this.logger.warn(`⚠️ Could not determine current branch, using fallback: ${error.message}`);
         // Try to get branches directly as fallback
         try {
-          const refs = await git.listRefs({ fs, dir: projectPath });
+          const refs = await git.listRefs({ fs, dir: projectPath, cache: this._gitCache });
           const headRef = refs.find(ref => ref === 'HEAD');
-          if (headRef) {
-            // Try to resolve HEAD manually
-            const headFile = require('path').join(gitDir, 'HEAD');
-            if (fs.existsSync(headFile)) {
-              const headContent = fs.readFileSync(headFile, 'utf8');
-              const match = headContent.match(/ref: refs\/heads\/(.+)/);
-              if (match) {
-                currentBranch = match[1].trim();
-                this.logger.info(`✅ Current branch resolved from HEAD file: ${currentBranch}`);
-              }
-            }
-          }
+           if (headRef) {
+             // Try to resolve HEAD manually
+             const headFile = require('path').join(gitDir, 'HEAD');
+             try {
+               const headContent = await fs.promises.readFile(headFile, 'utf8');
+               const match = headContent.match(/ref: refs\/heads\/(.+)/);
+               if (match) {
+                 currentBranch = match[1].trim();
+                 this.logger.info(`✅ Current branch resolved from HEAD file: ${currentBranch}`);
+               }
+             } catch {
+               // HEAD file doesn't exist or can't be read, continue with fallback
+             }
+           }
         } catch (fallbackError) {
           this.logger.warn(`⚠️ Could not resolve current branch from HEAD: ${fallbackError.message}`);
         }
@@ -154,7 +407,7 @@ class GitHandlers {
     
     try {
       // Get all branches (local and remote) using isomorphic-git's built-in method
-      const allBranches = await git.listBranches({ fs, dir: projectPath });
+      const allBranches = await git.listBranches({ fs, dir: projectPath, cache: this._gitCache });
       
       // Separate local and remote branches (same logic as GitOperations.js)
       const localBranches = allBranches.filter(branch => !branch.includes('origin/'));
@@ -184,24 +437,26 @@ class GitHandlers {
     } catch (error) {
       this.logger.error(`Failed to list branches via git.listBranches(): ${error.message}`);
       
-      // Fallback to filesystem method if git.listBranches() fails
-      this.logger.warn('Falling back to filesystem method...');
-      try {
-        const headsDir = require('path').join(gitDir, 'refs', 'heads');
-        if (fs.existsSync(headsDir)) {
-          const branchFiles = fs.readdirSync(headsDir);
-          for (const branchName of branchFiles) {
-            branches.push({
-              name: branchName,
-              isCurrent: branchName === currentBranch,
-              isRemote: false
-            });
-          }
-          this.logger.info(`Fallback: Found ${branchFiles.length} local branches via filesystem`);
-        }
-      } catch (fallbackError) {
-        this.logger.error(`Filesystem fallback also failed: ${fallbackError.message}`);
-      }
+       // Fallback to filesystem method if git.listBranches() fails
+       this.logger.warn('Falling back to filesystem method...');
+       try {
+         const headsDir = require('path').join(gitDir, 'refs', 'heads');
+         try {
+           const branchFiles = await fs.promises.readdir(headsDir);
+           for (const branchName of branchFiles) {
+             branches.push({
+               name: branchName,
+               isCurrent: branchName === currentBranch,
+               isRemote: false
+             });
+           }
+           this.logger.info(`Fallback: Found ${branchFiles.length} local branches via filesystem`);
+         } catch {
+           // headsDir doesn't exist or can't be read
+         }
+       } catch (fallbackError) {
+         this.logger.error(`Filesystem fallback also failed: ${fallbackError.message}`);
+       }
     }
       
       const result = {
@@ -230,6 +485,7 @@ class GitHandlers {
         dir: projectPath,
         ref: branchName
       });
+      this._gitCache = {};
       
       this.logger.info(`Created branch: ${branchName}`);
     } catch (error) {
@@ -250,6 +506,9 @@ class GitHandlers {
       
       const fs = require('fs');
       
+      // Start branch list fetch in parallel with checkout attempt (avoids redundant call on failure)
+      const branchListPromise = this.gitListBranches(projectPath).catch(() => null);
+      
       // First, try to checkout directly (for local branches)
       try {
         await git.checkout({
@@ -257,15 +516,19 @@ class GitHandlers {
           dir: projectPath,
           ref: branchName
         });
+        this._gitCache = {};
         
         this.logger.info(`✅ Successfully checked out branch: ${branchName}`);
         return;
       } catch (directError) {
         this.logger.warn(`⚠️ Direct checkout failed: ${directError.message}`);
         
-        // If direct checkout fails, try to list branches and check if it exists
+        // Use the already-fetched (parallel) branch list
         try {
-          const branchResult = await this.gitListBranches(projectPath);
+          const branchResult = await branchListPromise;
+          if (!branchResult) {
+            throw new Error(`Branch '${branchName}' not found locally or remotely`);
+          }
           const localBranch = branchResult.branches.find(b => b.name === branchName && !b.isRemote);
           const remoteBranch = branchResult.branches.find(b => b.name === branchName && b.isRemote);
           
@@ -277,6 +540,7 @@ class GitHandlers {
               dir: projectPath,
               ref: branchName
             });
+            this._gitCache = {};
             this.logger.info(`✅ Successfully checked out local branch: ${branchName}`);
           } else if (remoteBranch) {
             // Remote branch exists, create local tracking branch
@@ -287,6 +551,7 @@ class GitHandlers {
               ref: branchName,
               checkout: true
             });
+            this._gitCache = {};
             this.logger.info(`✅ Created and checked out local branch: ${branchName}`);
           } else {
             throw new Error(`Branch '${branchName}' not found locally or remotely`);
@@ -309,7 +574,7 @@ class GitHandlers {
    */
   async gitGetCurrentBranch(projectPath) {
     try {
-      const currentBranch = await git.currentBranch({ fs: require('fs'), dir: projectPath });
+      const currentBranch = await git.currentBranch({ fs: require('fs'), dir: projectPath, cache: this._gitCache });
       return currentBranch;
     } catch (error) {
       this.logger.error('Error getting current branch:', error);
@@ -331,7 +596,7 @@ class GitHandlers {
       // Get current branch with fallback
       let currentBranch = 'master';
       try {
-        currentBranch = await git.currentBranch({ fs, dir: projectPath });
+        currentBranch = await git.currentBranch({ fs, dir: projectPath, cache: this._gitCache });
         this.logger.info(`✅ Current branch: ${currentBranch}`);
       } catch (error) {
         this.logger.warn(`⚠️ Could not get current branch: ${error.message}`);
@@ -357,7 +622,8 @@ class GitHandlers {
         remoteUrl = await git.getConfig({
           fs,
           dir: projectPath,
-          path: 'remote.origin.url'
+          path: 'remote.origin.url',
+          cache: this._gitCache
         });
       } catch (error) {
         this.logger.debug('Could not get remote URL:', error.message);
@@ -375,7 +641,8 @@ class GitHandlers {
         const commitOid = await git.resolveRef({
           fs,
           dir: projectPath,
-          ref: currentBranch
+          ref: currentBranch,
+          cache: this._gitCache
         });
         
         if (commitOid) {
@@ -383,7 +650,8 @@ class GitHandlers {
           const commit = await git.readCommit({
             fs,
             dir: projectPath,
-            oid: commitOid
+            oid: commitOid,
+            cache: this._gitCache
           });
           
           if (commit && commit.commit) {
@@ -399,14 +667,16 @@ class GitHandlers {
           const headOid = await git.resolveRef({
             fs,
             dir: projectPath,
-            ref: 'HEAD'
+            ref: 'HEAD',
+            cache: this._gitCache
           });
           
           if (headOid) {
             const commit = await git.readCommit({
               fs,
               dir: projectPath,
-              oid: headOid
+              oid: headOid,
+              cache: this._gitCache
             });
             
             if (commit && commit.commit) {
@@ -427,7 +697,8 @@ class GitHandlers {
       try {
         const statusResult = await git.statusMatrix({
           fs,
-          dir: projectPath
+          dir: projectPath,
+          cache: this._gitCache
         });
         
         // Check if there are any unstaged changes
@@ -457,6 +728,7 @@ class GitHandlers {
   }
 
   /**
+<<<<<<< HEAD
    * Get GitHub token from secure storage
    * @returns {Promise<string|null>} GitHub token or null if not found
    */
@@ -556,13 +828,229 @@ class GitHandlers {
       });
 
       throw error;
+=======
+   * Pull changes from remote for current branch
+   * @param {string} projectPath - Path to the git repository
+   * @param {string|null} [commitMessage=null] - If provided, commit all changes before pulling
+   * @returns {Promise<{success: boolean, pulled?: boolean, branch?: string, error?: string}>}
+   */
+  async gitPullFromPreview(projectPath, commitMessage = null) {
+    if (!this.acquireGitLock()) {
+      this.sendOutput('⚠️ Operação Git já em andamento. Aguarde...');
+      return { success: false, error: 'Git operation already in progress. Please wait.' };
+    }
+
+    const fs = require('fs');
+
+    try {
+      const gitMod = await this._getGit();
+
+      // 1. Início - verificando
+      this.sendProgress({
+        stage: 'checking',
+        current: 0,
+        total: commitMessage ? 5 : 3,
+        message: 'Verificando status do repositório...'
+      });
+
+      const [token, currentBranch] = await Promise.all([
+        this.gitOps.getGitHubToken(),
+        gitMod.currentBranch({ fs, dir: projectPath, cache: this._gitCache })
+      ]);
+
+      if (!token) {
+        this.sendOutput('❌ Autenticação GitHub necessária. Faça login novamente.');
+        return { success: false, error: 'Autenticação GitHub necessária. Faça login novamente.' };
+      }
+
+      if (!currentBranch) {
+        this.sendOutput('❌ Nenhuma branch selecionada (detached HEAD). Selecione uma branch para atualizar.');
+        return { success: false, error: 'Nenhuma branch selecionada (detached HEAD). Selecione uma branch primeiro.' };
+      }
+
+      const auth = { username: token, password: 'x-oauth-basic' };
+
+      // Commit local changes before pulling if commitMessage provided
+      if (commitMessage) {
+        // 2. Staging
+        this.sendProgress({
+          stage: 'staging',
+          current: 1,
+          total: 5,
+          message: 'Preparando arquivos para commit...'
+        });
+
+        this.sendOutput('⚙️ Configurando usuário git para commit...');
+        try {
+          await this.gitOps.configureGitForUser(projectPath);
+        } catch (configError) {
+          this.logger.warn('Could not configure git user:', configError);
+          this.sendOutput('⚠️ Não foi possível configurar usuário git. Continuando com configuração existente...');
+        }
+        const [authorName, authorEmail] = await Promise.all([
+          gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }).then(v => v || 'documental'),
+          gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }).then(v => v || 'documental@app')
+        ]);
+        const author = { name: authorName, email: authorEmail };
+
+        // 3. Committing
+        this.sendProgress({
+          stage: 'committing',
+          current: 2,
+          total: 5,
+          message: 'Criando commit...'
+        });
+
+        await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
+
+        // Check for cancellation after auto-commit
+        if (this.isCancelRequested()) {
+          this.logger.info('Pull operation cancelled after commit');
+          this.releaseGitLock();
+          return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+        }
+      }
+
+      // 4. Fetching (or step 2 if no commitMessage)
+      this.sendProgress({
+        stage: 'fetching',
+        current: commitMessage ? 3 : 1,
+        total: commitMessage ? 5 : 3,
+        message: `Buscando alterações da branch remota '${currentBranch}'...`
+      });
+
+      this.sendOutput(`📥 Buscando alterações da branch remota '${currentBranch}'...`);
+
+      await gitMod.fetch({
+        fs,
+        http,
+        dir: projectPath,
+        remote: 'origin',
+        ref: currentBranch,
+        singleBranch: true,
+        depth: 1,
+        onAuth: () => auth,
+        onProgress: (evt) => {
+          if (evt.total && evt.loaded) {
+            const percent = Math.round((evt.loaded / evt.total) * 100);
+            this.sendProgress({
+              stage: 'fetching',
+              current: percent,
+              total: 100,
+              message: `Baixando: ${percent}%`
+            });
+          }
+        }
+      });
+      this._gitCache = {};
+
+      // Check for cancellation after fetch
+      if (this.isCancelRequested()) {
+        this.logger.info('Pull operation cancelled after fetch');
+        this.releaseGitLock();
+        return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+      }
+
+      // 5. Pulling - Check if fast-forward is possible (faster than pull)
+      this.sendProgress({
+        stage: 'pulling',
+        current: commitMessage ? 4 : 2,
+        total: commitMessage ? 5 : 3,
+        message: 'Mesclando alterações...'
+      });
+
+      this.sendOutput('🔄 Verificando atualização...');
+
+      // Check for cancellation
+      if (this.isCancelRequested()) {
+        this.logger.info('Pull operation cancelled before merge');
+        this.releaseGitLock();
+        return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+      }
+
+      // Try fast-forward first (faster than pull)
+      try {
+        const canFastForward = await gitMod.canFastForward({
+          fs,
+          dir: projectPath,
+          ref: `origin/${currentBranch}`,
+          target: currentBranch
+        });
+
+        if (canFastForward) {
+          this.sendOutput('⚡ Fast-forward possível, atualizando...');
+          await gitMod.fastForward({
+            fs,
+            dir: projectPath,
+            ref: currentBranch,
+            onAuth: () => auth,
+          });
+        } else {
+          this.sendOutput('🔄 Mesclando alterações...');
+          await gitMod.pull({
+            fs,
+            http,
+            dir: projectPath,
+            ref: currentBranch,
+            singleBranch: true,
+            author: { name: 'documental', email: 'documental@app' },
+            onAuth: () => auth,
+          });
+        }
+      } catch (ffError) {
+        // Fallback to regular pull if fast-forward check fails
+        this.logger.warn('Fast-forward check failed, using regular pull:', ffError);
+        await gitMod.pull({
+          fs,
+          http,
+          dir: projectPath,
+          ref: currentBranch,
+          singleBranch: true,
+          author: { name: 'documental', email: 'documental@app' },
+          onAuth: () => auth,
+        });
+      }
+      this._gitCache = {};
+
+      // 6. Complete
+      this.sendProgress({
+        stage: 'complete',
+        current: commitMessage ? 5 : 3,
+        total: commitMessage ? 5 : 3,
+        message: 'Pull concluído com sucesso!'
+      });
+
+      this.sendOutput(`✅ Pull concluído com sucesso na branch: ${currentBranch}`);
+      this.logger.info(`Successfully pulled from branch: ${currentBranch}`);
+      return { success: true, pulled: true, branch: currentBranch };
+
+    } catch (error) {
+      this.logger.error('Error pulling from branch:', error);
+
+      let errorMessage = error.message || 'Erro desconhecido ao atualizar';
+
+      if (error.message && (error.message.includes('merge') || error.message.includes('conflict'))) {
+        errorMessage = 'Conflito de merge detectado. Resolva manualmente.';
+      } else if (error.message && (error.message.includes('network') || error.message.includes('ECONNREFUSED') || error.message.includes('ETIMEDOUT'))) {
+        errorMessage = 'Erro de rede. Verifique sua conexão.';
+      } else if (error.message && (error.message.includes('401') || error.message.includes('403') || error.message.includes('authentication'))) {
+        errorMessage = 'Erro de autenticação. Faça login novamente.';
+      }
+
+      this.sendOutput(`❌ Erro ao atualizar: ${errorMessage}`);
+      return { success: false, error: errorMessage };
+
+    } finally {
+      this.releaseGitLock();
+>>>>>>> working-commitpullpush
     }
   }
 
   /**
-   * Push changes to a specific branch
+   * Push changes to a specific branch with optional commit-before-push and first-push-wins strategy
    * @param {string} projectPath - Path to the git repository
    * @param {string} targetBranch - Target branch name
+<<<<<<< HEAD
    * @param {Object} [callbacks] - Optional progress callbacks
    * @param {Function} [callbacks.onOutput] - Callback for output messages
    * @param {Function} [callbacks.onStatus] - Callback for status updates
@@ -623,6 +1111,205 @@ class GitHandlers {
       });
 
       throw error;
+=======
+   * @param {string|null} [commitMessage=null] - If provided, commit all changes before pushing
+   * @returns {Promise<{success: boolean, pushed?: boolean, branch?: string, error?: string}>}
+   */
+  async gitPushToBranch(projectPath, targetBranch, commitMessage = null) {
+    if (!this.acquireGitLock()) {
+      this.sendOutput('⚠️ Operação Git já em andamento. Aguarde...');
+      return { success: false, error: 'Git operation already in progress. Please wait.' };
+    }
+
+    const fs = require('fs');
+
+    try {
+      const gitMod = await this._getGit();
+
+      // 1. Início - verificando
+      this.sendProgress({
+        stage: 'checking',
+        current: 0,
+        total: commitMessage ? 6 : 2,
+        message: 'Verificando status do repositório...'
+      });
+
+      const [token, userConfigured] = await Promise.all([
+        this.gitOps.getGitHubToken(),
+        this.gitOps.configureGitForUser(projectPath)
+      ]);
+
+      if (!token) {
+        this.sendOutput('❌ Autenticação GitHub necessária. Faça login novamente.');
+        return { success: false, error: 'Autenticação GitHub necessária. Faça login novamente.' };
+      }
+
+      if (!userConfigured) {
+        this.sendOutput('⚠️ Não foi possível configurar usuário git. Continuando com configuração existente...');
+        this.logger.warn('Could not configure git user, proceeding with existing config');
+      }
+
+      const auth = { username: token, password: 'x-oauth-basic' };
+
+      // Commit local changes before pushing if commitMessage provided
+      if (commitMessage) {
+        // 2. Staging
+        this.sendProgress({
+          stage: 'staging',
+          current: 1,
+          total: 6,
+          message: 'Preparando arquivos para commit...'
+        });
+
+        const [authorName, authorEmail] = await Promise.all([
+          gitMod.getConfig({ fs, dir: projectPath, path: 'user.name', cache: this._gitCache }).then(v => v || 'documental'),
+          gitMod.getConfig({ fs, dir: projectPath, path: 'user.email', cache: this._gitCache }).then(v => v || 'documental@app')
+        ]);
+        const author = { name: authorName, email: authorEmail };
+
+        // 3. Committing
+        this.sendProgress({
+          stage: 'committing',
+          current: 2,
+          total: 6,
+          message: 'Criando commit...'
+        });
+
+        await this._commitAll(gitMod, fs, projectPath, commitMessage, author);
+
+        // Check for cancellation after auto-commit
+        if (this.isCancelRequested()) {
+          this.logger.info('Push operation cancelled after commit');
+          this.releaseGitLock();
+          return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+        }
+
+        // First-push-wins: fetch + pull to integrate remote changes before pushing
+        try {
+          // 4. Fetching
+          this.sendProgress({
+            stage: 'fetching',
+            current: 3,
+            total: 6,
+            message: `Buscando alterações remotas de '${targetBranch}'...`
+          });
+
+          this.sendOutput(`📥 Integrando alterações remotas de '${targetBranch}'...`);
+          await gitMod.fetch({
+            fs,
+            http,
+            dir: projectPath,
+            remote: 'origin',
+            ref: targetBranch,
+            singleBranch: true,
+            onAuth: () => auth,
+          });
+          this._gitCache = {};
+
+          // Check for cancellation after fetch
+          if (this.isCancelRequested()) {
+            this.logger.info('Push operation cancelled after fetch');
+            this.releaseGitLock();
+            return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+          }
+
+          // 5. Pulling
+          this.sendProgress({
+            stage: 'pulling',
+            current: 4,
+            total: 6,
+            message: 'Mesclando alterações remotas...'
+          });
+
+          await gitMod.pull({
+            fs,
+            http,
+            dir: projectPath,
+            ref: targetBranch,
+            singleBranch: true,
+            author: { name: authorName, email: authorEmail },
+            onAuth: () => auth,
+          });
+          this._gitCache = {};
+
+          // Check for cancellation after pull
+          if (this.isCancelRequested()) {
+            this.logger.info('Push operation cancelled after pull');
+            this.releaseGitLock();
+            return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+          }
+        } catch (fetchPullError) {
+          // Branch doesn't exist on remote yet — OK for first push
+          if (!fetchPullError.message.includes('Could not find') &&
+              !fetchPullError.message.includes('not found') &&
+              !fetchPullError.message.includes('404')) {
+            if (fetchPullError.message.includes('merge') || fetchPullError.message.includes('MERGE_HEAD')) {
+              this.sendOutput('❌ Conflito de merge detectado. Resolva manualmente.');
+              return { success: false, error: 'Conflito de merge. Resolva as diferenças manualmente antes de publicar.' };
+            }
+            this.logger.warn('Fetch/pull before push warning:', fetchPullError.message);
+          }
+        }
+      }
+
+      // Check for cancellation before push
+      if (this.isCancelRequested()) {
+        this.logger.info('Push operation cancelled before push');
+        this.releaseGitLock();
+        return { success: false, cancelled: true, message: 'Operation cancelled by user' };
+      }
+
+      // 6. Pushing (or step 2 if no commitMessage)
+      this.sendProgress({
+        stage: 'pushing',
+        current: commitMessage ? 5 : 1,
+        total: commitMessage ? 6 : 2,
+        message: `Publicando na branch '${targetBranch}'...`
+      });
+
+      this.sendOutput(`🚀 Publicando alterações na branch: ${targetBranch}...`);
+
+      await gitMod.push({
+        fs,
+        http,
+        dir: projectPath,
+        remote: 'origin',
+        ref: targetBranch,
+        onAuth: () => auth,
+      });
+      this._gitCache = {};
+
+      // 7. Complete (or step 3 if no commitMessage)
+      this.sendProgress({
+        stage: 'complete',
+        current: commitMessage ? 6 : 2,
+        total: commitMessage ? 6 : 2,
+        message: 'Push concluído com sucesso!'
+      });
+
+      this.sendOutput(`✅ Push concluído com sucesso na branch: ${targetBranch}`);
+      this.logger.info(`Successfully pushed to branch: ${targetBranch}`);
+      return { success: true, pushed: true, branch: targetBranch };
+
+    } catch (error) {
+      this.logger.error('Error pushing to branch:', error);
+
+      let errorMessage = error.message || 'Erro desconhecido ao publicar';
+
+      if (error.message && error.message.includes('non-fast-forward')) {
+        errorMessage = 'Push rejeitado. Faça pull antes de publicar (non-fast-forward).';
+      } else if (error.message && (error.message.includes('401') || error.message.includes('403') || error.message.includes('authentication'))) {
+        errorMessage = 'Erro de autenticação. Faça login novamente.';
+      } else if (error.message && (error.message.includes('network') || error.message.includes('ECONNREFUSED') || error.message.includes('ETIMEDOUT'))) {
+        errorMessage = 'Erro de rede. Verifique sua conexão.';
+      }
+
+      this.sendOutput(`❌ Erro ao publicar: ${errorMessage}`);
+      return { success: false, error: errorMessage };
+
+    } finally {
+      this.releaseGitLock();
+>>>>>>> working-commitpullpush
     }
   }
 
@@ -633,23 +1320,44 @@ class GitHandlers {
    */
   async gitListRemoteBranches(projectPath) {
     try {
-      const refs = await git.listServerRefs({
-        http,
-        url: await git.getConfig({
-          fs: require('fs'),
-          dir: projectPath,
-          path: 'remote.origin.url'
-        })
+      this.sendOutput('🔍 Buscando branches remotas...');
+
+      // Get auth token for private repo support
+      const token = await this.gitOps.getGitHubToken();
+      const auth = token ? { username: token, password: 'x-oauth-basic' } : undefined;
+
+      const gitMod = await this._getGit();
+
+      const url = await gitMod.getConfig({
+        fs: require('fs'),
+        dir: projectPath,
+        path: 'remote.origin.url',
+        cache: this._gitCache
       });
-      
+
+      const listServerRefsConfig = {
+        http,
+        url,
+        cache: this._gitCache,
+      };
+
+      if (auth) {
+        listServerRefsConfig.onAuth = () => auth;
+      }
+
+      const refs = await gitMod.listServerRefs(listServerRefsConfig);
+
       const branches = refs
         .filter(ref => ref.ref.startsWith('refs/heads/'))
         .map(ref => ref.ref.replace('refs/heads/', ''))
         .filter(name => name !== 'HEAD');
-      
+
       return branches;
     } catch (error) {
       this.logger.error('Error listing remote branches:', error);
+      if (!error.message?.includes('auth') && !(await this.gitOps.getGitHubToken())) {
+        throw new Error('Autenticação necessária para repositórios privados');
+      }
       throw error;
     }
   }
@@ -730,12 +1438,10 @@ class GitHandlers {
       }
     });
 
-    /**
-     * Pull from preview branch
-     */
-    ipcMain.handle('git:pull-from-preview', async (event, projectId) => {
+    ipcMain.handle('git:check-status', async (event, projectId) => {
       try {
         const projectPath = await this.getProjectPath(projectId);
+<<<<<<< HEAD
 
         // Pass callbacks for progress updates
         const callbacks = {
@@ -745,18 +1451,30 @@ class GitHandlers {
 
         const result = await this.gitPullFromPreview(projectPath, callbacks);
         return { success: true, ...result };
+=======
+        return await this.gitCheckStatus(projectPath);
+      } catch (error) {
+        this.logger.error('Error in git:check-status handler:', error);
+        return { success: false, isDirty: false, fileCount: 0, files: [], error: error.message };
+      }
+    });
+
+    ipcMain.handle('git:pull-from-preview', async (event, projectId, commitMessage) => {
+      try {
+        const projectPath = await this.getProjectPath(projectId);
+        const result = await this.gitPullFromPreview(projectPath, commitMessage || null);
+        return result;
+>>>>>>> working-commitpullpush
       } catch (error) {
         this.logger.error('Error in git:pull-from-preview handler:', error);
         return { success: false, error: error.message };
       }
     });
 
-    /**
-     * Push to branch
-     */
-    ipcMain.handle('git:push-to-branch', async (event, projectId, targetBranch) => {
+    ipcMain.handle('git:push-to-branch', async (event, projectId, targetBranch, commitMessage) => {
       try {
         const projectPath = await this.getProjectPath(projectId);
+<<<<<<< HEAD
 
         // Pass callbacks for progress updates
         const callbacks = {
@@ -766,6 +1484,10 @@ class GitHandlers {
 
         const result = await this.gitPushToBranch(projectPath, targetBranch, callbacks);
         return { success: true, ...result };
+=======
+        const result = await this.gitPushToBranch(projectPath, targetBranch, commitMessage || null);
+        return result;
+>>>>>>> working-commitpullpush
       } catch (error) {
         this.logger.error('Error in git:push-to-branch handler:', error);
         return { success: false, error: error.message };
@@ -786,6 +1508,15 @@ class GitHandlers {
       }
     });
 
+    /**
+     * Cancel current Git operation
+     */
+    ipcMain.handle('git:cancel-operation', async () => {
+      this.logger.info('Cancel operation requested via IPC');
+      this.requestCancel();
+      return { success: true, message: 'Cancellation requested' };
+    });
+
     this.logger.info('✅ Git operations IPC handlers registered');
   }
 
@@ -800,9 +1531,11 @@ class GitHandlers {
     ipcMain.removeHandler('git:checkout-branch');
     ipcMain.removeHandler('git:get-current-branch');
     ipcMain.removeHandler('git:get-repository-info');
+    ipcMain.removeHandler('git:check-status');
     ipcMain.removeHandler('git:pull-from-preview');
     ipcMain.removeHandler('git:push-to-branch');
     ipcMain.removeHandler('git:list-remote-branches');
+    ipcMain.removeHandler('git:cancel-operation');
     
     this.logger.info('✅ Git operations IPC handlers unregistered');
   }

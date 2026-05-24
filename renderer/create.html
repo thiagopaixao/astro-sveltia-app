@@ -30,6 +30,10 @@
             50% { transform: rotate(180deg) scale(0.8); }
             100% { transform: rotate(360deg) scale(1); }
         }
+        .creative-loader.paused::before,
+        .creative-loader.paused::after {
+            animation-play-state: paused;
+        }
         .step-icon-active {
             animation: spin 1s linear infinite;
         }
@@ -387,7 +391,7 @@
 
 <div class="text-center mb-8">
 <div class="flex items-center justify-center gap-4 mb-3">
-<div class="creative-loader"></div>
+<div class="creative-loader" x-show="!allStepsSuccess"></div>
 </div>
 <h1 class="text-3xl font-bold text-text-dark" x-text="isReopenMode ? 'Reabrindo Espaço de Trabalho' : 'Criando Espaço de Trabalho'"></h1>
 <p class="text-muted-dark text-base mt-1" x-text="isReopenMode ? 'Aguarde enquanto preparamos seu projeto novamente.' : 'Aguarde enquanto preparamos tudo para você.'"></p>
