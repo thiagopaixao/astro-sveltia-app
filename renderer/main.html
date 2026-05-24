@@ -792,29 +792,17 @@ clearingCache: false,
             const result = await window.electronAPI.pullFromPreview(projectId);
             
             if (result.success) {
-<<<<<<< HEAD
-                this.finishGitOperation(true);
-=======
                 console.log('✅ Pull from preview successful:', result.message);
->>>>>>> working-commitpullpush
                 // Refresh repository info after pull
                 await this.loadRepositoryInfo();
                 await this.loadBranches();
             } else {
-<<<<<<< HEAD
-                this.finishGitOperation(false, result.error || 'Erro ao atualizar');
-            }
-        } catch (error) {
-            console.error('❌ Error pulling from preview:', error);
-            this.finishGitOperation(false, error.message);
-=======
                 console.error('❌ Error pulling from preview:', result.error);
             }
         } catch (error) {
             console.error('❌ Error pulling from preview:', error);
         } finally {
             this.pullLoading = false;
->>>>>>> working-commitpullpush
         }
     },
     async pushToBranch() {
@@ -846,47 +834,6 @@ clearingCache: false,
             const result = await window.electronAPI.pushToBranch(projectId, this.selectedPublishBranch);
             
             if (result.success) {
-<<<<<<< HEAD
-                this.finishGitOperation(true);
-                // Refresh repository info after push
-                await this.loadRepositoryInfo();
-            } else {
-                this.finishGitOperation(false, result.error || 'Erro ao publicar');
-            }
-        } catch (error) {
-            console.error('❌ Error pushing to branch:', error);
-            this.finishGitOperation(false, error.message);
-        }
-    },
-    // Git operation progress modal methods
-    startGitOperation(type) {
-        this.gitOperationModalOpen = true;
-        this.gitOperationType = type;
-        this.gitOperationSteps = [];
-        this.gitOperationInProgress = true;
-        this.gitOperationFinished = false;
-        this.gitOperationSuccess = false;
-        this.gitOperationError = null;
-    },
-    updateGitOperationStep(stepId, status, log) {
-        const step = this.gitOperationSteps.find(s => s.id === stepId);
-        if (step) {
-            step.status = status;
-            if (log !== undefined) {
-                step.log = log;
-            }
-        }
-    },
-    finishGitOperation(success, errorMsg) {
-        this.gitOperationInProgress = false;
-        this.gitOperationFinished = true;
-        this.gitOperationSuccess = success;
-        this.gitOperationError = errorMsg || null;
-    },
-    closeGitOperationModal() {
-        if (this.gitOperationFinished) {
-            this.gitOperationModalOpen = false;
-=======
                 console.log('✅ Push to branch successful:', result.message);
                 // Refresh repository info after push
                 await this.loadRepositoryInfo();
@@ -897,7 +844,6 @@ clearingCache: false,
             console.error('❌ Error pushing to branch:', error);
         } finally {
             this.pushLoading = false;
->>>>>>> working-commitpullpush
         }
     },
     async openPullModal() {
@@ -1165,28 +1111,6 @@ clearingCache: false,
             });
         });
 
-<<<<<<< HEAD
-        // Listen for git operation output events
-        window.electronAPI.onGitOperationOutput((payload) => {
-            const { stepId, message } = payload;
-            const step = this.gitOperationSteps.find(s => s.id === stepId);
-            if (step) {
-                step.log = (step.log || '') + message + '\n';
-            }
-        });
-
-        // Listen for git operation status events
-        window.electronAPI.onGitOperationStatus((payload) => {
-            const { stepId, status, error } = payload;
-            const step = this.gitOperationSteps.find(s => s.id === stepId);
-            if (step) {
-                step.status = status;
-                if (status === 'failure' && error) {
-                    this.finishGitOperation(false, error);
-                }
-            }
-        });
-=======
         // Listen for git progress events
         if (window.electronAPI && window.electronAPI.onGitProgress) {
             window.electronAPI.onGitProgress((data) => {
@@ -1200,7 +1124,6 @@ clearingCache: false,
                 }
             });
         }
->>>>>>> working-commitpullpush
 
         // Load initial app logs and restore from sessionStorage
         window.electronAPI.getAppLogs().then(initialLogs => {
@@ -2104,55 +2027,6 @@ clearingCache: false,
 </nav>
 </div>
 </div>
-<<<<<<< HEAD
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="updateModalOpen">
-<div @click.outside="updateModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
-<h3 class="text-lg font-medium text-text-dark">Confirmar Atualização</h3>
-            <p class="mt-2 text-sm text-muted-dark">Você tem certeza que deseja atualizar a branch '<span class="font-bold text-primary" x-text="currentBranch"></span>'? Isso buscará atualizações da branch remota '<span x-text="currentBranch"></span>' e mesclará na branch atual.</p>
-<div class="mt-4 flex justify-end space-x-2">
-<button @click="updateModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" :disabled="pullLoading">Cancelar</button>
-<button @click="pullFromPreview()" class="px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-orange-500" :disabled="pullLoading">
-<span x-show="!pullLoading">Atualizar</span>
-<span x-show="pullLoading" class="flex items-center">
-<div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-Atualizando...
-</span>
-</button>
-</div>
-</div>
-</div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="publishModalOpen">
-<div @click.outside="publishModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
-<h3 class="text-lg font-medium text-text-dark">Publicar Alterações</h3>
-<p class="mt-2 text-sm text-muted-dark">Selecione a branch para publicar.</p>
-<div class="mt-4 space-y-4">
-<div>
-<label class="text-sm font-medium text-text-dark">Selecionar branch remota</label>
-<div class="mt-1 relative">
-<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedPublishBranch" :disabled="pushLoading || remoteBranches.length === 0">
-<template x-for="branch in remoteBranches" :key="branch">
-<option :value="branch" x-text="branch" :selected="branch === selectedPublishBranch"></option>
-</template>
-</select>
-<div x-show="pushLoading || remoteBranches.length === 0" class="absolute inset-0 flex items-center justify-center bg-background-dark bg-opacity-75">
-<div x-show="pushLoading" class="w-4 h-4 border-2 border-gray-600 border-t-primary rounded-full animate-spin"></div>
-<span x-show="!pushLoading && remoteBranches.length === 0" class="text-xs text-muted-dark">Carregando branches...</span>
-</div>
-</div>
-<p class="mt-1 text-xs text-muted-dark">A branch '<span class="font-bold text-primary" x-text="currentBranch"></span>' será publicada para a branch selecionada.</p>
-</div>
-</div>
-<div class="mt-6 flex justify-end space-x-2">
-<button @click="publishModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" :disabled="pushLoading">Cancelar</button>
-<button @click="pushToBranch()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" :disabled="pushLoading || !selectedPublishBranch">
-<span x-show="!pushLoading">Publicar</span>
-<span x-show="pushLoading" class="flex items-center">
-<div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-Publicando...
-</span>
-</button>
-</div>
-=======
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="pullModalState !== 'closed'">
   <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
     <div x-show="pullModalState === 'confirm'">
@@ -2222,7 +2096,6 @@ Publicando...
       <button @click="closePullModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Fechar</button>
     </div>
   </div>
->>>>>>> working-commitpullpush
 </div>
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="pushModalState !== 'closed'">
   <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
