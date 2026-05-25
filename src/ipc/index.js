@@ -42,7 +42,6 @@ class IpcRegistry {
     });
     this.fileHandlers = new FileHandlers(dependencies);
     
-    // Initialize SystemHandlers with ProcessManager from ProjectCreationHandler
     this.systemHandlers = new SystemHandlers({
       ...dependencies,
       processManager: this.projectCreationHandler.processManager

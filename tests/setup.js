@@ -6,6 +6,20 @@ import { vi } from 'vitest';
 // Create mutable dialog mock that tests can control
 global.dialogMockImpl = vi.fn();
 
+const BrowserWindowMock = vi.fn(() => ({
+  webContents: { send: vi.fn(), on: vi.fn(), insertCSS: vi.fn(), executeJavaScript: vi.fn() },
+  isDestroyed: vi.fn(() => false),
+  show: vi.fn(),
+  maximize: vi.fn(),
+  close: vi.fn(),
+  on: vi.fn(),
+  getBounds: vi.fn(() => ({ width: 1400, height: 900, x: 0, y: 0 })),
+  loadFile: vi.fn(async () => {})
+}));
+BrowserWindowMock.getAllWindows = vi.fn(() => []);
+BrowserWindowMock.getFocusedWindow = vi.fn();
+BrowserWindowMock.fromWebContents = vi.fn();
+
 // Mock Electron APIs
 global.mockElectron = {
   app: {
@@ -15,11 +29,7 @@ global.mockElectron = {
     isPackaged: false,
     getAppPath: vi.fn()
   },
-  BrowserWindow: {
-    getAllWindows: vi.fn(() => []),
-    getFocusedWindow: vi.fn(),
-    fromWebContents: vi.fn()
-  },
+  BrowserWindow: BrowserWindowMock,
   ipcMain: {
     handle: vi.fn(),
     on: vi.fn()

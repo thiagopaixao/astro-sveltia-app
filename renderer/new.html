@@ -4,29 +4,16 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Documental - Novo Projeto</title>
 <link href="./assets/css/fonts.css" rel="stylesheet"/>
-<link href="./assets/css/compiled.css" rel="stylesheet"/>
 
-<script>
-    tailwind.config = {
-        darkMode: "class",
-        theme: {
-            extend: {
-                colors: {
-                    primary: "#22c55e",
-                    "background-light": "#f3f4f6",
-                    "background-dark": "#111827",
-                    "surface-light": "#ffffff",
-                    "surface-dark": "#1f2937",
-                    "text-light": "#111827",
-                    "text-dark": "#f9fafb",
-                    "muted-light": "#6b7280",
-                    "muted-dark": "#9ca3af",
-                },
-            },
-        },
-    };
-    </script>
-<script src="script.js" defer></script>
+<link href="./assets/css/compiled.css" rel="stylesheet"/>
+    <link href="./assets/css/theme-override.css" rel="stylesheet"/>
+
+
+<script src="./shared/layout.js"></script>
+<script src="./shared/header.js"></script>
+<script src="./shared/footer.js"></script>
+<script src="./shared/logo.js"></script>
+
 <script>
 // Wait for both DOM and script.js to be ready
 function waitForElements() {
@@ -121,55 +108,58 @@ document.addEventListener('DOMContentLoaded', async () => {
 </script>
 </head>
 <body class="bg-background-dark text-text-dark antialiased">
-<div class="flex flex-col h-screen">
-<div class="flex-1 flex items-center justify-center p-8 pb-24">
-<div class="w-full max-w-2xl">
-<div class="text-center mb-10">
-<div class="flex items-center justify-center gap-4 mb-4">
-<svg class="h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-</svg>
-<h1 class="text-4xl font-black text-text-dark">Criar Novo Projeto</h1>
-</div>
-<p class="text-muted-dark text-lg">Preencha os detalhes abaixo para criar seu novo projeto.</p>
-</div>
+<script>
+document.write(Documental.renderLayout({
+  content: '\
+<div class="flex-1 flex items-center justify-center p-8 pb-24">\
+<div class="w-full max-w-2xl">\
+<div class="text-center mb-10">\
+<div class="flex items-center justify-center gap-4 mb-4">\
+' + Documental.renderLogo({ size: 'md' }) + '\
+<h1 class="text-4xl font-black text-text-dark">Criar Novo Projeto</h1>\
+</div>\
+<p class="text-muted-dark text-lg">Preencha os detalhes abaixo para criar seu novo projeto.</p>\
+</div>\
+\
+<div class="mb-6">\
+<button data-navigate="index.html" class="btn-ghost flex items-center gap-2">\
+<span class="material-symbols-outlined">arrow_back</span>\
+<span>Voltar para tela inicial</span>\
+</button>\
+</div>\
+<div class="bg-surface-dark rounded-lg p-8 space-y-6">\
+<div>\
+<label class="block text-sm font-medium text-muted-dark mb-2" for="project-name">Nome do Projeto</label>\
+<input class="w-full bg-background-dark border-border-subtle text-text-dark rounded-md focus:ring-primary focus:border-primary" id="project-name" name="project-name" placeholder="Ex: Meu Incrível Projeto" type="text"/>\
+</div>\
+<div>\
+<label class="block text-sm font-medium text-muted-dark mb-2" for="github-url">URL do Repositório Git</label>\
+<input class="w-full bg-background-dark border-border-subtle text-text-dark rounded-md focus:ring-primary focus:border-primary" id="github-url" name="github-url" placeholder="https://github.com/usuario/repositorio.git" type="url"/>\
+</div>\
+<div>\
+<label class="block text-sm font-medium text-muted-dark mb-2" for="project-path">Caminho da Pasta</label>\
+<div class="flex items-center space-x-2">\
+<input class="flex-1 w-full bg-background-dark border-border-subtle text-text-dark rounded-md focus:ring-primary focus:border-primary" id="project-path" name="project-path" type="text"/>\
+<button class="btn-secondary py-2 px-4 font-semibold flex items-center gap-2" id="select-folder-button">\
+<span class="material-symbols-outlined text-xl">folder_open</span>\
+<span>Selecionar</span>\
+</button>\
+</div>\
+</div>\
+</div>\
+</div>\
+</div>',
+  footer: Documental.renderFooter({
+    buttons: [{
+      label: '<span class="material-symbols-outlined">add_circle</span> <span>Criar Projeto</span>',
+      class: 'btn-primary flex items-center gap-2 text-sm',
+      id: 'create-project-button'
+    }],
+    maxWidth: 'max-w-2xl mx-auto'
+  })
+}));
+Documental.initThemeAttributes();
+</script>
 
-<div class="mb-6">
-<button data-navigate="index.html" class="flex items-center gap-2 text-muted-dark hover:text-text-dark transition-colors duration-200">
-<span class="material-symbols-outlined">arrow_back</span>
-<span>Voltar para tela inicial</span>
-</button>
-</div>
-<div class="bg-surface-dark rounded-lg p-8 space-y-6">
-<div>
-<label class="block text-sm font-medium text-muted-dark mb-2" for="project-name">Nome do Projeto</label>
-<input class="w-full bg-gray-900 border-gray-700 text-text-dark rounded-md focus:ring-primary focus:border-primary" id="project-name" name="project-name" placeholder="Ex: Meu Incrível Projeto" type="text"/>
-</div>
-<div>
-<label class="block text-sm font-medium text-muted-dark mb-2" for="github-url">URL do Repositório Git</label>
-<input class="w-full bg-gray-900 border-gray-700 text-text-dark rounded-md focus:ring-primary focus:border-primary" id="github-url" name="github-url" placeholder="https://github.com/usuario/repositorio.git" type="url"/>
-</div>
-<div>
-<label class="block text-sm font-medium text-muted-dark mb-2" for="project-path">Caminho da Pasta</label>
-<div class="flex items-center space-x-2">
-<input class="flex-1 w-full bg-gray-900 border-gray-700 text-text-dark rounded-md focus:ring-primary focus:border-primary" id="project-path" name="project-path" type="text"/>
-<button class="bg-gray-700 hover:bg-gray-600 text-text-dark font-semibold py-2 px-4 rounded-md flex items-center gap-2 transition-colors duration-300" id="select-folder-button">
-<span class="material-symbols-outlined text-xl">folder_open</span>
-<span>Selecionar</span>
-</button>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="p-4 border-t border-gray-800 bg-surface-dark mt-auto">
-<div class="flex justify-end max-w-2xl mx-auto">
-<button class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 text-sm" id="create-project-button">
-<span class="material-symbols-outlined">add_circle</span>
-<span>Criar Projeto</span>
-</button>
-</div>
-</div>
-</div>
-
+<script src="script.js" defer></script>
 </body></html>

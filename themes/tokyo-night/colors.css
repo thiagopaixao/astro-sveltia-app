@@ -1,0 +1,47 @@
+/* ==========================================================================
+   Tokyo Night Theme — Semantic Token Overrides
+   Dark-only theme inspired by the popular VS Code Tokyo Night color scheme.
+   Inherits from base, overrides all semantic tokens with Tokyo Night palette.
+   ========================================================================== */
+
+[data-theme="tokyo-night"][data-mode="dark"] {
+  /* Primary — Blue accent */
+  --color-primary: #7aa2f7;
+  --color-primary-hover: #89b4fa;
+
+  /* Backgrounds */
+  --color-background-light: #1a1b26;
+  --color-background-dark: #1a1b26;
+
+  /* Surfaces */
+  --color-surface-light: #24283b;
+  --color-surface-dark: #24283b;
+
+  /* Text */
+  --color-text-light: #a9b1d6;
+  --color-text-dark: #c0caf5;
+
+  /* Muted */
+  --color-muted-light: #565f89;
+  --color-muted-dark: #565f89;
+
+  /* Accent */
+  --color-accent: #ff9e64;
+  --color-accent-hover: #ffb86c;
+
+  /* Status */
+  --color-success: #9ece6a;
+  --color-success-dark: #73daca;
+  --color-danger: #f7768e;
+  --color-danger-dark: #db4b4b;
+  --color-warning: #e0af68;
+  --color-info: #7aa2f7;
+  --color-info-dark: #2ac3de;
+
+  /* Borders */
+  --color-border-subtle: #292e42;
+  --color-border-default: #3b4261;
+
+  /* Gray intermediate */
+  --color-gray-550: #414868;
+}

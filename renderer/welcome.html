@@ -4,8 +4,10 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Documental - Bem-vindo</title>
-<link href="./assets/css/fonts.css" rel="stylesheet"/>
+    <link href="./assets/css/fonts.css" rel="stylesheet"/>
+    
 <link href="./assets/css/compiled.css" rel="stylesheet"/>
+    <link href="./assets/css/theme-override.css" rel="stylesheet"/>
     <style>
         html, body {
             height: 100%;
@@ -25,8 +27,8 @@
             left: 0 !important;
             right: 0 !important;
             z-index: 9999 !important;
-            background-color: #1f2937 !important;
-            border-top: 2px solid #374151 !important;
+            background-color: var(--color-surface-dark) !important;
+            border-top: 2px solid var(--color-border-subtle) !important;
             padding: 1rem 2rem !important;
             margin: 0 !important;
             width: 100vw !important;
@@ -56,33 +58,21 @@
             }
         }
     </style>
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#22c55e",
-                        "background-light": "#f3f4f6",
-                        "background-dark": "#111827",
-                        "surface-light": "#ffffff",
-                        "surface-dark": "#1f2937",
-                        "text-light": "#111827",
-                        "text-dark": "#f9fafb",
-                        "muted-light": "#6b7280",
-                        "muted-dark": "#9ca3af",
-                    },
-                },
-            },
-        };
-    </script>
-
+    
+    <script src="./shared/layout.js"></script>
+    <script src="./shared/header.js"></script>
+    <script src="./shared/footer.js"></script>
+    
+    <script src="./assets/js/alpine.min.js" defer></script>
 </head>
 <body class="bg-background-dark text-text-dark antialiased">
+<script>
+document.write(Documental.renderLayout({
+  content: `
     <div class="flex flex-col min-h-screen" x-data="welcomeWizard">
         <!-- Progress Bar -->
-        <div class="h-1 bg-gray-800">
-            <div class="h-full welcome-gradient transition-all duration-500" :style="`width: ${(currentStep / totalSteps) * 100}%`"></div>
+        <div class="h-2 bg-surface-dark">
+            <div class="h-full welcome-gradient transition-all duration-500" :style="\`width: \${(currentStep / totalSteps) * 100}%\`"></div>
         </div>
 
         <!-- Main Content -->
@@ -123,7 +113,7 @@
  
                     <div class="mt-10 flex justify-center">
                         <button @click="nextStep()"
-                                class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-10 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                class="btn-primary px-10 py-3 flex items-center gap-2">
                             <span>Começar Configuração</span>
                             <span class="material-symbols-outlined">arrow_forward</span>
                         </button>
@@ -134,7 +124,7 @@
                 <!-- Step 2: GitHub Authentication Explanation -->
                 <div x-show="currentStep === 2" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="text-center fade-in">
                     <div class="mb-12">
-                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gray-800 mb-6">
+                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-background-dark mb-6">
                             <span class="material-symbols-outlined text-4xl text-primary">link</span>
                         </div>
                         <h1 class="text-4xl font-black text-text-dark mb-4">Conecte com o GitHub</h1>
@@ -175,7 +165,7 @@
                 <!-- Step 3: GitHub Authentication -->
                 <div x-show="currentStep === 3" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="text-center fade-in">
                     <div class="mb-12">
-                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gray-800 mb-6">
+                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-background-dark mb-6">
                             <svg class="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                             </svg>
@@ -194,7 +184,7 @@
                             </div>
                         </div>
 
-                        <button @click="authenticateWithGitHub()" :disabled="isAuthenticating" class="bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105 mx-auto disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button @click="authenticateWithGitHub()" :disabled="isAuthenticating" class="btn-secondary py-3 px-8 flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed">
                             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                             </svg>
@@ -204,17 +194,17 @@
                         <button
                             x-show="isAuthenticating"
                             @click="isAuthenticating = false"
-                            class="mt-4 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors duration-300 text-sm font-medium"
+                            class="mt-4 btn-secondary px-4 py-2 text-sm"
                         >
                             Cancelar
                         </button>
                     </div>
 
                     <div x-show="isAuthenticated" class="space-y-6">
-                        <div class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-md mx-auto">
+                        <div class="bg-primary/20 border border-primary rounded-lg p-6 max-w-md mx-auto">
                             <div class="flex items-center gap-3 mb-4">
-                                <span class="material-symbols-outlined text-green-500">check_circle</span>
-                                <p class="text-sm text-green-400">Autenticação realizada com sucesso!</p>
+                                <span class="material-symbols-outlined text-primary">check_circle</span>
+                                <p class="text-sm text-primary">Autenticação realizada com sucesso!</p>
                             </div>
                             <div x-show="userInfo" class="text-left">
                                 <div class="flex justify-between items-start mb-4">
@@ -228,8 +218,8 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <button @click="logoutFromGitHub()" 
-                                            class="bg-red-600 hover:bg-red-500 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors duration-300 flex items-center gap-2">
+                            <button @click="logoutFromGitHub()" 
+                                    class="btn-danger text-sm py-2 px-4 flex items-center gap-2">
                                         <span class="material-symbols-outlined text-lg">logout</span>
                                         Sair
                                     </button>
@@ -246,7 +236,7 @@
                 <!-- Step 4: Node.js Detection and Setup -->
                 <div x-show="currentStep === 4" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" class="text-center fade-in">
                     <div class="mb-10">
-                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gray-800 mb-6">
+                        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-background-dark mb-6">
                             <span class="material-symbols-outlined text-4xl text-primary">cloud_download</span>
                         </div>
                         <h1 class="text-4xl font-black text-text-dark mb-4">Baixar Node.js 20 LTS</h1>
@@ -282,15 +272,15 @@
                     </div>
 
                     <template x-if="nodeDetectionResult && nodeDetectionResult.runtime && nodeDetectionResult.runtime.installed && nodeDetectionResult.runtime.isValid">
-                        <div class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-xl mx-auto mb-4 text-left">
+                        <div class="bg-primary/20 border border-primary rounded-lg p-6 max-w-xl mx-auto mb-4 text-left">
                             <div class="flex items-center gap-3 mb-3">
-                                <span class="material-symbols-outlined text-green-500 text-xl">check_circle</span>
-                                <p class="font-medium text-green-400">Node.js portátil instalado com sucesso</p>
+                                <span class="material-symbols-outlined text-primary text-xl">check_circle</span>
+                                <p class="font-medium text-primary">Node.js portátil instalado com sucesso</p>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <p class="text-xs uppercase text-muted-dark">Node.js</p>
-                                    <p class="font-mono text-lg text-text-dark" x-text="`v${nodeDetectionResult.runtime.version}`"></p>
+                                    <p class="font-mono text-lg text-text-dark" x-text="\`v\${nodeDetectionResult.runtime.version}\`"></p>
                                 </div>
                                 <div>
                                     <p class="text-xs uppercase text-muted-dark">npm</p>
@@ -305,21 +295,21 @@
                     </template>
 
                     <template x-if="nodeDetectionResult && (!nodeDetectionResult.runtime || !nodeDetectionResult.runtime.installed || !nodeDetectionResult.runtime.isValid)">
-                        <div class="bg-yellow-900/20 border border-yellow-700 rounded-lg p-6 max-w-xl mx-auto mb-4 text-left">
+                        <div class="bg-warning/20 border border-warning rounded-lg p-6 max-w-xl mx-auto mb-4 text-left">
                             <div class="flex items-center gap-3">
-                                <span class="material-symbols-outlined text-yellow-500 text-xl">info</span>
-                                <p class="font-medium text-yellow-400">Node.js ainda não foi baixado</p>
+                                <span class="material-symbols-outlined text-warning text-xl">info</span>
+                                <p class="font-medium text-warning">Node.js ainda não foi baixado</p>
                             </div>
                             <p class="text-sm text-muted-dark mt-3">Clique em "Baixar e instalar" para que o Documental cuide de tudo automaticamente.</p>
                         </div>
                     </template>
 
-                    <div x-show="nodeErrorMessage" class="bg-red-900/20 border border-red-700 rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
+                    <div x-show="nodeErrorMessage" class="bg-danger/20 border border-danger rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
                         <div class="flex items-center gap-2 mb-1">
-                            <span class="material-symbols-outlined text-red-400">error</span>
-                            <p class="text-red-200 font-medium">Erro ao verificar Node.js</p>
+                            <span class="material-symbols-outlined text-danger">error</span>
+                            <p class="text-danger font-medium">Erro ao verificar Node.js</p>
                         </div>
-                        <p class="text-sm text-red-200" x-text="nodeErrorMessage"></p>
+                        <p class="text-sm text-danger" x-text="nodeErrorMessage"></p>
                     </div>
 
                     <div x-show="installingNode" class="bg-surface-dark rounded-lg p-5 max-w-xl mx-auto mb-4 text-left">
@@ -329,27 +319,27 @@
                             </div>
                             <div>
                                 <p class="text-sm text-text-dark font-medium" x-text="nodeInstallProgress?.message || 'Baixando Node.js...' "></p>
-                                <p class="text-xs text-muted-dark" x-text="typeof nodeInstallProgress?.percent === 'number' ? `${nodeInstallProgress.percent}%` : ''"></p>
+                                <p class="text-xs text-muted-dark" x-text="typeof nodeInstallProgress?.percent === 'number' ? \`\${nodeInstallProgress.percent}%\` : ''"></p>
                             </div>
                         </div>
-                        <div class="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-                            <div class="h-full welcome-gradient transition-all duration-300" :style="`width: ${typeof nodeInstallProgress?.percent === 'number' ? nodeInstallProgress.percent : 10}%`"></div>
+                        <div class="w-full bg-surface-dark rounded-full h-2 overflow-hidden">
+                            <div class="h-full welcome-gradient transition-all duration-300" :style="\`width: \${typeof nodeInstallProgress?.percent === 'number' ? nodeInstallProgress.percent : 10}%\`"></div>
                         </div>
                     </div>
 
-                    <div x-show="nodeInstallError" class="bg-red-900/20 border border-red-700 rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
+                    <div x-show="nodeInstallError" class="bg-danger/20 border border-danger rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
 
                         <div class="flex items-center gap-2 mb-2">
-                            <span class="material-symbols-outlined text-red-400">error</span>
-                            <p class="text-red-300 font-medium">Falha ao instalar Node.js</p>
+                            <span class="material-symbols-outlined text-danger">error</span>
+                            <p class="text-danger font-medium">Falha ao instalar Node.js</p>
                         </div>
-                        <p class="text-sm text-red-200" x-text="nodeInstallError"></p>
+                        <p class="text-sm text-danger" x-text="nodeInstallError"></p>
                     </div>
 
-                    <div x-show="nodeInstallSuccess" class="bg-green-900/20 border border-green-700 rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
+                    <div x-show="nodeInstallSuccess" class="bg-primary/20 border border-primary rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
                         <div class="flex items-center gap-2">
-                            <span class="material-symbols-outlined text-green-400">task_alt</span>
-                            <p class="text-green-200 text-sm">Node.js baixado e validado com sucesso!</p>
+                            <span class="material-symbols-outlined text-primary">task_alt</span>
+                            <p class="text-primary text-sm">Node.js baixado e validado com sucesso!</p>
                         </div>
                     </div>
                 </div>
@@ -359,13 +349,13 @@
                         <!-- Step 2: GitHub Authentication Explanation -->
                         <div x-show="currentStep === 2" class="flex gap-4 justify-center w-full">
 
-                            <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                            <button @click="previousStep()" class="btn-secondary py-3 px-6">
                                 <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
                                 Voltar
                             </button>
                             
                             <button @click="nextStep()" 
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                    class="btn-primary px-8 py-3 flex items-center gap-2">
                                 <span>Entendido</span>
                                 <span class="material-symbols-outlined">arrow_forward</span>
                             </button>
@@ -373,13 +363,13 @@
 
                         <!-- Step 3: GitHub Authentication -->
                         <div x-show="currentStep === 3" class="flex gap-4 justify-center w-full">
-                            <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-300">
+                            <button @click="previousStep()" class="btn-secondary py-3 px-6">
                                 <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
                                 Voltar
                             </button>
                             
                             <button @click="nextStep()" x-show="isAuthenticated" 
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                    class="btn-primary px-8 py-3 flex items-center gap-2">
                                 <span>Continuar</span>
                                 <span class="material-symbols-outlined">arrow_forward</span>
                             </button>
@@ -387,7 +377,7 @@
 
                         <!-- Step 4: Node.js Detection -->
                         <div x-show="currentStep === 4" class="flex flex-wrap gap-4 justify-center w-full">
-                            <button @click="previousStep()" class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-300">
+                            <button @click="previousStep()" class="btn-secondary py-2 px-4">
                                 <span class="material-symbols-outlined align-middle mr-2">arrow_back</span>
                                 Voltar
                             </button>
@@ -395,20 +385,20 @@
                             <button @click="installManagedNode()" 
                                     x-show="shouldInstallRuntime()"
                                     :disabled="installingNode || isDetectingNode"
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
+                                    class="btn-primary py-2 px-6 disabled:opacity-60 disabled:cursor-not-allowed">
                                 <span class="material-symbols-outlined align-middle mr-2">download</span>
                                 <span x-text="installingNode ? 'Instalando...' : 'Baixar e instalar Node.js 20 LTS'"></span>
                             </button>
 
                             <button @click="detectNode()" 
                                     :disabled="isDetectingNode"
-                                    class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
+                                    class="btn-secondary py-2 px-6 disabled:opacity-60 disabled:cursor-not-allowed">
                                 Verificar novamente
                             </button>
 
                             <button @click="completeSetup()" 
                                     x-show="runtimePronto()"
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
+                                    class="btn-primary py-2 px-6">
                                 Finalizar Configuração
                             </button>
                         </div>
@@ -429,286 +419,288 @@
             <div class="flex gap-2">
                 <template x-for="step in totalSteps" :key="step">
                     <div class="w-3 h-3 rounded-full transition-colors duration-300" 
-                         :class="step <= currentStep ? 'bg-primary' : 'bg-gray-600'"></div>
+                         :class="step <= currentStep ? 'bg-primary' : 'bg-muted-dark'"></div>
                 </template>
             </div>
         </div>
     </div>
+  `
+}));
+Documental.initThemeAttributes();
+</script>
+<script src="script.js" defer></script>
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('welcomeWizard', () => ({
+            currentStep: 1,
+            totalSteps: 4,
+            isAuthenticating: false,
+            isAuthenticated: false,
+            userInfo: null,
+            // Node.js detection properties
+            isDetectingNode: false,
+            nodeDetectionResult: null,
+            nodeErrorMessage: null,
+            nodeInstallError: null,
+            nodeInstallSuccess: false,
+            nodeInstallProgress: null,
+            installingNode: false,
+            
+            // Setup completion tracking
+            setupCompleted: false,
 
-    <script src="./assets/js/alpine.min.js" defer></script>
-    <script src="script.js" defer></script>
-    <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('welcomeWizard', () => ({
-                currentStep: 1,
-                totalSteps: 4,
-                isAuthenticating: false,
-                isAuthenticated: false,
-                userInfo: null,
-                // Node.js detection properties
-                isDetectingNode: false,
-                nodeDetectionResult: null,
-                nodeErrorMessage: null,
-                nodeInstallError: null,
-                nodeInstallSuccess: false,
-                nodeInstallProgress: null,
-                installingNode: false,
-                
-                // Setup completion tracking
-                setupCompleted: false,
+            init() {
+                // Check if already authenticated
+                this.checkAuthenticationStatus();
 
-                init() {
-                    // Check if already authenticated
-                    this.checkAuthenticationStatus();
+                if (window.electronAPI && window.electronAPI.onNodeInstallProgress) {
+                    window.electronAPI.onNodeInstallProgress((progress) => {
+                        this.nodeInstallProgress = progress;
+                    });
+                }
+            },
 
-                    if (window.electronAPI && window.electronAPI.onNodeInstallProgress) {
-                        window.electronAPI.onNodeInstallProgress((progress) => {
-                            this.nodeInstallProgress = progress;
-                        });
-                    }
-                },
-
-                nextStep() {
-                    if (this.currentStep < this.totalSteps) {
-                        this.currentStep++;
-                        
-                        // Check Node.js installation when moving to step 4
-                        if (this.currentStep === 4) {
-                            this.detectNode();
-                        }
-                    }
-                },
-
-                previousStep() {
-                    if (this.currentStep > 1) {
-                        this.currentStep--;
-                    }
-                },
-
-                runtimePronto() {
-                    const runtime = this.nodeDetectionResult?.runtime;
-                    return !!(runtime && runtime.installed && runtime.isValid);
-                },
-
-                shouldInstallRuntime() {
-                    const runtime = this.nodeDetectionResult?.runtime;
-                    return !runtime || !runtime.installed || !runtime.isValid;
-                },
-
-                async checkAuthenticationStatus() {
-                    try {
-                        if (window.electronAPI && window.electronAPI.checkGitHubAuth) {
-                            const authStatus = await window.electronAPI.checkGitHubAuth();
-                            if (authStatus.authenticated) {
-                                this.isAuthenticated = true;
-                                this.userInfo = authStatus.userInfo;
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error checking authentication status:', error);
-                    }
-                },
-
-                async authenticateWithGitHub() {
-                    console.log('🔘 Authentication button clicked!');
-                    console.log('🔍 Checking electronAPI availability:', !!window.electronAPI);
-                    console.log('🔍 Checking authenticateWithGitHub method:', !!(window.electronAPI && window.electronAPI.authenticateWithGitHub));
+            nextStep() {
+                if (this.currentStep < this.totalSteps) {
+                    this.currentStep++;
                     
-                    this.isAuthenticating = true;
-                    try {
-                        if (window.electronAPI && window.electronAPI.authenticateWithGitHub) {
-                            console.log('📡 Calling authenticateWithGitHub API...');
-                            const result = await window.electronAPI.authenticateWithGitHub();
-                            console.log('📥 Authentication API response:', result);
+                    // Check Node.js installation when moving to step 4
+                    if (this.currentStep === 4) {
+                        this.detectNode();
+                    }
+                }
+            },
+
+            previousStep() {
+                if (this.currentStep > 1) {
+                    this.currentStep--;
+                }
+            },
+
+            runtimePronto() {
+                const runtime = this.nodeDetectionResult?.runtime;
+                return !!(runtime && runtime.installed && runtime.isValid);
+            },
+
+            shouldInstallRuntime() {
+                const runtime = this.nodeDetectionResult?.runtime;
+                return !runtime || !runtime.installed || !runtime.isValid;
+            },
+
+            async checkAuthenticationStatus() {
+                try {
+                    if (window.electronAPI && window.electronAPI.checkGitHubAuth) {
+                        const authStatus = await window.electronAPI.checkGitHubAuth();
+                        if (authStatus.authenticated) {
+                            this.isAuthenticated = true;
+                            this.userInfo = authStatus.userInfo;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking authentication status:', error);
+                }
+            },
+
+            async authenticateWithGitHub() {
+                console.log('🔘 Authentication button clicked!');
+                console.log('🔍 Checking electronAPI availability:', !!window.electronAPI);
+                console.log('🔍 Checking authenticateWithGitHub method:', !!(window.electronAPI && window.electronAPI.authenticateWithGitHub));
+                
+                this.isAuthenticating = true;
+                try {
+                    if (window.electronAPI && window.electronAPI.authenticateWithGitHub) {
+                        console.log('📡 Calling authenticateWithGitHub API...');
+                        const result = await window.electronAPI.authenticateWithGitHub();
+                        console.log('📥 Authentication API response:', result);
+                        
+                        if (result.requiresDeviceCode) {
+                            console.log('📱 Device code flow initiated:', {
+                                deviceCode: result.deviceCode,
+                                verificationUri: result.verificationUri,
+                                expiresIn: result.expiresIn,
+                                interval: result.interval
+                            });
                             
-                            if (result.requiresDeviceCode) {
-                                console.log('📱 Device code flow initiated:', {
-                                    deviceCode: result.deviceCode,
-                                    verificationUri: result.verificationUri,
-                                    expiresIn: result.expiresIn,
-                                    interval: result.interval
-                                });
-                                
-                                // Show device code to user
-                                const userCode = result.deviceCode;
-                                const verificationUri = result.verificationUri;
-                                
-                                console.log('🔔 Showing device code to user...');
-                                
-                                // Create a modal or alert with the code
-                                const proceed = confirm(
-                                    `Código de Autenticação GitHub\n\n` +
-                                    `1. Visite: ${verificationUri}\n` +
-                                    `2. Digite o código: ${userCode}\n\n` +
-                                    `Após inserir o código no GitHub, clique em OK para continuar.`
+                            // Show device code to user
+                            const userCode = result.deviceCode;
+                            const verificationUri = result.verificationUri;
+                            
+                            console.log('🔔 Showing device code to user...');
+                            
+                            // Create a modal or alert with the code
+                            const proceed = confirm(
+                                `Código de Autenticação GitHub\n\n` +
+                                `1. Visite: ${verificationUri}\n` +
+                                `2. Digite o código: ${userCode}\n\n` +
+                                `Após inserir o código no GitHub, clique em OK para continuar.`
+                            );
+                            
+                            console.log('👤 User decision:', proceed);
+                            
+                            if (proceed) {
+                                console.log('🔄 Continuing authentication polling...');
+                                // Continue polling for token
+                                const authResult = await window.electronAPI.continueGitHubAuth(
+                                    result.deviceCodeInternal, 
+                                    result.interval
                                 );
                                 
-                                console.log('👤 User decision:', proceed);
+                                console.log('📥 Continue auth response:', authResult);
                                 
-                                if (proceed) {
-                                    console.log('🔄 Continuing authentication polling...');
-                                    // Continue polling for token
-                                    const authResult = await window.electronAPI.continueGitHubAuth(
-                                        result.deviceCodeInternal, 
-                                        result.interval
-                                    );
-                                    
-                                    console.log('📥 Continue auth response:', authResult);
-                                    
-                                    if (authResult.success) {
-                                        console.log('✅ Authentication successful!');
-                                        this.isAuthenticated = true;
-                                        this.userInfo = authResult.userInfo;
-                                    } else {
-                                        console.error('❌ Authentication continuation failed:', authResult.error);
-                                        alert('Erro na autenticação: ' + authResult.error);
-                                    }
+                                if (authResult.success) {
+                                    console.log('✅ Authentication successful!');
+                                    this.isAuthenticated = true;
+                                    this.userInfo = authResult.userInfo;
                                 } else {
-                                    console.log('🚫 User cancelled authentication');
+                                    console.error('❌ Authentication continuation failed:', authResult.error);
+                                    alert('Erro na autenticação: ' + authResult.error);
                                 }
-                            } else if (result.success) {
-                                console.log('✅ Direct authentication successful!');
-                                this.isAuthenticated = true;
-                                this.userInfo = result.userInfo;
                             } else {
-                                console.error('❌ Authentication failed:', result.error);
-                                alert('Erro na autenticação: ' + result.error);
+                                console.log('🚫 User cancelled authentication');
                             }
+                        } else if (result.success) {
+                            console.log('✅ Direct authentication successful!');
+                            this.isAuthenticated = true;
+                            this.userInfo = result.userInfo;
                         } else {
-                            console.error('❌ electronAPI or authenticateWithGitHub not available');
-                            alert('Erro: API de autenticação não disponível');
+                            console.error('❌ Authentication failed:', result.error);
+                            alert('Erro na autenticação: ' + result.error);
                         }
-                    } catch (error) {
-                        console.error('💥 Authentication error:', error);
-                        console.error('🔍 Error stack:', error.stack);
-                        alert('Erro na autenticação: ' + error.message);
-                    } finally {
-                        console.log('🏁 Authentication process finished');
-                        this.isAuthenticating = false;
+                    } else {
+                        console.error('❌ electronAPI or authenticateWithGitHub not available');
+                        alert('Erro: API de autenticação não disponível');
                     }
-                },
+                } catch (error) {
+                    console.error('💥 Authentication error:', error);
+                    console.error('🔍 Error stack:', error.stack);
+                    alert('Erro na autenticação: ' + error.message);
+                } finally {
+                    console.log('🏁 Authentication process finished');
+                    this.isAuthenticating = false;
+                }
+            },
 
-                async completeSetup() {
-                    try {
-                        if (window.electronAPI && window.electronAPI.completeWelcomeSetup) {
-                            const result = await window.electronAPI.completeWelcomeSetup();
-                            
-                            if (result && result.success) {
-                                console.log('✅ Setup completed successfully, navigating to main screen');
-                                window.electronAPI.navigateTo('index.html');
-                            } else {
-                                throw new Error(result?.error || 'Falha ao marcar configuração como concluída');
-                            }
-                        } else {
-                            throw new Error('API para completar configuração não disponível');
-                        }
-                    } catch (error) {
-                        console.error('Error completing setup:', error);
-                        alert('Erro ao finalizar configuração: ' + error.message);
-                    }
-                },
-
-                /**
-                 * Logout from GitHub
-                 */
-                async logoutFromGitHub() {
-                    try {
-                        console.log('🔘 Logging out from GitHub...');
+            async completeSetup() {
+                try {
+                    if (window.electronAPI && window.electronAPI.completeWelcomeSetup) {
+                        const result = await window.electronAPI.completeWelcomeSetup();
                         
-                        if (window.electronAPI && window.electronAPI.logoutFromGitHub) {
-                            const result = await window.electronAPI.logoutFromGitHub();
-                            
-                            if (result.success) {
-                                console.log('✅ Successfully logged out from GitHub');
-                                this.isAuthenticated = false;
-                                this.userInfo = null;
-                                
-                                // Show success message briefly
-                                const successDiv = document.createElement('div');
-                                successDiv.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-                                successDiv.innerHTML = `
-                                    <div class="flex items-center gap-2">
-                                        <span class="material-symbols-outlined">check_circle</span>
-                                        <span>Desconectado do GitHub com sucesso!</span>
-                                    </div>
-                                `;
-                                document.body.appendChild(successDiv);
-                                
-                                // Remove success message after 3 seconds
-                                setTimeout(() => {
-                                    if (successDiv.parentNode) {
-                                        successDiv.parentNode.removeChild(successDiv);
-                                    }
-                                }, 3000);
-                            } else {
-                                console.error('❌ Failed to logout from GitHub:', result.error);
-                                alert('Erro ao sair do GitHub: ' + result.error);
-                            }
+                        if (result && result.success) {
+                            console.log('✅ Setup completed successfully, navigating to main screen');
+                            window.electronAPI.navigateTo('index.html');
                         } else {
-                            console.error('❌ Logout API not available');
-                            alert('Erro: API de logout não disponível');
+                            throw new Error(result?.error || 'Falha ao marcar configuração como concluída');
                         }
-                    } catch (error) {
-                        console.error('💥 Logout error:', error);
-                        alert('Erro ao sair do GitHub: ' + error.message);
+                    } else {
+                        throw new Error('API para completar configuração não disponível');
                     }
-                },
+                } catch (error) {
+                    console.error('Error completing setup:', error);
+                    alert('Erro ao finalizar configuração: ' + error.message);
+                }
+            },
 
-                // Node.js related methods
-                async detectNode() {
-                    this.isDetectingNode = true;
-                    this.nodeErrorMessage = null;
-
-                    try {
-                        if (window.electronAPI && window.electronAPI.detectNode) {
-                            const result = await window.electronAPI.detectNode();
-                            console.log('Node.js detection result:', result);
+            /**
+             * Logout from GitHub
+             */
+            async logoutFromGitHub() {
+                try {
+                    console.log('🔘 Logging out from GitHub...');
+                    
+                    if (window.electronAPI && window.electronAPI.logoutFromGitHub) {
+                        const result = await window.electronAPI.logoutFromGitHub();
+                        
+                        if (result.success) {
+                            console.log('✅ Successfully logged out from GitHub');
+                            this.isAuthenticated = false;
+                            this.userInfo = null;
                             
-                            if (result.error) {
-                                throw new Error(result.error);
-                            }
-
-                            this.nodeDetectionResult = result;
+                            // Show success message briefly
+                            const successDiv = document.createElement('div');
+                            successDiv.className = 'fixed top-4 right-4 bg-primary text-white px-6 py-3 rounded-lg shadow-lg z-50';
+                            successDiv.innerHTML = `
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-outlined">check_circle</span>
+                                    <span>Desconectado do GitHub com sucesso!</span>
+                                </div>
+                            `;
+                            document.body.appendChild(successDiv);
+                            
+                            // Remove success message after 3 seconds
+                            setTimeout(() => {
+                                if (successDiv.parentNode) {
+                                    successDiv.parentNode.removeChild(successDiv);
+                                }
+                            }, 3000);
                         } else {
-                            throw new Error('API de detecção do Node.js não disponível');
+                            console.error('❌ Failed to logout from GitHub:', result.error);
+                            alert('Erro ao sair do GitHub: ' + result.error);
                         }
-                    } catch (error) {
-                        console.error('Error detecting Node.js:', error);
-                        this.nodeErrorMessage = 'Erro na detecção do Node.js: ' + error.message;
-                        this.nodeDetectionResult = null;
-                    } finally {
-                        this.isDetectingNode = false;
+                    } else {
+                        console.error('❌ Logout API not available');
+                        alert('Erro: API de logout não disponível');
                     }
-                },
+                } catch (error) {
+                    console.error('💥 Logout error:', error);
+                    alert('Erro ao sair do GitHub: ' + error.message);
+                }
+            },
 
-                async installManagedNode() {
-                    try {
-                        if (!window.electronAPI || !window.electronAPI.installManagedNode) {
-                            throw new Error('API de instalação não disponível');
+            // Node.js related methods
+            async detectNode() {
+                this.isDetectingNode = true;
+                this.nodeErrorMessage = null;
+
+                try {
+                    if (window.electronAPI && window.electronAPI.detectNode) {
+                        const result = await window.electronAPI.detectNode();
+                        console.log('Node.js detection result:', result);
+                        
+                        if (result.error) {
+                            throw new Error(result.error);
                         }
 
-                        this.nodeInstallError = null;
-                        this.nodeInstallSuccess = false;
-                        this.installingNode = true;
-                        this.nodeInstallProgress = { stage: 'starting', percent: 5, message: 'Preparando download...' };
-
-                        const result = await window.electronAPI.installManagedNode();
-                        if (!result.success) {
-                            throw new Error(result.error || 'Falha ao instalar Node.js');
-                        }
-
-                        this.nodeInstallSuccess = true;
-                        this.nodeInstallProgress = { stage: 'completed', percent: 100, message: 'Instalação concluída' };
-                        await this.detectNode();
-                    } catch (error) {
-                        console.error('Erro instalando Node.js gerenciado:', error);
-                        this.nodeInstallError = error.message;
-                    } finally {
-                        this.installingNode = false;
+                        this.nodeDetectionResult = result;
+                    } else {
+                        throw new Error('API de detecção do Node.js não disponível');
                     }
-                },
-            }));
-        });
-    </script>
+                } catch (error) {
+                    console.error('Error detecting Node.js:', error);
+                    this.nodeErrorMessage = 'Erro na detecção do Node.js: ' + error.message;
+                    this.nodeDetectionResult = null;
+                } finally {
+                    this.isDetectingNode = false;
+                }
+            },
+
+            async installManagedNode() {
+                try {
+                    if (!window.electronAPI || !window.electronAPI.installManagedNode) {
+                        throw new Error('API de instalação não disponível');
+                    }
+
+                    this.nodeInstallError = null;
+                    this.nodeInstallSuccess = false;
+                    this.installingNode = true;
+                    this.nodeInstallProgress = { stage: 'starting', percent: 5, message: 'Preparando download...' };
+
+                    const result = await window.electronAPI.installManagedNode();
+                    if (!result.success) {
+                        throw new Error(result.error || 'Falha ao instalar Node.js');
+                    }
+
+                    this.nodeInstallSuccess = true;
+                    this.nodeInstallProgress = { stage: 'completed', percent: 100, message: 'Instalação concluída' };
+                    await this.detectNode();
+                } catch (error) {
+                    console.error('Erro instalando Node.js gerenciado:', error);
+                    this.nodeInstallError = error.message;
+                } finally {
+                    this.installingNode = false;
+                }
+            },
+        }));
+    });
+</script>
 </body>
 </html>

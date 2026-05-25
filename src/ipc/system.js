@@ -42,7 +42,7 @@ class SystemHandlers {
    * @param {Object} dependencies.windowManager - Window manager instance
    * @param {Object} [dependencies.processManager] - Process manager instance
    */
-constructor({ logger, windowManager, processManager }) {
+  constructor({ logger, windowManager, processManager }) {
     this.logger = logger;
     this.windowManager = windowManager;
     this.processManager = processManager;
@@ -70,6 +70,7 @@ constructor({ logger, windowManager, processManager }) {
         width: bounds.width,
         height: bounds.height,
         show: false,
+        backgroundColor: '#111827',
         webPreferences: {
           preload: path.resolve(__dirname, '..', '..', 'preload.js'),
           contextIsolation: true,
@@ -799,7 +800,8 @@ async verifyNodeInstallation() {
           height,
           x,
           y,
-          show: false, // Create hidden initially
+          show: false,
+          backgroundColor: '#111827',
           webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -809,7 +811,7 @@ async verifyNodeInstallation() {
         
          // Load index.html
          const indexPath = path.join(app.getAppPath(), 'renderer', 'index.html');
-        await newWindow.loadFile(indexPath);
+         await newWindow.loadFile(indexPath);
         
         // Show new window
         newWindow.show();

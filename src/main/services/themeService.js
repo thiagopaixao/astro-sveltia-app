@@ -1,0 +1,344 @@
+/**
+ * @fileoverview Theme service for resolving, validating, and loading UI themes
+ * @author Documental Team
+ * @since 1.0.0
+ *
+ * Reads THEME and THEME_MODE from .env / runtime-env.json, resolves the theme
+ * directory, validates it, reads manifest.json, builds the CSS injection chain
+ * with inheritance, and handles fallbacks.
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+function getNativeTheme() {
+  try {
+    // eslint-disable-next-line global-require
+    return require('electron').nativeTheme;
+  } catch (_err) {
+    return null;
+  }
+}
+
+/**
+ * Attempt to load runtime-env.json (mirrors github-config.js pattern).
+ * @param {Object} fsImpl - fs implementation (real or mock)
+ * @param {Object} pathImpl - path implementation (real or mock)
+ * @param {string} appRoot - Application root directory
+ * @returns {Object|null} Parsed runtime env or null
+ */
+function loadRuntimeEnv(fsImpl, pathImpl, appRoot) {
+  const candidatePaths = [
+    pathImpl.join(appRoot, 'resources', 'config', 'runtime-env.json'),
+    pathImpl.join(process.cwd(), 'resources', 'config', 'runtime-env.json')
+  ];
+
+  if (process.resourcesPath) {
+    candidatePaths.unshift(
+      pathImpl.join(process.resourcesPath, 'config', 'runtime-env.json')
+    );
+  }
+
+  for (const candidate of candidatePaths) {
+    try {
+      if (fsImpl.existsSync(candidate)) {
+        const raw = fsImpl.readFileSync(candidate, 'utf8');
+        return JSON.parse(raw);
+      }
+    } catch (_err) {
+      // Skip unreadable candidates
+    }
+  }
+
+  return null;
+}
+
+class ThemeService {
+  /**
+   * @param {Object} deps - Dependency injection container
+   * @param {Object} deps.logger - Logger instance
+   * @param {Object} [deps.fs] - fs module (injected for testing)
+   * @param {Object} [deps.path] - path module (injected for testing)
+   * @param {Function} [deps.getNativeTheme] - nativeTheme resolver (injected for testing)
+   */
+  constructor({ logger, fs: fsImpl, path: pathImpl, getNativeTheme: nativeThemeFn }) {
+    this.logger = logger;
+    this._fs = fsImpl || fs;
+    this._path = pathImpl || path;
+    this._getNativeTheme = nativeThemeFn || getNativeTheme;
+    this.themeName = null;
+    this.themeMode = null;
+    this.themeDir = null;
+    this.manifest = null;
+    this.cssFiles = [];
+    this.logoPath = null;
+    this.iconCssPath = null;
+  }
+
+  /**
+   * Initialize the theme service: read config, resolve theme, load manifest,
+   * build CSS chain.
+   * @param {string} appRoot - Application root directory
+   * @returns {void}
+   */
+  initialize(appRoot) {
+    this._appRoot = appRoot;
+
+    const themeName = this._resolveThemeName(appRoot);
+    this.logger.info(`ThemeService: resolved theme name "${themeName}"`);
+
+    const themeDir = this._path.join(appRoot, 'themes', themeName);
+
+    const validated = this._validateThemeDir(themeDir, themeName);
+    this.themeName = validated.themeName;
+    this.themeDir = validated.themeDir;
+
+    this.manifest = this._loadManifest(this.themeDir);
+    this.themeMode = this._resolveMode(this.manifest);
+    this.cssFiles = this._buildCssChain(this.themeDir, this.manifest, appRoot);
+    this._resolveAssetPaths(this.themeDir);
+
+    this.logger.info(
+      `ThemeService: initialized — theme="${this.themeName}", mode="${this.themeMode}", ` +
+      `cssFiles=${this.cssFiles.length}, logo=${!!this.logoPath}, icons=${!!this.iconCssPath}`
+    );
+  }
+
+  /**
+   * Get concatenated CSS content from all files in the chain.
+   * @returns {Promise<string>} Concatenated CSS
+   */
+  async getThemeCssContent() {
+    const contents = [];
+    for (const cssFile of this.cssFiles) {
+      try {
+        const content = this._fs.readFileSync(cssFile, 'utf8');
+        contents.push(content);
+      } catch (err) {
+        this.logger.warn(`ThemeService: failed to read CSS file "${cssFile}": ${err.message}`);
+      }
+    }
+    return contents.join('\n');
+  }
+
+  /**
+   * Get the theme logo as a data URI for CSS injection.
+   * Returns null when no theme logo.svg exists.
+   * @returns {string|null} data:image/svg+xml;base64,... URI or null
+   */
+  getLogoDataUri() {
+    if (!this.logoPath) {
+      return null;
+    }
+    try {
+      const raw = this._fs.readFileSync(this.logoPath, 'utf8');
+      return 'data:image/svg+xml;base64,' + Buffer.from(raw).toString('base64');
+    } catch (err) {
+      this.logger.warn(`ThemeService: failed to read logo "${this.logoPath}": ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
+    * Get the resolved theme name for data-theme attribute.
+    * @returns {string} Theme name
+    */
+  getThemeName() {
+    return this.themeName;
+  }
+
+  /**
+    * Get the resolved mode ('dark' or 'light').
+    * @returns {string} Resolved mode
+    */
+  getResolvedMode() {
+    return this.themeMode;
+  }
+
+  /**
+   * Get the raw THEME_MODE string before auto-resolution ('dark', 'light', or 'auto').
+   * @returns {string} Raw mode from env/runtime-env
+   */
+  getRawMode() {
+    return this._rawMode || 'auto';
+  }
+
+  _resolveThemeName(appRoot) {
+    const envTheme = (process.env.THEME || '').trim();
+    if (envTheme) {
+      return envTheme;
+    }
+
+    const runtimeEnv = loadRuntimeEnv(this._fs, this._path, appRoot);
+    const runtimeTheme = (runtimeEnv?.THEME || '').trim();
+    if (runtimeTheme) {
+      return runtimeTheme;
+    }
+
+    return 'base';
+  }
+
+  _validateThemeDir(themeDir, themeName) {
+    if (!this._fs.existsSync(themeDir)) {
+      this.logger.warn(
+        `ThemeService: theme directory "${themeDir}" not found, falling back to "base"`
+      );
+      return { themeName: 'base', themeDir: this._path.join(this._path.dirname(themeDir), 'base') };
+    }
+
+    const manifestPath = this._path.join(themeDir, 'manifest.json');
+    if (!this._fs.existsSync(manifestPath)) {
+      this.logger.warn(
+        `ThemeService: manifest.json not found in "${themeDir}", falling back to "base"`
+      );
+      return { themeName: 'base', themeDir: this._path.join(this._path.dirname(themeDir), 'base') };
+    }
+
+    return { themeName, themeDir };
+  }
+
+  _loadManifest(themeDir) {
+    const manifestPath = this._path.join(themeDir, 'manifest.json');
+    try {
+      const raw = this._fs.readFileSync(manifestPath, 'utf8');
+      return JSON.parse(raw);
+    } catch (err) {
+      this.logger.warn(
+        `ThemeService: failed to parse manifest.json: ${err.message}, using defaults`
+      );
+      return { name: 'unknown', mode: ['dark', 'light'], inherit: null };
+    }
+  }
+
+  _resolveMode(manifest) {
+    const availableModes = manifest.mode || ['dark', 'light'];
+    const requestedMode = this._resolveThemeModeEnv();
+
+    if (requestedMode === 'auto') {
+      const nt = this._getNativeTheme();
+      const osPrefersDark = nt?.shouldUseDarkColors ?? true;
+      const resolved = osPrefersDark ? 'dark' : 'light';
+      if (availableModes.includes(resolved)) {
+        return resolved;
+      }
+      this.logger.warn(
+        `ThemeService: OS prefers "${resolved}" but theme only supports [${availableModes}], using "${availableModes[0]}"`
+      );
+      return availableModes[0];
+    }
+
+    if (availableModes.includes(requestedMode)) {
+      return requestedMode;
+    }
+
+    this.logger.warn(
+      `ThemeService: requested mode "${requestedMode}" not available in [${availableModes}], using "${availableModes[0]}"`
+    );
+    return availableModes[0];
+  }
+
+  _resolveThemeModeEnv() {
+    this._appRoot = this._appRoot || null;
+
+    const envMode = (process.env.THEME_MODE || '').trim().toLowerCase();
+    if (envMode) {
+      this._rawMode = envMode;
+      return envMode;
+    }
+
+    if (this._appRoot) {
+      const runtimeEnv = loadRuntimeEnv(this._fs, this._path, this._appRoot);
+      const runtimeMode = (runtimeEnv?.THEME_MODE || '').trim().toLowerCase();
+      if (runtimeMode) {
+        this._rawMode = runtimeMode;
+        return runtimeMode;
+      }
+    }
+
+    this._rawMode = 'auto';
+    return 'auto';
+  }
+
+  startWatching(callback) {
+    if (this._rawMode !== 'auto') return;
+
+    const nt = this._getNativeTheme();
+    if (!nt || typeof nt.on !== 'function') return;
+
+    this._themeChangeHandler = () => {
+      try {
+        const osPrefersDark = nt.shouldUseDarkColors ?? true;
+        const newMode = osPrefersDark ? 'dark' : 'light';
+        const availableModes = this.manifest?.mode || ['dark', 'light'];
+        const resolved = availableModes.includes(newMode) ? newMode : availableModes[0];
+        if (resolved !== this.themeMode) {
+          this.themeMode = resolved;
+          callback(resolved);
+        }
+      } catch (err) {
+        this.logger.warn(`ThemeService: error in theme change handler: ${err.message}`);
+      }
+    };
+
+    nt.on('updated', this._themeChangeHandler);
+    this.logger.info('ThemeService: started watching OS theme changes');
+  }
+
+  stopWatching() {
+    if (!this._themeChangeHandler) return;
+
+    const nt = this._getNativeTheme();
+    if (nt && typeof nt.removeListener === 'function') {
+      nt.removeListener('updated', this._themeChangeHandler);
+    }
+    this._themeChangeHandler = null;
+    this.logger.info('ThemeService: stopped watching OS theme changes');
+  }
+
+  _buildCssChain(themeDir, manifest, appRoot) {
+    const chain = [];
+
+    if (manifest.inherit) {
+      const parentDir = this._path.join(appRoot, 'themes', manifest.inherit);
+      if (this._fs.existsSync(parentDir)) {
+        const parentManifest = this._loadManifest(parentDir);
+        const parentChain = this._buildCssChain(parentDir, parentManifest, appRoot);
+        chain.push(...parentChain);
+      } else {
+        this.logger.warn(
+          `ThemeService: parent theme "${manifest.inherit}" directory not found, skipping inheritance`
+        );
+      }
+    }
+
+    const colorsCss = this._path.join(themeDir, 'colors.css');
+    if (this._fs.existsSync(colorsCss)) {
+      chain.push(colorsCss);
+    } else {
+      this.logger.warn(`ThemeService: required colors.css not found in "${themeDir}"`);
+    }
+
+    const iconsCss = this._path.join(themeDir, 'icons.css');
+    if (this._fs.existsSync(iconsCss)) {
+      chain.push(iconsCss);
+    }
+
+    return chain;
+  }
+
+  _resolveAssetPaths(themeDir) {
+    const logoPath = this._path.join(themeDir, 'logo.svg');
+    if (this._fs.existsSync(logoPath)) {
+      this.logoPath = logoPath;
+    }
+
+    const iconCssPath = this._path.join(themeDir, 'icons.css');
+    if (this._fs.existsSync(iconCssPath)) {
+      this.iconCssPath = iconCssPath;
+    }
+  }
+}
+
+module.exports = { ThemeService };

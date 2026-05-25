@@ -22,6 +22,7 @@ const { ProjectService } = require('./src/application/ProjectService.js');
 const { FileService } = require('./src/main/services/fileService.js');
 const { MenuManager } = require('./src/main/services/menuManager.js');
 const { NodeDetectionService } = require('./src/main/services/nodeDetectionService.js');
+const { ThemeService } = require('./src/main/services/themeService.js');
 const { createIpcRegistry } = require('./src/ipc/index.js');
 
 // Initialize modular logging system
@@ -35,6 +36,7 @@ let projectService;
 let fileService;
 let menuManager;
 let nodeDetectionService;
+let themeService;
 let ipcRegistry;
 
 // Application state
@@ -56,6 +58,17 @@ async function initializeServices() {
     });
     await databaseManager.initialize();
     logger.info('✅ Database initialized');
+
+    // Initialize theme service
+    logger.info('🎨 Initializing theme service...');
+    themeService = new ThemeService({
+      logger: getLogger('ThemeService'),
+      fs: require('fs'),
+      path: require('path'),
+      getNativeTheme: () => require('electron').nativeTheme
+    });
+    themeService.initialize(app.getAppPath());
+    logger.info('✅ Theme service initialized');
 
     // Initialize window manager
     logger.info('🪟 Initializing window manager...');
@@ -112,7 +125,8 @@ async function initializeServices() {
       windowManager,
       projectService,
       fileService,
-      nodeDetectionService
+      nodeDetectionService,
+      themeService
     });
     ipcRegistry.registerIpcHandlers();
     logger.info('✅ IPC registry initialized');

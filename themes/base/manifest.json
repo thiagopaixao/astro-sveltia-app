@@ -1,0 +1,7 @@
+{
+  "name": "Documental Default",
+  "version": "1.0.0",
+  "mode": ["dark", "light"],
+  "inherit": null,
+  "description": "Default Documental theme with green primary color"
+}

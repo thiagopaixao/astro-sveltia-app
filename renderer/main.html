@@ -4,7 +4,9 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Documental</title>
 <link href="./assets/css/fonts.css" rel="stylesheet"/>
+
 <link href="./assets/css/compiled.css" rel="stylesheet"/>
+    <link href="./assets/css/theme-override.css" rel="stylesheet"/>
 <script defer src="./assets/js/alpine.min.js"></script>
 <script src="script.js" defer></script>
 <style>
@@ -16,66 +18,22 @@
         .resize-handle {
             cursor: col-resize;
             width: 4px;
-            background-color: #4a5568;
+            background-color: var(--color-gray-550);
             flex-shrink: 0;
         }
         .resize-handle:hover,
         .resize-handle-active {
-            background-color: #22c55e;
+            background-color: var(--color-primary);
         }
         .resize-handle-horizontal {
             cursor: row-resize;
             height: 4px;
-            background-color: #4a5568;
+            background-color: var(--color-gray-550);
             flex-shrink: 0;
         }
         .resize-handle-horizontal:hover,
         .resize-handle-horizontal-active {
-            background-color: #22c55e;
-        }
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #1f2937;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
-        }
-        .initial-loader {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        .initial-loader__dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 9999px;
-            background: #22c55e;
-            opacity: 0.2;
-            animation: loaderPulse 1.2s ease-in-out infinite;
-        }
-        .initial-loader__dot:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        .initial-loader__dot:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        @keyframes loaderPulse {
-            0%, 60%, 100% {
-                opacity: 0.2;
-                transform: scale(0.9);
-            }
-            30% {
-                opacity: 1;
-                transform: scale(1.1);
-            }
+            background-color: var(--color-primary);
         }
         [x-cloak] {
             display: none !important;
@@ -99,11 +57,6 @@
             -webkit-user-select: text !important;
             user-select: text !important;
         }
-        .content-loader {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
         /* Progress Bar Shimmer Animation */
         @keyframes shimmer {
             0% { transform: translateX(-100%); }
@@ -113,29 +66,9 @@
             animation: shimmer 2s infinite;
         }
     </style>
-<script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#22c55e",
-                        "background-light": "#f3f4f6",
-                        "background-dark": "#111827",
-                        "surface-light": "#ffffff",
-                        "surface-dark": "#1f2937",
-                        "text-light": "#111827",
-                        "text-dark": "#f9fafb",
-                        "muted-light": "#6b7280",
-                        "muted-dark": "#9ca3af",
-                        "accent-orange": "#ff5722",
-                    },
-                },
-            },
-        };
-    </script>
+
 </head>
-<body :class="{'resizing': isResizing || isResizingVertical}" @mousemove.window="onResize($event)" @mouseup.window="stopResize()" class="bg-background-dark text-text-dark antialiased">
+<body :class="{'resizing': isResizing || isResizingVertical}" @mousemove.window="onResize($event)" @mouseup.window="stopResize()" class="bg-background-dark text-text-dark antialiased custom-scrollbar">
 <div class="flex flex-col h-screen" x-data="{ 
     menuOpen: false, 
     activeTab: 'view', 
@@ -1755,35 +1688,36 @@ clearingCache: false,
         }
     }
 }">
-<header class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-gray-700 shrink-0">
+<header class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-border-subtle shrink-0">
 <div class="flex items-center space-x-2">
+<!-- TODO: Replace with Documental.renderLogo({ size: 'sm' }) once page uses shared components -->
 <svg class="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
 </svg>
 <h1 class="text-xl font-bold text-text-dark">Documental</h1>
 </div>
 <div class="flex items-center space-x-2 ml-4">
-<button :class="{ 'bg-gray-700 ring-2 ring-primary': activeTab === 'editor', 'hover:bg-gray-700': activeTab !== 'editor' }" @click="activeTab = 'editor'" class="p-2 rounded-full focus:outline-none">
+<button :class="{ 'bg-surface-dark ring-2 ring-primary': activeTab === 'editor', 'hover:bg-surface-dark': activeTab !== 'editor' }" @click="activeTab = 'editor'" class="p-2 rounded-full focus:outline-none">
 <span :class="{'text-primary': activeTab === 'editor', 'text-muted-dark': activeTab !== 'editor'}" class="material-icons">edit</span>
 </button>
-<button :class="{ 'bg-gray-700 ring-2 ring-primary': activeTab === 'view', 'hover:bg-gray-700': activeTab !== 'view' }" @click="activeTab = 'view'" class="p-2 rounded-full focus:outline-none">
+<button :class="{ 'bg-surface-dark ring-2 ring-primary': activeTab === 'view', 'hover:bg-surface-dark': activeTab !== 'view' }" @click="activeTab = 'view'" class="p-2 rounded-full focus:outline-none">
 <span :class="{'text-primary': activeTab === 'view', 'text-muted-dark': activeTab !== 'view'}" class="material-icons">visibility</span>
 </button>
-<button :class="{ 'bg-gray-700 ring-2 ring-primary': activeTab === 'split', 'hover:bg-gray-700': activeTab !== 'split' }" @click="activeTab = 'split'" class="p-2 rounded-full focus:outline-none">
+<button :class="{ 'bg-surface-dark ring-2 ring-primary': activeTab === 'split', 'hover:bg-surface-dark': activeTab !== 'split' }" @click="activeTab = 'split'" class="p-2 rounded-full focus:outline-none">
 <span :class="{'text-primary': activeTab === 'split', 'text-muted-dark': activeTab !== 'split'}" class="material-icons">vertical_split</span>
 </button>
 </div>
 <div class="flex-1 mx-4">
 <div class="relative flex items-center">
-<div class="flex w-full items-center bg-background-dark border border-gray-600 rounded-md transition-colors">
+<div class="flex w-full items-center bg-background-dark border border-border-default rounded-md transition-colors">
 <div class="flex items-center pl-2 pr-1 space-x-1">
-<button @click.prevent="browserGoBack()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="Voltar">
+<button @click.prevent="browserGoBack()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-dark focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="Voltar">
 <span class="material-icons text-muted-dark text-sm">arrow_back</span>
 </button>
-<button @click.prevent="browserReload()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="Recarregar">
+<button @click.prevent="browserReload()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-dark focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="Recarregar">
 <span class="material-icons text-muted-dark text-sm">refresh</span>
 </button>
-<button @click.prevent="browserGoHome()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="Página inicial">
+<button @click.prevent="browserGoHome()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-dark focus:outline-none focus:ring-2 focus:ring-primary/20" aria-label="Página inicial">
 <span class="material-icons text-muted-dark text-sm">home</span>
 </button>
 </div>
@@ -1799,10 +1733,10 @@ clearingCache: false,
 </div>
 </div>
 <div class="flex items-center space-x-2">
-<button @click="openPullModal()" class="px-4 py-2 text-sm font-semibold text-white bg-accent-orange rounded-md hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange">Atualizar</button>
-<button @click="openPushModal()" class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-md hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-primary">Publicar</button>
+<button @click="openPullModal()" class="px-4 py-2 text-sm font-semibold text-white bg-accent-orange rounded-md hover:bg-accent-orange-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange">Atualizar</button>
+<button @click="openPushModal()" class="btn-primary">Publicar</button>
 <div class="relative">
-<button @click="menuOpen = !menuOpen" class="p-2 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary">
+<button @click="menuOpen = !menuOpen" class="p-2 rounded-full hover:bg-surface-dark focus:outline-none focus:ring-2 focus:ring-primary">
 <span class="material-icons text-muted-dark">menu</span>
 </button>
 </div>
@@ -1822,11 +1756,7 @@ clearingCache: false,
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
          class="absolute inset-0 z-30 flex flex-col items-center justify-center space-y-4 bg-background-dark">
-        <div class="initial-loader">
-            <span class="initial-loader__dot"></span>
-            <span class="initial-loader__dot"></span>
-            <span class="initial-loader__dot"></span>
-        </div>
+        <div class="spinner spinner-lg"></div>
         <p class="text-xs uppercase tracking-[0.3em] text-muted-dark" x-text="clearingCache ? 'limpando cache...' : 'carregando ambiente'"></p>
     </div>
 
@@ -1839,8 +1769,8 @@ clearingCache: false,
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
          class="absolute inset-0 z-20 flex flex-col items-center justify-center space-y-4 bg-background-dark">
-        <div class="content-loader">
-            <div class="w-16 h-16 border-4 border-gray-600 border-t-primary rounded-full animate-spin"></div>
+         <div class="flex items-center justify-center">
+             <div class="spinner spinner-lg"></div>
         </div>
         <p class="text-xs uppercase tracking-[0.3em] text-muted-dark">preparando conteúdo</p>
     </div>
@@ -1871,13 +1801,13 @@ clearingCache: false,
                         <template x-if="editorScreenshot">
                             <img :src="editorScreenshot" class="w-full h-full object-cover" alt="Editor preview"/>
                         </template>
-                        <div class="absolute inset-0 bg-black bg-opacity-60"></div>
+                        <div class="absolute inset-0 bg-black/60"></div>
                     </div>
                     <div class="relative flex-1">
                         <template x-if="viewerScreenshot">
                             <img :src="viewerScreenshot" class="w-full h-full object-cover" alt="Viewer preview"/>
                         </template>
-                        <div class="absolute inset-0 bg-black bg-opacity-60"></div>
+                        <div class="absolute inset-0 bg-black/60"></div>
                     </div>
                 </div>
             </template>
@@ -1886,7 +1816,7 @@ clearingCache: false,
                     <template x-if="(activeTab === 'view' ? viewerScreenshot : editorScreenshot)">
                         <img :src="activeTab === 'view' ? viewerScreenshot : editorScreenshot" class="w-full h-full object-cover" alt="Browser preview"/>
                     </template>
-                    <div class="absolute inset-0 bg-black bg-opacity-60"></div>
+                    <div class="absolute inset-0 bg-black/60"></div>
                 </div>
             </template>
         </div>
@@ -1901,10 +1831,10 @@ clearingCache: false,
 <template x-if="consoleOpen">
 <div :style="{ height: `calc(100% - ${mainHeight}%)` }" class="flex flex-col flex-1 bg-surface-dark overflow-hidden shrink-0" x-ref="consoleContainer">
 <div @mousedown.prevent="startVerticalResize($event)" class="resize-handle-horizontal w-full" x-ref="resizeHandleHorizontal"></div>
-<div class="flex items-center justify-between p-2 border-b border-gray-700">
+<div class="flex items-center justify-between p-2 border-b border-border-subtle">
 <div class="flex items-center space-x-1 overflow-x-auto">
 <template :key="tab.id" x-for="tab in consoleTabs">
-<button :class="{'bg-gray-700 text-primary': activeConsoleTab === tab.id, 'hover:bg-gray-800': activeConsoleTab !== tab.id}" @click="activeConsoleTab = tab.id" class="px-3 py-1 text-sm rounded-md flex items-center space-x-2 shrink-0">
+<button :class="{'bg-surface-dark text-primary': activeConsoleTab === tab.id, 'hover:bg-surface-dark': activeConsoleTab !== tab.id}" @click="activeConsoleTab = tab.id" class="px-3 py-1 text-sm rounded-md flex items-center space-x-2 shrink-0">
 <span x-text="tab.name"></span>
 <span @click="closeConsoleTab(tab.id, $event)" class="material-icons text-muted-dark text-xs hover:text-text-dark" x-show="tab.type === 'terminal'">close</span>
 </button>
@@ -1912,10 +1842,10 @@ clearingCache: false,
 </div>
 <div class="flex items-center space-x-2">
 
- <button @click="addTerminalTab()" class="p-1 rounded-full hover:bg-gray-700" title="Adicionar terminal" style="display:none;">
+ <button @click="addTerminalTab()" class="p-1 rounded-full hover:bg-surface-dark" title="Adicionar terminal" style="display:none;">
  <span class="material-icons text-muted-dark text-base">add</span>
  </button>
-<button @click="consoleOpen = false" class="p-1 rounded-full hover:bg-gray-700" title="Fechar console">
+<button @click="consoleOpen = false" class="p-1 rounded-full hover:bg-surface-dark" title="Fechar console">
 <span class="material-icons text-muted-dark text-base">close</span>
 </button>
 </div>
@@ -1933,7 +1863,7 @@ clearingCache: false,
 <pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" contenteditable="true" x-text="commandOutput || '(Sem comandos executados)'"></pre>
 </div>
 <div x-show="tab.type === 'terminal'">
-<p class="text-green-400">user@documental:~$ <span class="text-gray-400">Terminal interativo (em desenvolvimento)</span></p>
+<p class="text-success">user@documental:~$ <span class="text-muted-dark">Terminal interativo (em desenvolvimento)</span></p>
 </div>
 </div>
 </template>
@@ -1941,7 +1871,7 @@ clearingCache: false,
 </div>
 </template>
 </div>
-<footer class="flex items-center justify-between h-8 px-4 bg-surface-dark border-t border-gray-700 text-xs text-muted-dark shrink-0">
+<footer class="flex items-center justify-between h-8 px-4 bg-surface-dark border-t border-border-subtle text-xs text-muted-dark shrink-0">
 <div class="flex items-center space-x-6">
 <button
   @click="branchModalOpen = true"
@@ -1987,57 +1917,57 @@ clearingCache: false,
 </div>
 </footer>
 <div @click.outside="menuOpen = false" class="absolute top-16 right-4 z-10" style="display: none;" x-show="menuOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-end="opacity-100 transform scale-100" x-transition:enter-start="opacity-0 transform scale-95" x-transition:leave="transition ease-in duration-75" x-transition:leave-end="opacity-0 transform scale-95" x-transition:leave-start="opacity-100 transform scale-100">
-<div class="w-56 bg-surface-dark rounded-md shadow-lg border border-gray-700">
+<div class="w-56 bg-surface-dark rounded-md shadow-lg border border-border-subtle">
 <nav class="p-2">
 <ul class="space-y-1">
   <li>
-    <a @click.prevent="consoleOpen = !consoleOpen; if(consoleOpen) mainHeight = 70; menuOpen = false" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="consoleOpen = !consoleOpen; if(consoleOpen) mainHeight = 70; menuOpen = false" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-dark rounded-md" href="#">
       <span class="material-icons mr-3">terminal</span>
       <span>Console</span>
     </a>
   </li>
   <li>
-    <a @click.prevent="clearCacheModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="clearCacheModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-dark rounded-md" href="#">
       <span class="material-icons mr-3">delete_sweep</span>
       <span>Limpar cache</span>
     </a>
   </li>
   <li>
-    <a @click.prevent="openNewWindow()" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="openNewWindow()" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-dark rounded-md" href="#">
       <span class="material-icons mr-3">open_in_new</span>
       <span>Nova Janela</span>
     </a>
   </li>
 
   <li>
-    <a @click.prevent="closeProject()" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="closeProject()" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-dark rounded-md" href="#">
       <span class="material-icons mr-3">folder_off</span>
       <span>Fechar Projeto</span>
     </a>
   </li>
 
-  <li class="border-t border-gray-700 my-2"></li>
+  <li class="border-t border-border-subtle my-2"></li>
   <li style="display: none;">
-    <a class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#" data-navigate="config.html">
+    <a class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-dark rounded-md" href="#" data-navigate="config.html">
       <span class="material-icons mr-3">settings</span>
       <span>Configurações</span>
     </a>
   </li>
   <li>
-    <a @click.prevent="helpModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="helpModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-dark rounded-md" href="#">
       <span class="material-icons mr-3">help_outline</span>
       <span>Ajuda</span>
     </a>
   </li>
   <li>
-    <a @click.prevent="aboutModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="aboutModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-dark rounded-md" href="#">
       <span class="material-icons mr-3">info_outline</span>
       <span>Sobre</span>
     </a>
   </li>
-  <li class="border-t border-gray-700 my-2"></li>
+  <li class="border-t border-border-subtle my-2"></li>
   <li>
-    <a @click.prevent="exitApp()" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="exitApp()" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-dark rounded-md" href="#">
       <span class="material-icons mr-3">exit_to_app</span>
       <span>Sair</span>
     </a>
@@ -2046,108 +1976,108 @@ clearingCache: false,
 </nav>
 </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="pullModalState !== 'closed'">
-  <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-show="pullModalState !== 'closed'">
+  <div class="bg-surface-dark rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
     <div x-show="pullModalState === 'confirm'">
       <h3 class="text-lg font-semibold text-white mb-2">Atualizar Projeto</h3>
-      <p class="text-gray-300 text-sm mb-4">Deseja atualizar o projeto com as alterações remotas?</p>
-      <p class="text-sm text-gray-400 mb-4" x-show="pullCurrentBranch">Branch: <span class="text-green-400 font-mono" x-text="pullCurrentBranch"></span></p>
-      <div x-show="pullIsDirty" class="mb-4 p-3 bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded">
-        <p class="text-yellow-400 text-sm font-medium mb-1">⚠️ Alterações não salvas detectadas</p>
-        <p class="text-gray-400 text-xs mb-2" x-text="`${pullDirtyFiles.length} arquivo(s) modificado(s). Um commit será feito automaticamente antes de atualizar.`"></p>
-        <label class="block text-sm text-gray-300 mb-1">Mensagem do commit <span class="text-red-400">*</span></label>
+      <p class="text-muted-dark text-sm mb-4">Deseja atualizar o projeto com as alterações remotas?</p>
+      <p class="text-sm text-muted-dark mb-4" x-show="pullCurrentBranch">Branch: <span class="text-success font-mono" x-text="pullCurrentBranch"></span></p>
+      <div x-show="pullIsDirty" class="mb-4 p-3 bg-warning/20 border border-warning rounded">
+        <p class="text-warning text-sm font-medium mb-1">⚠️ Alterações não salvas detectadas</p>
+        <p class="text-muted-dark text-xs mb-2" x-text="`${pullDirtyFiles.length} arquivo(s) modificado(s). Um commit será feito automaticamente antes de atualizar.`"></p>
+        <label class="block text-sm text-muted-dark mb-1">Mensagem do commit <span class="text-danger">*</span></label>
         <textarea x-model="pullCommitMessage"
-          class="w-full bg-gray-900 text-gray-200 text-sm rounded border border-gray-600 focus:border-green-500 focus:outline-none p-2 resize-none"
+          class="w-full bg-background-dark text-text-dark text-sm rounded border border-border-default focus:border-primary focus:outline-none p-2 resize-none"
           rows="2"
           placeholder="Ex: Atualiza conteúdo da página inicial"></textarea>
       </div>
       <div class="flex space-x-3">
-        <button @click="confirmPull()" :disabled="pullIsDirty && !pullCommitMessage.trim()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Confirmar</button>
-        <button @click="closePullModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Cancelar</button>
+        <button @click="confirmPull()" :disabled="pullIsDirty && !pullCommitMessage.trim()" class="btn-primary bg-success-dark hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed">Confirmar</button>
+        <button @click="closePullModal()" class="btn-secondary bg-muted-dark hover:bg-muted-dark">Cancelar</button>
       </div>
     </div>
-    <div x-show="pullModalState === 'progress'" class="space-y-4">
+      <div x-show="pullModalState === 'progress'" class="space-y-4">
       <h3 class="text-lg font-semibold text-white">Atualizando...</h3>
 
       <!-- Spinner (quando percentage === 0) -->
       <div x-show="progress.percentage === 0" class="flex items-center justify-center py-4">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-        <span class="ml-3 text-gray-300 text-sm">Iniciando...</span>
+        <div class="spinner spinner-md"></div>
+        <span class="ml-3 text-muted-dark text-sm">Iniciando...</span>
       </div>
 
       <!-- Barra de Progresso (quando percentage > 0) -->
       <div x-show="progress.percentage > 0" class="space-y-2">
         <div class="flex justify-between items-center text-sm">
-          <span x-text="progress.stage" class="text-gray-300"></span>
-          <span x-text="progress.percentage + '%'" class="text-blue-400 font-mono font-bold"></span>
+          <span x-text="progress.stage" class="text-muted-dark"></span>
+          <span x-text="progress.percentage + '%'" class="text-info font-mono font-bold"></span>
         </div>
 
-        <div class="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
-          <div class="bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300 relative overflow-hidden"
+        <div class="w-full bg-surface-dark rounded-full h-2 overflow-hidden">
+          <div class="welcome-gradient h-full rounded-full transition-all duration-300 relative overflow-hidden"
                :style="`width: ${progress.percentage}%`">
             <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
           </div>
         </div>
       </div>
 
-      <div x-ref="pullLogArea" class="bg-gray-900 rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
+      <div x-ref="pullLogArea" class="bg-background-dark rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-muted-dark space-y-1">
         <template x-for="(log, i) in pullLogs" :key="i">
           <div x-text="log" class="break-words whitespace-pre-wrap py-0.5"></div>
         </template>
       </div>
 
       <div class="flex justify-end">
-        <button @click="cancelPull()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors">
+        <button @click="cancelPull()" class="btn-danger rounded-md">
           Cancelar
         </button>
       </div>
     </div>
     <div x-show="pullModalState === 'result'">
       <h3 class="text-lg font-semibold text-white mb-4">Resultado</h3>
-      <div x-show="pullResult && pullResult.success" class="flex items-center text-green-400 mb-4">
+      <div x-show="pullResult && pullResult.success" class="flex items-center text-success mb-4">
         <span class="text-2xl mr-2">✅</span>
         <span class="text-sm">Atualização concluída com sucesso!</span>
       </div>
-      <div x-show="pullResult && !pullResult.success" class="flex items-center text-red-400 mb-4">
+      <div x-show="pullResult && !pullResult.success" class="flex items-center text-danger mb-4">
         <span class="text-2xl mr-2">❌</span>
         <span class="text-sm" x-text="pullResult ? (pullResult.error || 'Erro desconhecido') : 'Erro desconhecido'"></span>
       </div>
-      <button @click="closePullModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Fechar</button>
+      <button @click="closePullModal()" class="btn-secondary bg-muted-dark hover:bg-muted-dark">Fechar</button>
     </div>
   </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="pushModalState !== 'closed'">
-  <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-show="pushModalState !== 'closed'">
+  <div class="bg-surface-dark rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
     <div x-show="pushModalState === 'select'">
       <h3 class="text-lg font-semibold text-white mb-2">Publicar Alterações</h3>
-      <p class="text-gray-300 text-sm mb-4">Selecione a branch de destino para publicar.</p>
+      <p class="text-muted-dark text-sm mb-4">Selecione a branch de destino para publicar.</p>
       <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-300 mb-1">Branch remota</label>
+        <label class="block text-sm font-medium text-muted-dark mb-1">Branch remota</label>
         <div class="relative">
-          <select x-model="pushSelectedBranch" :disabled="pushBranchesLoading || pushBranches.length === 0" class="block w-full pl-3 pr-10 py-2 text-sm border border-gray-600 bg-gray-900 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50">
+          <select x-model="pushSelectedBranch" :disabled="pushBranchesLoading || pushBranches.length === 0" class="block w-full pl-3 pr-10 py-2 text-sm border border-border-default bg-background-dark text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50">
             <option value="" disabled x-show="!pushSelectedBranch">Selecione uma branch...</option>
             <template x-for="branch in pushBranches" :key="branch">
               <option :value="branch" x-text="branch"></option>
             </template>
           </select>
-          <div x-show="pushBranchesLoading" class="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75 rounded-md">
-            <div class="w-4 h-4 border-2 border-gray-600 border-t-green-400 rounded-full animate-spin"></div>
+            <div x-show="pushBranchesLoading" class="absolute inset-0 flex items-center justify-center bg-background-dark/75 rounded-md">
+            <div class="spinner spinner-sm"></div>
           </div>
         </div>
-        <p x-show="!pushBranchesLoading && pushBranches.length === 0" class="mt-1 text-xs text-red-400">Não foi possível carregar as branches remotas.</p>
+        <p x-show="!pushBranchesLoading && pushBranches.length === 0" class="mt-1 text-xs text-danger">Não foi possível carregar as branches remotas.</p>
       </div>
-      <div x-show="pushIsDirty" class="mb-4 p-3 bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded">
-        <p class="text-yellow-400 text-sm font-medium mb-1">⚠️ Alterações não salvas detectadas</p>
-        <p class="text-gray-400 text-xs mb-2" x-text="`${pushDirtyFiles.length} arquivo(s) modificado(s). Um commit será feito automaticamente antes de publicar.`"></p>
-        <label class="block text-sm text-gray-300 mb-1">Mensagem do commit <span class="text-red-400">*</span></label>
+      <div x-show="pushIsDirty" class="mb-4 p-3 bg-warning/20 border border-warning rounded">
+        <p class="text-warning text-sm font-medium mb-1">⚠️ Alterações não salvas detectadas</p>
+        <p class="text-muted-dark text-xs mb-2" x-text="`${pushDirtyFiles.length} arquivo(s) modificado(s). Um commit será feito automaticamente antes de publicar.`"></p>
+        <label class="block text-sm text-muted-dark mb-1">Mensagem do commit <span class="text-danger">*</span></label>
         <textarea x-model="pushCommitMessage"
-          class="w-full bg-gray-900 text-gray-200 text-sm rounded border border-gray-600 focus:border-green-500 focus:outline-none p-2 resize-none"
+          class="w-full bg-background-dark text-text-dark text-sm rounded border border-border-default focus:border-primary focus:outline-none p-2 resize-none"
           rows="2"
           placeholder="Ex: Atualiza conteúdo da página inicial"></textarea>
       </div>
       <div class="flex space-x-3">
-        <button @click="confirmPush()" :disabled="!pushSelectedBranch || pushBranchesLoading || (pushIsDirty && !pushCommitMessage.trim())" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-500 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">Publicar</button>
-        <button @click="closePushModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Cancelar</button>
+        <button @click="confirmPush()" :disabled="!pushSelectedBranch || pushBranchesLoading || (pushIsDirty && !pushCommitMessage.trim())" class="btn-primary bg-success-dark hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed">Publicar</button>
+        <button @click="closePushModal()" class="btn-secondary bg-muted-dark hover:bg-muted-dark">Cancelar</button>
       </div>
     </div>
     <div x-show="pushModalState === 'progress'" class="space-y-4">
@@ -2155,19 +2085,19 @@ clearingCache: false,
 
       <!-- Spinner (quando percentage === 0) -->
       <div x-show="progress.percentage === 0" class="flex items-center justify-center py-4">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-        <span class="ml-3 text-gray-300 text-sm">Iniciando...</span>
+        <div class="spinner spinner-md"></div>
+        <span class="ml-3 text-muted-dark text-sm">Iniciando...</span>
       </div>
 
       <!-- Barra de Progresso (quando percentage > 0) -->
       <div x-show="progress.percentage > 0" class="space-y-2">
         <div class="flex justify-between items-center text-sm">
-          <span x-text="progress.stage" class="text-gray-300"></span>
-          <span x-text="progress.percentage + '%'" class="text-blue-400 font-mono font-bold"></span>
+          <span x-text="progress.stage" class="text-muted-dark"></span>
+          <span x-text="progress.percentage + '%'" class="text-info font-mono font-bold"></span>
         </div>
 
-        <div class="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
-          <div class="bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300 relative overflow-hidden"
+        <div class="w-full bg-surface-dark rounded-full h-2 overflow-hidden">
+          <div class="welcome-gradient h-full rounded-full transition-all duration-300 relative overflow-hidden"
                :style="`width: ${progress.percentage}%`">
             <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
           </div>
@@ -2175,33 +2105,33 @@ clearingCache: false,
       </div>
 
       <!-- Logs -->
-      <div x-ref="pushLogArea" class="bg-gray-900 rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
+      <div x-ref="pushLogArea" class="bg-background-dark rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-muted-dark space-y-1">
         <template x-for="(log, i) in pushLogs" :key="i">
           <div x-text="log" class="break-words whitespace-pre-wrap py-0.5"></div>
         </template>
       </div>
 
       <div class="flex justify-end">
-        <button @click="cancelPush()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm transition-colors">
+        <button @click="cancelPush()" class="btn-danger rounded-md">
           Cancelar
         </button>
       </div>
     </div>
     <div x-show="pushModalState === 'result'">
       <h3 class="text-lg font-semibold text-white mb-4">Resultado</h3>
-      <div x-show="pushResult && pushResult.success" class="flex items-center text-green-400 mb-4">
+      <div x-show="pushResult && pushResult.success" class="flex items-center text-success mb-4">
         <span class="text-2xl mr-2">✅</span>
         <span class="text-sm">Publicação concluída com sucesso!</span>
       </div>
-      <div x-show="pushResult && !pushResult.success" class="flex items-center text-red-400 mb-4">
+      <div x-show="pushResult && !pushResult.success" class="flex items-center text-danger mb-4">
         <span class="text-2xl mr-2">❌</span>
         <span class="text-sm" x-text="pushResult ? (pushResult.error || 'Erro desconhecido') : 'Erro desconhecido'"></span>
       </div>
-      <button @click="closePushModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium">Fechar</button>
+      <button @click="closePushModal()" class="btn-secondary bg-muted-dark hover:bg-muted-dark">Fechar</button>
     </div>
   </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="branchModalOpen">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-show="branchModalOpen">
 <div @click.outside="branchModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
 <h3 class="text-lg font-medium text-text-dark">Gerenciar Branches</h3>
 <p class="mt-2 text-sm text-muted-dark">Selecione uma branch existente ou crie uma nova branch local.</p>
@@ -2212,7 +2142,7 @@ clearingCache: false,
 </div>
 <div>
 <label class="text-sm font-medium text-text-dark">Ação</label>
-<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="branchAction">
+<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-border-default bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="branchAction">
 <option value="change">Mudar para branch existente</option>
 <option value="create">Criar nova branch local</option>
 </select>
@@ -2220,52 +2150,52 @@ clearingCache: false,
 <div x-show="branchAction === 'change'">
 <label class="text-sm font-medium text-text-dark">Mudar para branch</label>
 <div class="mt-1 relative">
-<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch" :disabled="branchLoading">
+<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-border-default bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch" :disabled="branchLoading">
 <template x-for="branch in branches" :key="branch.name">
 <option :value="branch.name" x-text="branch.name"></option>
 </template>
 </select>
 <!-- Debug info -->
-<div x-show="branches.length === 0" class="text-red-500 text-sm mt-2">
+<div x-show="branches.length === 0" class="text-danger text-sm mt-2">
 🔍 DEBUG: No branches found. 
 <br>branches.length: <span x-text="branches.length"></span>
 <br>branchLoading: <span x-text="branchLoading"></span>
 <br>currentBranch: <span x-text="currentBranch"></span>
 </div>
-<div x-show="branches.length > 0" class="text-green-500 text-sm mt-2">
+<div x-show="branches.length > 0" class="text-success text-sm mt-2">
 ✅ DEBUG: Found <span x-text="branches.length"></span> branches
 </div>
-<div x-show="branchLoading" class="absolute inset-0 flex items-center justify-center bg-background-dark bg-opacity-75">
-<div class="w-4 h-4 border-2 border-gray-600 border-t-primary rounded-full animate-spin"></div>
+<div x-show="branchLoading" class="absolute inset-0 flex items-center justify-center bg-background-dark/75">
+<div class="spinner spinner-sm"></div>
 </div>
 </div>
 </div>
 <div x-show="branchAction === 'create'">
 <label class="block text-sm font-medium text-text-dark" for="new-branch-name">Nome da nova branch</label>
 <div class="mt-1 flex rounded-md shadow-sm">
-<span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-600 bg-gray-700 text-muted-dark text-sm" x-text="getWorkingBranchName()"></span>
-<input class="flex-1 block w-full rounded-none rounded-r-md bg-background-dark border-gray-600 focus:ring-primary focus:border-primary sm:text-sm text-text-dark" id="new-branch-name" placeholder="adicione-um-sufixo-aqui" type="text" x-model="newBranchName"/>
+<span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-border-default bg-surface-dark text-muted-dark text-sm" x-text="getWorkingBranchName()"></span>
+<input class="flex-1 block w-full rounded-none rounded-r-md bg-background-dark border-border-default focus:ring-primary focus:border-primary sm:text-sm text-text-dark" id="new-branch-name" placeholder="adicione-um-sufixo-aqui" type="text" x-model="newBranchName"/>
 </div>
 </div>
 </div>
 <div class="mt-6 flex justify-end space-x-2">
-<button @click="branchModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
-<button @click="changeBranch(); branchModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" x-show="branchAction === 'change'" :disabled="branchLoading || selectedBranch === currentBranch">Mudar Branch</button>
-<button @click="createBranch(); branchModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500" x-show="branchAction === 'create'" :disabled="branchLoading || !newBranchName.trim()">Criar Branch</button>
+<button @click="branchModalOpen = false" class="btn-secondary">Cancelar</button>
+<button @click="changeBranch(); branchModalOpen = false;" class="btn-primary" x-show="branchAction === 'change'" :disabled="branchLoading || selectedBranch === currentBranch">Mudar Branch</button>
+<button @click="createBranch(); branchModalOpen = false;" class="btn-primary" x-show="branchAction === 'create'" :disabled="branchLoading || !newBranchName.trim()">Criar Branch</button>
 </div>
 </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="clearCacheModalOpen">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-show="clearCacheModalOpen">
 <div @click.outside="clearCacheModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
 <h3 class="text-lg font-medium text-text-dark">Limpar Cache</h3>
 <p class="mt-2 text-sm text-muted-dark">Tem certeza de que deseja limpar o cache? Todos os dados de histórico, cache e cookies serão perdidos definitivamente. Esta ação não pode ser desfeita.</p>
 <div class="mt-4 flex justify-end space-x-2">
-<button @click="clearCacheModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
-<button @click="confirmClearCache()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500">Limpar</button>
+<button @click="clearCacheModalOpen = false" class="btn-secondary">Cancelar</button>
+<button @click="confirmClearCache()" class="btn-danger">Limpar</button>
 </div>
 </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="helpModalOpen">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-show="helpModalOpen">
 <div @click.outside="helpModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
 <h3 class="text-lg font-medium text-text-dark">Ajuda</h3>
 <div class="mt-2 space-y-4 text-sm text-muted-dark">
@@ -2279,13 +2209,14 @@ clearingCache: false,
 <p>Para mais informações, visite nossa <a class="text-primary hover:underline" href="#">documentação online</a>.</p>
 </div>
 <div class="mt-6 flex justify-end">
-<button @click="helpModalOpen = false" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500">Entendido</button>
+<button @click="helpModalOpen = false" class="btn-primary">Entendido</button>
 </div>
 </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="aboutModalOpen">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-show="aboutModalOpen">
 <div @click.outside="aboutModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md text-center">
 <div class="flex justify-center mb-4">
+<!-- TODO: Replace with Documental.renderLogo({ size: 'lg' }) once page uses shared components -->
 <svg class="h-12 w-12 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
 </svg>
@@ -2294,28 +2225,28 @@ clearingCache: false,
 <p class="mt-1 text-sm text-muted-dark">Versão 1.0.0 (Electron)</p>
 <p class="mt-4 text-xs text-muted-dark">© 2023 Documental. Todos os direitos reservados.</p>
 <div class="mt-6 flex justify-center">
-<button @click="aboutModalOpen = false" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-green-500">Fechar</button>
+<button @click="aboutModalOpen = false" class="btn-primary">Fechar</button>
 </div>
 </div>
 </div>
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="exitModalOpen">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-show="exitModalOpen">
 <div @click.outside="exitModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
 <h3 class="text-lg font-medium text-text-dark">Sair do Documental</h3>
 <p class="mt-2 text-sm text-muted-dark">Tem certeza de que deseja sair do aplicativo?</p>
 <div class="mt-4 flex justify-end space-x-2">
-    <button @click="cancelExit()" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
-    <button @click="confirmExit()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500">Sair</button>
+<button @click="cancelExit()" class="btn-secondary">Cancelar</button>
+<button @click="confirmExit()" class="btn-danger">Sair</button>
 </div>
 </div>
 </div>
 
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="closeProjectModalOpen">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-show="closeProjectModalOpen">
   <div @click.outside="closeProjectModalOpen = false" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md">
     <h3 class="text-lg font-medium text-text-dark">Fechar Projeto</h3>
     <p class="mt-2 text-sm text-muted-dark">Tem certeza de que deseja fechar o projeto atual? Você será redirecionado para a tela de seleção de projetos.</p>
     <div class="mt-4 flex justify-end space-x-2">
-      <button @click="cancelCloseProject()" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600">Cancelar</button>
-      <button @click="confirmCloseProject()" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-500">Fechar Projeto</button>
+<button @click="cancelCloseProject()" class="btn-secondary">Cancelar</button>
+<button @click="confirmCloseProject()" class="px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-accent-orange-hover transition-colors">Fechar Projeto</button>
     </div>
   </div>
 </div>
@@ -2323,7 +2254,7 @@ clearingCache: false,
 </div>
 
 <!-- Git Operation Progress Modal -->
-<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="gitOperationModalOpen">
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" x-show="gitOperationModalOpen">
   <div @click.outside="!gitOperationInProgress ? (gitOperationModalOpen = false) : null" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
     <!-- Header with loader -->
     <div class="flex items-center gap-3 mb-4">
@@ -2333,22 +2264,22 @@ clearingCache: false,
         <div class="w-3 h-3 bg-primary rounded-full animate-pulse" style="animation-delay: 0.4s;"></div>
       </div>
       <div x-show="gitOperationFinished && gitOperationSuccess" class="flex items-center justify-center">
-        <span class="material-symbols-outlined text-green-500 text-2xl">check_circle</span>
+        <span class="material-symbols-outlined text-success text-2xl">check_circle</span>
       </div>
       <div x-show="gitOperationFinished && !gitOperationSuccess" class="flex items-center justify-center">
-        <span class="material-symbols-outlined text-red-500 text-2xl">error</span>
+        <span class="material-symbols-outlined text-danger text-2xl">error</span>
       </div>
       <h3 class="text-lg font-medium text-text-dark" x-text="gitOperationType === 'pull' ? 'Atualizando...' : 'Publicando...'"></h3>
     </div>
     
     <!-- Steps list -->
-    <div class="bg-gray-900/50 rounded-lg p-4 space-y-2 max-h-80 overflow-y-auto">
+    <div class="bg-background-dark/50 rounded-lg p-4 space-y-2 max-h-80 overflow-y-auto">
       <template x-for="step in gitOperationSteps" :key="step.id">
         <div class="bg-surface-dark rounded-lg border text-sm" :class="{
           'border-primary': step.status === 'active',
-          'border-green-500': step.status === 'success',
-          'border-red-500': step.status === 'failure',
-          'border-gray-700': step.status === 'pending'
+          'border-success': step.status === 'success',
+          'border-danger': step.status === 'failure',
+          'border-border-subtle': step.status === 'pending'
         }">
           <div class="flex items-center justify-between p-3" :class="{ 'cursor-pointer': step.status !== 'active' && step.log }" @click="step.log ? (step.expanded = !step.expanded) : null">
             <div class="flex items-center gap-3">
@@ -2357,20 +2288,20 @@ clearingCache: false,
                   <span class="material-symbols-outlined text-primary text-xl animate-spin">autorenew</span>
                 </template>
                 <template x-if="step.status === 'success'">
-                  <span class="material-symbols-outlined text-green-500 text-xl">check_circle</span>
+                  <span class="material-symbols-outlined text-success text-xl">check_circle</span>
                 </template>
                 <template x-if="step.status === 'failure'">
-                  <span class="material-symbols-outlined text-red-500 text-xl">error</span>
+                  <span class="material-symbols-outlined text-danger text-xl">error</span>
                 </template>
                 <template x-if="step.status === 'pending'">
-                  <div class="w-4 h-4 border-2 border-gray-600 rounded-full"></div>
+                  <div class="w-4 h-4 border-2 border-border-default rounded-full"></div>
                 </template>
               </div>
               <span class="font-medium" :class="{ 
                 'text-muted-dark': step.status === 'pending', 
                 'text-text-dark font-semibold': step.status === 'success', 
                 'text-text-dark': step.status === 'active', 
-                'text-red-400': step.status === 'failure' 
+                'text-danger': step.status === 'failure' 
               }" x-text="step.title"></span>
             </div>
             <span x-show="step.log" class="material-symbols-outlined transition-transform" :class="{ 'rotate-180': step.expanded }">expand_more</span>
@@ -2378,7 +2309,7 @@ clearingCache: false,
           <!-- Expandable log -->
           <div x-cloak x-show="step.expanded" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-2">
             <div class="px-3 pb-3">
-              <div class="bg-gray-900 rounded-md p-3 max-h-40 overflow-y-auto border border-gray-700">
+              <div class="bg-background-dark rounded-md p-3 max-h-40 overflow-y-auto border border-border-subtle">
                 <pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="step.log"></pre>
               </div>
             </div>
@@ -2388,7 +2319,7 @@ clearingCache: false,
     </div>
     
     <!-- Error message -->
-    <div x-show="gitOperationError" class="mt-4 p-3 bg-red-900/50 text-red-200 rounded-md border border-red-700">
+    <div x-show="gitOperationError" class="mt-4 p-3 bg-danger/20 text-danger rounded-md border border-danger">
       <p class="text-sm font-medium" x-text="gitOperationError"></p>
     </div>
     
@@ -2397,8 +2328,8 @@ clearingCache: false,
       <button 
         x-show="gitOperationFinished"
         @click="closeGitOperationModal()"
-        :class="gitOperationSuccess ? 'bg-primary hover:bg-green-600' : 'bg-red-600 hover:bg-red-500'"
-        class="px-4 py-2 text-sm font-medium text-white rounded-md transition-colors duration-300"
+        :class="gitOperationSuccess ? 'bg-primary hover:bg-success-dark' : 'bg-danger-dark hover:bg-danger'"
+        class="btn-primary rounded-md transition-colors duration-300"
       >
         OK
       </button>
@@ -2406,4 +2337,10 @@ clearingCache: false,
   </div>
 </div>
 
+
+<script>
+  if (typeof initThemeAttributes === 'function') {
+    initThemeAttributes();
+  }
+</script>
 </body></html>

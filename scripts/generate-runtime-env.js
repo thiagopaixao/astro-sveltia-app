@@ -49,6 +49,17 @@ function main() {
     GITHUB_CLIENT_ID: clientId
   };
 
+  // Include theme configuration if set in environment
+  const theme = (process.env.THEME || '').trim();
+  if (theme) {
+    runtimeConfig.THEME = theme;
+  }
+
+  const themeMode = (process.env.THEME_MODE || '').trim();
+  if (themeMode) {
+    runtimeConfig.THEME_MODE = themeMode;
+  }
+
   const outputPath = path.join(outputDir, 'runtime-env.json');
   fs.writeFileSync(outputPath, JSON.stringify(runtimeConfig, null, 2), 'utf8');
   console.log(`✅ Runtime environment file created at ${outputPath}`);
