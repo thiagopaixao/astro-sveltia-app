@@ -1,0 +1,9 @@
+common:
+  save: Guardar
+  cancel: Cancelar
+  delete: Eliminar
+  close: Cerrar
+welcome:
+  title: Bienvenido a Documental
+  subtitle: Tu centro de documentacion
+  getStarted: Empezar

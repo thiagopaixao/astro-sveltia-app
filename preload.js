@@ -81,7 +81,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   joinPath: (...segments) => ipcRenderer.invoke('join-path', ...segments),
   normalizePath: (filePath) => ipcRenderer.invoke('normalizePath', filePath),
   getDirName: (filePath) => ipcRenderer.invoke('get-dir-name', filePath),
-  getBaseName: (filePath) => ipcRenderer.invoke('get-base-name', filePath)
+  getBaseName: (filePath) => ipcRenderer.invoke('get-base-name', filePath),
+  // i18n (internationalization) functions
+  getTranslations: (locale) => ipcRenderer.invoke('i18n:get-translations', locale),
+  getTranslationsSync: (locale) => ipcRenderer.sendSync('i18n:get-translations-sync', locale),
+  getAppLocale: () => ipcRenderer.invoke('i18n:get-locale'),
+  getAppLocaleSync: () => ipcRenderer.sendSync('i18n:get-locale-sync'),
+  setAppLocale: (locale) => ipcRenderer.invoke('i18n:set-locale', locale),
+  getAvailableLocales: () => ipcRenderer.invoke('i18n:get-available-locales'),
 });
 
 console.log('✅ electronAPI exposed to renderer successfully');

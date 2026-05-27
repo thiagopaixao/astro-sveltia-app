@@ -14,6 +14,7 @@ const { SystemHandlers } = require('./system.js');
 const { FileHandlers } = require('./file.js');
 const { ProjectCreationHandler } = require('./projectCreation.js');
 const { registerNodeDetectionHandlers } = require('./nodeDetection.js');
+const { I18nHandlers } = require('./i18n.js');
 
 /**
  * IPC Registry - Central point for registering all IPC handlers
@@ -54,6 +55,11 @@ class IpcRegistry {
       this.logger.warn('⚠️ NodeDetectionService not provided, skipping Node.js detection handlers');
     }
     
+    this.i18nHandlers = new I18nHandlers({
+      logger: this.logger,
+      db: dependencies.db
+    });
+    
     this.isRegistered = false;
   }
 
@@ -78,6 +84,7 @@ class IpcRegistry {
       this.browserHandlers.registerHandlers();
       this.fileHandlers.registerHandlers();
       this.projectCreationHandler.registerHandlers();
+      this.i18nHandlers.registerHandlers();
 
       this.isRegistered = true;
       this.logger.info('✅ All IPC handlers registered successfully');
@@ -106,6 +113,7 @@ class IpcRegistry {
     try {
       // Unregister handlers in reverse order
       this.projectCreationHandler.unregisterHandlers();
+      this.i18nHandlers.unregisterHandlers();
       this.fileHandlers.unregisterHandlers();
       this.browserHandlers.unregisterHandlers();
       this.gitHandlers.unregisterHandlers();
@@ -134,7 +142,8 @@ class IpcRegistry {
       browser: this.browserHandlers,
       system: this.systemHandlers,
       file: this.fileHandlers,
-      projectCreation: this.projectCreationHandler
+      projectCreation: this.projectCreationHandler,
+      i18n: this.i18nHandlers
     };
   }
 
@@ -152,7 +161,8 @@ class IpcRegistry {
       { name: 'Browser', handlers: this.browserHandlers },
       { name: 'File', handlers: this.fileHandlers },
       { name: 'Project Creation', handlers: this.projectCreationHandler },
-      { name: 'Node Detection', handlers: null }
+      { name: 'Node Detection', handlers: null },
+      { name: 'i18n', handlers: this.i18nHandlers }
     ];
 
     handlerCategories.forEach(category => {
@@ -190,7 +200,7 @@ class IpcRegistry {
   getHandlerStats() {
     return {
       isRegistered: this.isRegistered,
-      handlerCount: 8,
+      handlerCount: 9,
       categories: [
         'System',
         'Authentication', 
@@ -199,7 +209,8 @@ class IpcRegistry {
         'Browser',
         'File',
         'Project Creation',
-        'Node Detection'
+        'Node Detection',
+        'i18n'
       ],
       registrationTime: new Date().toISOString()
     };

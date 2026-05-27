@@ -1,13 +1,39 @@
 <!DOCTYPE html>
-<html class="dark" lang="pt-BR"><head>
+<html class="dark" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Documental - Reabrindo Espaço de Trabalho</title>
+<title x-text="__t('open.page_title')">Documental - Reopening Workspace</title>
 <link href="./assets/css/fonts.css" rel="stylesheet"/>
-
 <link href="./assets/css/compiled.css" rel="stylesheet"/>
-    <link href="./assets/css/theme-override.css" rel="stylesheet"/>
 <style>
+        .creative-loader {
+            width: 50px;
+            height: 50px;
+            position: relative;
+        }
+        .creative-loader::before, .creative-loader::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 6px solid transparent;
+            border-top-color: #22c55e;
+            animation: spin-creative 1.5s ease-in-out infinite;
+        }
+        .creative-loader::after {
+            border-top-color: #3b82f6;
+            animation-delay: 0.3s;
+            animation-direction: reverse;
+        }
+        @keyframes spin-creative {
+            0% { transform: rotate(0deg) scale(1); }
+            50% { transform: rotate(180deg) scale(0.8); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+        .creative-loader.paused::before,
+        .creative-loader.paused::after {
+            animation-play-state: paused;
+        }
         .step-icon-active {
             animation: spin 1s linear infinite;
         }
@@ -23,412 +49,416 @@
             backdrop-filter: blur(4px);
         }
     </style>
-
-<script src="./shared/layout.js"></script>
-<script src="./shared/header.js"></script>
-<script src="./shared/footer.js"></script>
-
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#22c55e",
+                        "background-light": "#f3f4f6",
+                        "background-dark": "#111827",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1f2937",
+                        "text-light": "#111827",
+                        "text-dark": "#f9fafb",
+                        "muted-light": "#6b7280",
+                        "muted-dark": "#9ca3af",
+                    },
+                },
+            },
+        };
+    </script>
+<script src="./i18n.js"></script>
 <script defer src="./assets/js/alpine.min.js"></script>
+<script src="script.js" defer></script>
 </head>
 <body class="bg-background-dark text-text-dark antialiased">
-<script>
-document.write(Documental.renderLayout({
-  content: `
-    <div class="flex flex-col h-full" x-data="openWizard">
-        <div class="flex-1 flex items-center justify-center p-8 overflow-y-auto">
-            <div class="w-full max-w-2xl">
-
-                <div class="text-center mb-8">
-                    <div class="flex items-center justify-center gap-4 mb-3">
-                        <template x-if="!allStepsSuccess">
-                            <div class="spinner spinner-md"></div>
-                        </template>
-                    </div>
-                    <h1 class="text-3xl font-bold text-text-dark">Reabrindo Espaço de Trabalho</h1>
-                    <p class="text-muted-dark text-base mt-1">Aguarde enquanto preparamos seu projeto novamente.</p>
-                </div>
-                <div class="bg-surface-dark rounded-lg p-4 space-y-2">
-                    <template :key="step.id" x-for="(step, index) in steps">
-                        <div :class="{ 'opacity-40': step.status === 'skipped' }" class="bg-background-dark/50 rounded-lg text-sm">
-                            <div :class="{'cursor-pointer': step.status !== 'active'}" @click="step.expanded = !step.expanded" class="flex items-center justify-between p-3">
-                                <div class="flex items-center gap-3">
-                                    <div class="flex items-center justify-center w-6 h-6">
-                                        <template x-if="step.status === 'active'">
-                                            <span class="material-symbols-outlined text-primary text-xl step-icon-active">autorenew</span>
-                                        </template>
-                                        <template x-if="step.status === 'success'">
-                                            <span class="material-symbols-outlined text-success text-xl">check_circle</span>
-                                        </template>
-                                        <template x-if="step.status === 'failure'">
-                                            <span class="material-symbols-outlined text-danger text-xl">error</span>
-                                        </template>
-                                        <template x-if="step.status === 'skipped'">
-                                            <span class="material-symbols-outlined text-muted-dark text-xl">skip_next</span>
-                                        </template>
-                                        <template x-if="step.status === 'pending'">
-                                            <div class="w-4 h-4 border-2 border-border-default rounded-full"></div>
-                                        </template>
-                                    </div>
-                                    <span :class="{ 
-                                        'text-muted-dark font-normal': step.status === 'skipped',
-                                        'text-muted-dark': step.status === 'pending', 
-                                        'text-text-dark font-semibold': step.status === 'success', 
-                                        'text-text-dark': step.status === 'active', 
-                                        'text-danger': step.status === 'failure' 
-                                    }" class="font-medium" x-text="step.title"></span>
-                                </div>
-                                <span :class="{ 'rotate-180': step.expanded }" class="material-symbols-outlined transition-transform">expand_more</span>
-                            </div>
-                            <div x-cloak="" x-show="step.expanded" x-transition:enter="transition ease-out duration-300" x-transition:enter-end="opacity-100 translate-y-0" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="opacity-0 -translate-y-2" x-transition:leave-start="opacity-100 translate-y-0">
-                                <div class="px-3 pb-3">
-                                    <div class="bg-background-dark rounded-md p-3 max-h-40 overflow-y-auto border border-border-subtle">
-                                        <pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="step.log"></pre>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-        </div>
-        <div class="p-4 border-t border-border-subtle bg-surface-dark mt-auto">
-            <div class="flex justify-end gap-4 max-w-2xl mx-auto">
-                <button @click="cancelProcess()" class="btn-danger px-5 py-2 font-semibold">
-                    Cancelar
-                </button>
-                <template x-if="!anyStepFailed">
-                    <button :class="{'!bg-primary !hover:bg-primary-hover': allStepsSuccess}" :disabled="!allStepsSuccess" @click="allStepsSuccess ? (sessionStorage.setItem('currentProjectId', projectId), window.electronAPI.navigateTo('main.html')) : $event.target.innerText = 'Finalizado!';" class="btn-secondary px-5 py-2 font-semibold flex items-center gap-2 disabled:bg-muted-dark disabled:cursor-not-allowed">
-                        <span x-text="allStepsSuccess ? 'Finalizar' : 'Avançar'"></span>
-                    </button>
-                </template>
-                <template x-if="anyStepFailed">
-                    <button :disabled="!processFinished" @click="retryProcess()" class="px-5 py-2 bg-info hover:bg-info text-white font-semibold rounded-md flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-                        Tentar novamente
-                    </button>
-                </template>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de confirmação para cancelar -->
-    <div id="cancel-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;">
-        <div class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
-            <div class="flex items-center gap-3 mb-4">
-                <span class="material-symbols-outlined text-warning text-2xl">warning</span>
-                <h3 class="text-lg font-medium text-text-dark">Cancela Reabertura do Projeto</h3>
-            </div>
-            <p class="text-sm text-muted-dark mb-6">O processo de reabertura está em andamento. Deseja realmente cancelar?</p>
+<div class="flex flex-col h-screen" x-data="{
+        projectId: null,
+        projectPath: '',
+        githubUrl: '',
+        repoFolderName: '',
+        activeStepId: 2,
+        processFinished: false,
+        processFailed: false,
+        processPaused: false,
+        steps: [
+            { id: 1, title: __t('open.step_clone_project'), status: 'skipped', log: __t('open.step_skipped_exists'), expanded: false },
+            { id: 2, title: __t('common.step_branch_preview'), status: 'pending', log: '', expanded: false },
+            { id: 3, title: __t('common.step_dependencies'), status: 'skipped', log: __t('open.step_skipped_deps'), expanded: false },
+            { id: 4, title: __t('common.step_build'), status: 'skipped', log: __t('open.step_skipped_build'), expanded: false },
+            { id: 5, title: __t('common.step_dev_server'), status: 'pending', log: '', expanded: false }
+        ],
+        get allStepsSuccess() {
+            return this.steps.filter(s => s.status !== 'skipped').every(s => s.status === 'success');
+        },
+        get anyStepFailed() {
+            return this.steps.some(s => s.status === 'failure');
+        },
+        init() {
+            // Watch for process pause
+            this.$watch('processPaused', (value) => {
+                if (value) {
+                    console.log('Process paused');
+                }
+            });
             
-            <div class="space-y-3">
-                <button id="confirm-delete-btn" 
-                        class="w-full btn-danger hover:bg-danger-dark">
-                    Sim e excluir projeto
-                </button>
-                <button id="confirm-return-btn" 
-                        class="w-full px-4 py-2 text-sm font-medium text-white bg-accent-orange rounded-md hover:bg-accent-orange-hover transition-colors">
-                    Sim e voltar ao início
-                </button>
-                <button id="cancel-modal-btn" 
-                        class="w-full btn-secondary">
-                    Não e continuar
-                </button>
-            </div>
-        </div>
-    </div>
-  `
-}));
-Documental.initThemeAttributes();
-</script>
-<script src="script.js" defer></script>
-<script>
-    document.addEventListener('alpine:init', () => {
-        Alpine.data('openWizard', () => ({
-            projectId: null,
-            projectPath: '',
-            githubUrl: '',
-            repoFolderName: '',
-            activeStepId: 2,
-            processFinished: false,
-            processFailed: false,
-            processPaused: false,
-            steps: [
-                { id: 1, title: 'Clonando repositório git do projeto...', status: 'skipped', log: 'Passo ignorado - projeto já existe', expanded: false },
-                { id: 2, title: 'Verificando e garantindo branch preview...', status: 'pending', log: '', expanded: false },
-                { id: 3, title: 'Instalando dependências...', status: 'skipped', log: 'Passo ignorado - dependências já instaladas', expanded: false },
-                { id: 4, title: 'Construindo o projeto...', status: 'skipped', log: 'Passo ignorado - projeto já construído', expanded: false },
-                { id: 5, title: 'Executando servidor do modo dev...', status: 'pending', log: '', expanded: false }
-            ],
-            get allStepsSuccess() {
-                return this.steps.filter(s => s.status !== 'skipped').every(s => s.status === 'success');
-            },
-            get anyStepFailed() {
-                return this.steps.some(s => s.status === 'failure');
-            },
-            init() {
-                // Watch for process pause
-                this.$watch('processPaused', (value) => {
-                    if (value) {
-                        console.log('Process paused');
-                    }
-                });
-                
-                this.projectId = sessionStorage.getItem('currentProjectId');
-                
-                if (!this.projectId) {
-                    console.error('No project ID found in session storage.');
-                    this.processFailed = true;
+            this.projectId = sessionStorage.getItem('currentProjectId');
+            
+            if (!this.projectId) {
+                console.error('No project ID found in session storage.');
+                this.processFailed = true;
+                return;
+            }
+
+            // Clear ALL old state to avoid conflicts
+            sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
+            sessionStorage.removeItem(`projectOpenState-${this.projectId}`);
+            
+            // Force fresh state - don't load any saved state
+            this.steps[1].status = 'active';
+            console.log('🔧 DEBUG: Fresh state set for open.html');
+
+            this.$watch('steps', (newSteps) => {
+                sessionStorage.setItem(`projectOpenState-${this.projectId}`, JSON.stringify({
+                    projectId: this.projectId,
+                    projectPath: this.projectPath,
+                    githubUrl: this.githubUrl,
+                    repoFolderName: this.repoFolderName,
+                    activeStepId: this.activeStepId,
+                    processFinished: this.processFinished,
+                    processFailed: this.processFailed,
+                    steps: newSteps
+                }));
+            }, { deep: true });
+
+            window.electronAPI.onCommandOutput((payload) => {
+                const normalized = typeof payload === 'object' && payload !== null
+                    ? { stepId: payload.stepId || null, message: payload.message || '' }
+                    : { stepId: null, message: payload || '' };
+                if (!normalized.message) {
                     return;
                 }
+                const targetIndex = normalized.stepId
+                    ? this.steps.findIndex(s => s.id === normalized.stepId)
+                    : this.steps.findIndex(s => s.status === 'active');
+                if (targetIndex !== -1) {
+                    this.steps[targetIndex].log += normalized.message;
+                }
+            });
 
-                // Clear ALL old state to avoid conflicts
-                sessionStorage.removeItem(`projectOpenState-${this.projectId}`);
-                sessionStorage.removeItem(`projectCreationState-${this.projectId}`);
-                
-                // Force fresh state - don't load any saved state
-                this.steps[1].status = 'active';
-                console.log('🔧 DEBUG: Fresh state set for open.html');
-
-                this.$watch('steps', (newSteps) => {
-                    sessionStorage.setItem(`projectOpenState-${this.projectId}`, JSON.stringify({
-                        projectId: this.projectId,
-                        projectPath: this.projectPath,
-                        githubUrl: this.githubUrl,
-                        repoFolderName: this.repoFolderName,
-                        activeStepId: this.activeStepId,
-                        processFinished: this.processFinished,
-                        processFailed: this.processFailed,
-                        steps: newSteps
-                    }));
-                }, { deep: true });
-
-                window.electronAPI.onCommandOutput((payload) => {
-                    const normalized = typeof payload === 'object' && payload !== null
-                        ? { stepId: payload.stepId || null, message: payload.message || '' }
-                        : { stepId: null, message: payload || '' };
-                    if (!normalized.message) {
-                        return;
-                    }
-                    const targetIndex = normalized.stepId
-                        ? this.steps.findIndex(s => s.id === normalized.stepId)
-                        : this.steps.findIndex(s => s.status === 'active');
-                    if (targetIndex !== -1) {
-                        this.steps[targetIndex].log += normalized.message;
-                    }
-                });
-
-                window.electronAPI.onCommandStatus((payload) => {
-                    const normalized = typeof payload === 'object' && payload !== null
-                        ? { stepId: payload.stepId || null, status: payload.status || '' }
-                        : { stepId: null, status: payload };
-                    console.log('🔧 DEBUG: Received status payload:', normalized);
-                    const targetIndex = normalized.stepId
-                        ? this.steps.findIndex(s => s.id === normalized.stepId)
-                        : this.steps.findIndex(s => s.status === 'active');
-                    if (targetIndex !== -1) {
-                        if (normalized.status === 'success') {
-                            this.steps[targetIndex].status = 'success';
-                            console.log('🔧 DEBUG: Step', targetIndex, 'completed successfully');
-                            
-                            // Find next non-skipped step
-                            let nextIndex = targetIndex + 1;
-                            while (nextIndex < this.steps.length && this.steps[nextIndex].status === 'skipped') {
-                                console.log('🔧 DEBUG: Skipping step', nextIndex, '(marked as skipped)');
-                                nextIndex++;
-                            }
-                            
-                            if (nextIndex < this.steps.length) {
-                                this.steps[nextIndex].status = 'active';
-                                this.activeStepId = this.steps[nextIndex].id;
-                                console.log('🔧 DEBUG: Activating step', nextIndex, 'as next step');
-                            } else {
-                                this.processFinished = true;
-                                console.log('🔧 DEBUG: Process finished - no more steps');
-                            }
-                        } else if (normalized.status === 'failure') {
-                            this.steps[targetIndex].status = 'failure';
-                            this.processFinished = true;
-                            this.processFailed = true;
-                        } else if (normalized.status === 'cancelled') {
-                            this.processFinished = true;
-                            this.processFailed = true; // Mark as failed for UI purposes
-                            this.steps[targetIndex].log += '\nProcesso cancelado pelo usuário.';
+            window.electronAPI.onCommandStatus((payload) => {
+                const normalized = typeof payload === 'object' && payload !== null
+                    ? { stepId: payload.stepId || null, status: payload.status || '' }
+                    : { stepId: null, status: payload };
+                console.log('🔧 DEBUG: Received status payload:', normalized);
+                const targetIndex = normalized.stepId
+                    ? this.steps.findIndex(s => s.id === normalized.stepId)
+                    : this.steps.findIndex(s => s.status === 'active');
+                if (targetIndex !== -1) {
+                    if (normalized.status === 'success') {
+                        this.steps[targetIndex].status = 'success';
+                        console.log('🔧 DEBUG: Step', targetIndex, 'completed successfully');
+                        
+                        // Find next non-skipped step
+                        let nextIndex = targetIndex + 1;
+                        while (nextIndex < this.steps.length && this.steps[nextIndex].status === 'skipped') {
+                            console.log('🔧 DEBUG: Skipping step', nextIndex, '(marked as skipped)');
+                            nextIndex++;
                         }
-                    }
-                    if (this.steps[this.steps.length - 1].status === 'active') {
+                        
+                        if (nextIndex < this.steps.length) {
+                            this.steps[nextIndex].status = 'active';
+                            this.activeStepId = this.steps[nextIndex].id;
+                            console.log('🔧 DEBUG: Activating step', nextIndex, 'as next step');
+                        } else {
+                            this.processFinished = true;
+                            console.log('🔧 DEBUG: Process finished - no more steps');
+                        }
+                    } else if (normalized.status === 'failure') {
+                        this.steps[targetIndex].status = 'failure';
                         this.processFinished = true;
+                        this.processFailed = true;
+                    } else if (normalized.status === 'cancelled') {
+                        this.processFinished = true;
+                        this.processFailed = true; // Mark as failed for UI purposes
+                        this.steps[targetIndex].log += '\n' + __t('common.process_cancelled');
                     }
-                });
-
-                window.electronAPI.onDevServerUrl((url) => {
-                    sessionStorage.setItem('devServerUrl', url);
-                    console.log('Dev server URL saved to session storage:', url);
-                });
-
-                window.electronAPI.onServerOutput((payload) => {
-                    const normalized = typeof payload === 'object' && payload !== null
-                        ? { stepId: payload.stepId || null, message: payload.message || '' }
-                        : { stepId: null, message: payload || '' };
-                    const currentServerOutput = sessionStorage.getItem('serverOutput') || '';
-                    sessionStorage.setItem('serverOutput', currentServerOutput + normalized.message);
-                    
-                    const targetIndex = normalized.stepId
-                        ? this.steps.findIndex(s => s.id === normalized.stepId)
-                        : this.steps.findIndex(s => s.status === 'active');
-                    if (targetIndex !== -1 && normalized.message) {
-                        this.steps[targetIndex].log += normalized.message;
-                    }
-                });
-
-                this.startOpenProcess();
-                
-                // Setup modal event listeners
-                this.setupModalListeners();
-            },
-            
-            setupModalListeners() {
-                const modal = document.getElementById('cancel-modal');
-                const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
-                const confirmReturnBtn = document.getElementById('confirm-return-btn');
-                const cancelModalBtn = document.getElementById('cancel-modal-btn');
-                
-                if (confirmDeleteBtn) {
-                    confirmDeleteBtn.addEventListener('click', () => {
-                        this.confirmCancelAndDelete();
-                    });
                 }
-                
-                if (confirmReturnBtn) {
-                    confirmReturnBtn.addEventListener('click', () => {
-                        this.confirmCancelAndReturn();
-                    });
-                }
-                
-                if (cancelModalBtn) {
-                    cancelModalBtn.addEventListener('click', () => {
-                        this.closeCancelModal();
-                    });
-                }
-                
-                // Close modal when clicking outside
-                if (modal) {
-                    modal.addEventListener('click', (e) => {
-                        if (e.target === modal) {
-                            this.closeCancelModal();
-                        }
-                    });
-                }
-            },
-            async startOpenProcess() {
-                try {
-                    console.log('🔧 DEBUG: startOpenProcess called for project:', this.projectId);
-                    const projectDetails = await window.electronAPI.getProjectDetails(this.projectId);
-                    this.projectPath = projectDetails.projectPath;
-                    this.githubUrl = projectDetails.githubUrl;
-                    this.repoFolderName = projectDetails.repoFolderName;
-
-                    // If process was not finished, restart it
-                    if (!this.processFinished) {
-                        console.log('🔧 DEBUG: Calling openProjectOnlyPreviewAndServer...');
-                        const result = await window.electronAPI.openProjectOnlyPreviewAndServer(this.projectId, this.projectPath, this.githubUrl, this.repoFolderName);
-                        console.log('🔧 DEBUG: Result from openProjectOnlyPreviewAndServer:', result);
-                    }
-                } catch (error) {
-                    console.error('Error fetching project details or starting open:', error);
-                    this.processFailed = true;
+                if (this.steps[this.steps.length - 1].status === 'active') {
                     this.processFinished = true;
-                    const activeStepIndex = this.steps.findIndex(s => s.status === 'active');
-                    if (activeStepIndex !== -1) {
-                        this.steps[activeStepIndex].log += `\nErro: ${error.message || error}`;
-                        this.steps[activeStepIndex].status = 'failure';
-                    }
                 }
-            },
-            async cancelProcess() {
-                // Pause the process and show confirmation modal
-                console.log('cancelProcess called');
-                this.processPaused = true;
+            });
+
+            window.electronAPI.onDevServerUrl((url) => {
+                sessionStorage.setItem('devServerUrl', url);
+                console.log('Dev server URL saved to session storage:', url);
+            });
+
+            window.electronAPI.onServerOutput((payload) => {
+                const normalized = typeof payload === 'object' && payload !== null
+                    ? { stepId: payload.stepId || null, message: payload.message || '' }
+                    : { stepId: null, message: payload || '' };
+                const currentServerOutput = sessionStorage.getItem('serverOutput') || '';
+                sessionStorage.setItem('serverOutput', currentServerOutput + normalized.message);
                 
-                // Show modal using vanilla JavaScript
-                const modal = document.getElementById('cancel-modal');
-                if (modal) {
-                    modal.style.display = 'flex';
-                    console.log('Modal shown');
+                const targetIndex = normalized.stepId
+                    ? this.steps.findIndex(s => s.id === normalized.stepId)
+                    : this.steps.findIndex(s => s.status === 'active');
+                if (targetIndex !== -1 && normalized.message) {
+                    this.steps[targetIndex].log += normalized.message;
                 }
-            },
+            });
+
+            this.startOpenProcess();
             
-            async confirmCancelAndDelete() {
-                try {
-                    // Cancel the process and delete project
-                    if (this.projectId && this.projectPath) {
-                        await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
-                        // Also remove from database
-                        await window.electronAPI.removeProject(this.projectId);
-                    }
-                    
-                    // Clear session storage
-                    sessionStorage.removeItem(`projectOpenState-${this.projectId}`);
-                    sessionStorage.removeItem('currentProjectId');
-                    
-                    // Navigate to index
-                    window.electronAPI.navigateTo('index.html');
-                } catch (error) {
-                    console.error('Error canceling and deleting project:', error);
-                    alert('Erro ao cancelar e excluir projeto: ' + error);
-                }
-            },
+            // Setup modal event listeners
+            this.setupModalListeners();
+        },
+        
+        setupModalListeners() {
+            const modal = document.getElementById('cancel-modal');
+            const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+            const confirmReturnBtn = document.getElementById('confirm-return-btn');
+            const cancelModalBtn = document.getElementById('cancel-modal-btn');
             
-            async confirmCancelAndReturn() {
-                try {
-                    // Just cancel the process without deleting
-                    if (this.projectId && this.projectPath) {
-                        await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
-                    }
-                    
-                    // Clear session storage
-                    sessionStorage.removeItem(`projectOpenState-${this.projectId}`);
-                    sessionStorage.removeItem('currentProjectId');
-                    
-                    // Navigate to index
-                    window.electronAPI.navigateTo('index.html');
-                } catch (error) {
-                    console.error('Error canceling project:', error);
-                    alert('Erro ao cancelar projeto: ' + error);
-                }
-            },
+            if (confirmDeleteBtn) {
+                confirmDeleteBtn.addEventListener('click', () => {
+                    this.confirmCancelAndDelete();
+                });
+            }
             
-            closeCancelModal() {
-                const modal = document.getElementById('cancel-modal');
-                if (modal) {
-                    modal.style.display = 'none';
-                }
-                this.processPaused = false;
-                // Continue the process
-            },
-            async retryProcess() {
-                this.processFinished = false;
-                this.processFailed = false;
-                
-                this.activeStepId = 2;
-                this.steps.forEach((step, index) => {
-                    if (index === 0 || index === 2 || index === 3) {
-                        step.status = 'skipped';
-                        step.log = index === 0 ? 'Passo ignorado - projeto já existe' : 
-                                  index === 2 ? 'Passo ignorado - dependências já instaladas' : 
-                                  'Passo ignorado - projeto já construído';
-                    } else if (index === 1) {
-                        step.status = 'active';
-                        step.log = '';
-                    } else if (index === 4) {
-                        step.status = 'pending';
-                        step.log = '';
+            if (confirmReturnBtn) {
+                confirmReturnBtn.addEventListener('click', () => {
+                    this.confirmCancelAndReturn();
+                });
+            }
+            
+            if (cancelModalBtn) {
+                cancelModalBtn.addEventListener('click', () => {
+                    this.closeCancelModal();
+                });
+            }
+            
+            // Close modal when clicking outside
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        this.closeCancelModal();
                     }
                 });
-                
-                sessionStorage.removeItem(`projectOpenState-${this.projectId}`);
-                await this.startOpenProcess();
             }
-        }));
-    });
-</script>
-</body>
-</html>
+        },
+        async startOpenProcess() {
+            try {
+                console.log('🔧 DEBUG: startOpenProcess called for project:', this.projectId);
+                const projectDetails = await window.electronAPI.getProjectDetails(this.projectId);
+                this.projectPath = projectDetails.projectPath;
+                this.githubUrl = projectDetails.githubUrl;
+                this.repoFolderName = projectDetails.repoFolderName;
+
+                // If process was not finished, restart it
+                if (!this.processFinished) {
+                    console.log('🔧 DEBUG: Calling openProjectOnlyPreviewAndServer...');
+                    const result = await window.electronAPI.openProjectOnlyPreviewAndServer(this.projectId, this.projectPath, this.githubUrl, this.repoFolderName);
+                    console.log('🔧 DEBUG: Result from openProjectOnlyPreviewAndServer:', result);
+                }
+            } catch (error) {
+                console.error('Error fetching project details or starting open:', error);
+                this.processFailed = true;
+                this.processFinished = true;
+                const activeStepIndex = this.steps.findIndex(s => s.status === 'active');
+                if (activeStepIndex !== -1) {
+                    this.steps[activeStepIndex].log += `\nError: ${error.message || error}`;
+                    this.steps[activeStepIndex].status = 'failure';
+                }
+            }
+        },
+        async cancelProcess() {
+            // Pause the process and show confirmation modal
+            console.log('cancelProcess called');
+            this.processPaused = true;
+            
+            // Show modal using vanilla JavaScript
+            const modal = document.getElementById('cancel-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                console.log('Modal shown');
+            }
+        },
+        
+        async confirmCancelAndDelete() {
+            try {
+                // Cancel the process and delete project
+                if (this.projectId && this.projectPath) {
+                    await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
+                    // Also remove from database
+                    await window.electronAPI.removeProject(this.projectId);
+                }
+                
+                // Clear session storage
+                sessionStorage.removeItem(`projectOpenState-${this.projectId}`);
+                sessionStorage.removeItem('currentProjectId');
+                
+                // Navigate to index
+                window.electronAPI.navigateTo('index.html');
+            } catch (error) {
+                console.error('Error canceling and deleting project:', error);
+                alert(__t('open.error_cancel_delete', { error: error }));
+            }
+        },
+        
+        async confirmCancelAndReturn() {
+            try {
+                // Just cancel the process without deleting
+                if (this.projectId && this.projectPath) {
+                    await window.electronAPI.cancelProjectCreation(this.projectId, this.projectPath, this.repoFolderName);
+                }
+                
+                // Clear session storage
+                sessionStorage.removeItem(`projectOpenState-${this.projectId}`);
+                sessionStorage.removeItem('currentProjectId');
+                
+                // Navigate to index
+                window.electronAPI.navigateTo('index.html');
+            } catch (error) {
+                console.error('Error canceling project:', error);
+                alert(__t('open.error_cancel', { error: error }));
+            }
+        },
+        
+        closeCancelModal() {
+            const modal = document.getElementById('cancel-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+            this.processPaused = false;
+            // Continue the process
+        },
+        async retryProcess() {
+            this.processFinished = false;
+            this.processFailed = false;
+            
+            this.activeStepId = 2;
+            this.steps.forEach((step, index) => {
+                if (index === 0 || index === 2 || index === 3) {
+                    step.status = 'skipped';
+                    step.log = index === 0 ? __t('open.step_skipped_exists') : 
+                              index === 2 ? __t('open.step_skipped_deps') : 
+                              __t('open.step_skipped_build');
+                } else if (index === 1) {
+                    step.status = 'active';
+                    step.log = '';
+                } else if (index === 4) {
+                    step.status = 'pending';
+                    step.log = '';
+                }
+            });
+            
+            sessionStorage.removeItem(`projectOpenState-${this.projectId}`);
+            await this.startOpenProcess();
+        }
+    }">
+<div class="flex-1 flex items-center justify-center p-8 overflow-y-auto">
+<div class="w-full max-w-2xl">
+
+<div class="text-center mb-8">
+<div class="flex items-center justify-center gap-4 mb-3">
+<template x-if="!allStepsSuccess">
+<div class="creative-loader"></div>
+</template>
+</div>
+<h1 class="text-3xl font-bold text-text-dark" x-text="__t('open.title')"></h1>
+<p class="text-muted-dark text-base mt-1">Aguarde enquanto preparamos seu projeto novamente.</p>
+</div>
+<div class="bg-surface-dark rounded-lg p-4 space-y-2">
+<template :key="step.id" x-for="(step, index) in steps">
+<div :class="{ 'opacity-40': step.status === 'skipped' }" class="bg-gray-900/50 rounded-lg text-sm">
+<div :class="{'cursor-pointer': step.status !== 'active'}" @click="step.expanded = !step.expanded" class="flex items-center justify-between p-3">
+<div class="flex items-center gap-3">
+<div class="flex items-center justify-center w-6 h-6">
+<template x-if="step.status === 'active'">
+<span class="material-symbols-outlined text-primary text-xl step-icon-active">autorenew</span>
+</template>
+<template x-if="step.status === 'success'">
+<span class="material-symbols-outlined text-green-500 text-xl">check_circle</span>
+</template>
+<template x-if="step.status === 'failure'">
+<span class="material-symbols-outlined text-red-500 text-xl">error</span>
+</template>
+<template x-if="step.status === 'skipped'">
+<span class="material-symbols-outlined text-gray-500 text-xl">skip_next</span>
+</template>
+<template x-if="step.status === 'pending'">
+<div class="w-4 h-4 border-2 border-gray-600 rounded-full"></div>
+</template>
+</div>
+<span :class="{ 
+    'text-gray-500 font-normal': step.status === 'skipped',
+    'text-muted-dark': step.status === 'pending', 
+    'text-text-dark font-semibold': step.status === 'success', 
+    'text-text-dark': step.status === 'active', 
+    'text-red-400': step.status === 'failure' 
+}" class="font-medium" x-text="step.title"></span>
+</div>
+<span :class="{ 'rotate-180': step.expanded }" class="material-symbols-outlined transition-transform">expand_more</span>
+</div>
+<div x-cloak="" x-show="step.expanded" x-transition:enter="transition ease-out duration-300" x-transition:enter-end="opacity-100 translate-y-0" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:leave="transition ease-in duration-200" x-transition:leave-end="opacity-0 -translate-y-2" x-transition:leave-start="opacity-100 translate-y-0">
+<div class="px-3 pb-3">
+<div class="bg-gray-900 rounded-md p-3 max-h-40 overflow-y-auto border border-gray-700">
+<pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="step.log"></pre>
+</div>
+</div>
+</div>
+</div>
+</template>
+</div>
+</div>
+</div>
+<div class="p-4 border-t border-gray-800 bg-surface-dark mt-auto">
+<div class="flex justify-end gap-4 max-w-2xl mx-auto">
+ <button @click="cancelProcess()" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-5 rounded-md transition-colors duration-300 text-sm">
+                    Cancelar
+                </button>
+<template x-if="!anyStepFailed">
+<button :class="{'!bg-primary !hover:bg-green-500': allStepsSuccess}" :disabled="!allStepsSuccess" @click="allStepsSuccess ? (sessionStorage.setItem('currentProjectId', projectId), window.electronAPI.navigateTo('main.html')) : $event.target.innerText = 'Finalizado!';" class="bg-gray-600 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm">
+<span x-text="allStepsSuccess ? __t('common.finish') : __t('common.advance')"></span>
+</button>
+</template>
+<template x-if="anyStepFailed">
+<button :disabled="!processFinished" @click="retryProcess()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                        Tentar novamente
+                    </button>
+</template>
+</div>
+</div>
+</div>
+
+<!-- Modal de confirmação para cancelar -->
+<div id="cancel-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;">
+    <div class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div class="flex items-center gap-3 mb-4">
+            <span class="material-symbols-outlined text-yellow-500 text-2xl">warning</span>
+            <h3 class="text-lg font-medium text-text-dark">Cancela Reabertura do Projeto</h3>
+        </div>
+        <p class="text-sm text-muted-dark mb-6" x-text="__t('open.cancel_reopen_desc')"></p>
+        
+        <div class="space-y-3">
+            <button id="confirm-delete-btn" 
+                    class="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors duration-200">
+                <span x-text="__t('open.yes_delete')"></span>
+            </button>
+            <button id="confirm-return-btn" 
+                    class="w-full px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 transition-colors duration-200">
+                <span x-text="__t('open.yes_return')"></span>
+            </button>
+            <button id="cancel-modal-btn" 
+                    class="w-full px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600 transition-colors duration-200">
+                <span x-text="__t('open.no_continue')"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+</body></html>

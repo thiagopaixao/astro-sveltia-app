@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', async () => {
+  if (window.__i18nReady) await window.__i18nReady;
   const navigateButtons = document.querySelectorAll('[data-navigate]');
   const projectPathInput = document.getElementById('project-path');
   const selectFolderButton = document.getElementById('select-folder-button');
@@ -114,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const projectPath = projectPathInput ? projectPathInput.value : '';
 
       if (!projectName || !githubUrl || !projectPath) {
-        alert('Por favor, preencha todos os campos.');
+        alert(__t('new.fill_all_fields'));
         return;
       }
 
@@ -138,7 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         sessionStorage.removeItem('folderInfo'); // Clean up
         window.electronAPI.navigateTo('create.html'); // Navigate to create page after creation
       } catch (error) {
-        alert(`Erro ao criar projeto: ${error}`);
+        alert(__t('new.error_create_project', {error}));
         console.error('Error saving project:', error);
       }
     });
@@ -159,7 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           recentProjectsContainer.innerHTML = `
             <div class="text-center text-muted-dark py-8">
               <span class="material-symbols-outlined text-4xl mb-2">folder_off</span>
-              <p>Nenhum projeto recente encontrado.</p>
+              <p>${__t('index.no_recent_projects')}</p>
             </div>
           `;
           return;
@@ -214,7 +215,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('Error loading recent projects:', error);
       recentProjectsContainer.innerHTML = `
         <div class="text-center text-red-400 py-8">
-          <p>Erro ao carregar projetos recentes.</p>
+          <p>${__t('index.error_load_recent')}</p>
         </div>
       `;
     }
@@ -227,14 +228,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.electronAPI.navigateTo('open.html');
     } catch (error) {
       console.error('Error opening recent project:', error);
-      alert('Erro ao abrir projeto: ' + error);
+      alert(__t('all_projects.error_open_project', {error}));
     }
   }
 
   // Function to remove project
   async function removeProject(projectId, projectName = null) {
     // Simple confirmation for now
-    const confirmRemoval = confirm(`Tem certeza que deseja remover o projeto "${projectName || `Projeto #${projectId}`}"? Esta ação não pode ser desfeita.`);
+    const confirmRemoval = confirm(__t('all_projects.confirm_remove', {name: projectName || __t('script.project_fallback', {id: projectId})}));
     
     if (!confirmRemoval) {
       return;
@@ -251,18 +252,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('Project removed successfully');
       } else {
         console.error('removeProject API not available');
-        alert('Erro: função de remover projeto não disponível');
+        alert(__t('all_projects.error_remove_api'));
       }
     } catch (error) {
       console.error('Error removing project:', error);
-      alert('Erro ao remover projeto: ' + error);
+      alert(__t('all_projects.error_remove', {error}));
     }
   }
 
   // Function to load all projects
   async function loadAllProjects() {
     const allProjectsContainer = document.getElementById('all-projects-container');
-    const projectsCount = document.getElementById('projects-count');
+    const projectsCountContainer = document.getElementById('projects-count-container');
     if (!allProjectsContainer) return;
 
     try {
@@ -272,15 +273,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const allProjects = await window.electronAPI.getAllProjects();
         console.log('Received projects:', allProjects);
         
-        if (projectsCount) {
-          projectsCount.textContent = allProjects.length;
+        if (projectsCountContainer) {
+          projectsCountContainer.textContent = __t('all_projects.projects_found', { count: allProjects.length });
         }
         
         if (allProjects.length === 0) {
           allProjectsContainer.innerHTML = `
             <div class="text-center text-muted-dark py-8">
               <span class="material-symbols-outlined text-4xl mb-2">folder_off</span>
-              <p>Nenhum projeto encontrado.</p>
+              <p>${__t('all_projects.no_projects')}</p>
             </div>
           `;
           return;
@@ -298,14 +299,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div>
                   <p class="font-semibold text-text-dark">${project.projectName}</p>
                   <p class="text-sm text-muted-dark">${fullPath}</p>
-                  <p class="text-xs text-muted-dark mt-1">Criado em: ${new Date(project.createdAt).toLocaleDateString('pt-BR')}</p>
+                  <p class="text-xs text-muted-dark mt-1">${__t('all_projects.created_at', {date: new Date(project.createdAt).toLocaleDateString(__t('common.date_locale'))})}</p>
                 </div>
               </div>
               <div class="flex items-center gap-2">
-                <button class="p-2 rounded-full hover:bg-gray-700 open-project" data-project-id="${project.id}" title="Abrir projeto">
+                <button class="p-2 rounded-full hover:bg-gray-700 open-project" data-project-id="${project.id}" title="${__t('all_projects.open_project')}">
                   <span class="material-symbols-outlined text-primary text-xl">folder_open</span>
                 </button>
-                <button class="p-2 rounded-full hover:bg-gray-700 remove-project" data-project-id="${project.id}" title="Remover projeto">
+                <button class="p-2 rounded-full hover:bg-gray-700 remove-project" data-project-id="${project.id}" title="${__t('all_projects.remove_project')}">
                   <span class="material-symbols-outlined text-red-400 text-xl">delete</span>
                 </button>
               </div>
@@ -347,7 +348,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Electron API for getAllProjects missing.');
         allProjectsContainer.innerHTML = `
           <div class="text-center text-red-400 py-8">
-            <p>API getAllProjects não encontrada.</p>
+            <p>${__t('all_projects.api_not_found')}</p>
           </div>
         `;
       }
@@ -355,7 +356,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('Error loading all projects:', error);
       allProjectsContainer.innerHTML = `
         <div class="text-center text-red-400 py-8">
-          <p>Erro ao carregar projetos: ${error.message || error}</p>
+          <p>${__t('all_projects.error_load_all', {error: error.message || error})}</p>
         </div>
       `;
     }
@@ -381,7 +382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } catch (error) {
       console.error('Error checking folder:', error);
-      alert('Erro ao verificar pasta: ' + error);
+      alert(__t('script.error_check_folder', {error}));
     }
   }
 
@@ -392,23 +393,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     folderModal.dataset.selectedPath = folderPath;
     
-    let infoHTML = `<p><strong>Caminho:</strong> ${folderPath}</p>`;
+    let infoHTML = `<p><strong>${__t('script.folder_path_label')}</strong> ${folderPath}</p>`;
     
     if (folderInfo) {
       if (folderInfo.isEmpty) {
-        infoHTML += `<p><strong>Status:</strong> Pasta vazia</p>`;
-        infoHTML += `<p><strong>Ação:</strong> O repositório será clonado diretamente nesta pasta</p>`;
+        infoHTML += `<p><strong>${__t('script.status_label')}</strong> ${__t('script.status_empty')}</p>`;
+        infoHTML += `<p><strong>${__t('script.action_label')}</strong> ${__t('script.action_clone')}</p>`;
       } else if (folderInfo.isGitRepo) {
-        infoHTML += `<p><strong>Status:</strong> Repositório Git válido</p>`;
+        infoHTML += `<p><strong>${__t('script.status_label')}</strong> ${__t('script.status_git')}</p>`;
         if (folderInfo.remoteUrl) {
-          infoHTML += `<p><strong>URL Remota:</strong> ${folderInfo.remoteUrl}</p>`;
+          infoHTML += `<p><strong>${__t('script.remote_url')}</strong> ${folderInfo.remoteUrl}</p>`;
         }
-        infoHTML += `<p><strong>Ação:</strong> Usará repositório existente (clone ignorado)</p>`;
+        infoHTML += `<p><strong>${__t('script.action_label')}</strong> ${__t('script.action_existing')}</p>`;
       } else {
-        infoHTML += `<p><strong>Status:</strong> Pasta com arquivos (não é um repositório Git)</p>`;
-        infoHTML += `<p><strong>Ação:</strong> Criará subpasta para o novo projeto</p>`;
+        infoHTML += `<p><strong>${__t('script.status_label')}</strong> ${__t('script.status_files')}</p>`;
+        infoHTML += `<p><strong>${__t('script.action_label')}</strong> ${__t('script.action_subfolder')}</p>`;
       }
-      infoHTML += `<p><strong>Conteúdo:</strong> ${folderInfo.fileCount || 0} arquivos/pastas</p>`;
+      infoHTML += `<p><strong>${__t('script.content_label')}</strong> ${__t('script.content_count', {count: folderInfo.fileCount || 0})}</p>`;
     }
     
     folderInfoDiv.innerHTML = infoHTML;

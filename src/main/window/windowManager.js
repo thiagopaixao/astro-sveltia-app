@@ -70,7 +70,6 @@ class WindowManager {
       width: windowConfig.width || this.config.windowConfig.width,
       height: windowConfig.height || this.config.windowConfig.height,
       show: false,
-      backgroundColor: '#111827',
       resizable: windowConfig.resizable !== false,
       maximizable: windowConfig.maximizable !== false,
       minimizable: windowConfig.minimizable !== false,
@@ -112,8 +111,7 @@ class WindowManager {
     this.mainWindow = new BrowserWindow({
       width: this.config.windowConfig.width,
       height: this.config.windowConfig.height,
-      show: false,
-      backgroundColor: '#111827',
+      show: this.config.windowConfig.show,
       webPreferences: this.config.windowConfig.webPreferences
     });
 
@@ -122,19 +120,19 @@ class WindowManager {
       this.mainWindow.maximize();
     }
 
+    // Show window
+    this.mainWindow.show();
+
     // Load appropriate content based on first-time user status
     const isFirstTime = await this.checkFirstTimeUser();
     
     if (isFirstTime) {
       this.logger.info('👋 First time user detected - showing welcome screen');
-      await this.mainWindow.loadFile(path.join(this.config.basePath, 'renderer', 'welcome.html'));
+      this.mainWindow.loadFile(path.join(this.config.basePath, 'renderer', 'language.html'));
     } else {
       this.logger.info('🏠 Returning user detected - showing main screen');
-      await this.mainWindow.loadFile(path.join(this.config.basePath, 'renderer', 'index.html'));
+      this.mainWindow.loadFile(path.join(this.config.basePath, 'renderer', 'index.html'));
     }
-
-    // Show window after content + theme are loaded
-    this.mainWindow.show();
 
     // Hide menu bar
     Menu.setApplicationMenu(null);

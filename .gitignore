@@ -32,6 +32,4 @@ documental-processes.json
 .sisyphus
 .serena
 .omo
-
-# Theme build artifact
-renderer/assets/css/theme-override.css
+EOF

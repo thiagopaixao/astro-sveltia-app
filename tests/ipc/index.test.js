@@ -6,7 +6,6 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock electron at the top level
 vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn(),
@@ -35,7 +34,8 @@ describe('IpcRegistry Unit Tests', () => {
       },
       windowManager: {
         getMainWindow: vi.fn()
-      }
+      },
+      db: {}
     };
   });
 
@@ -129,12 +129,12 @@ describe('IpcRegistry Unit Tests', () => {
       expect(handlers.git).toBeDefined();
       expect(handlers.browser).toBeDefined();
       expect(handlers.system).toBeDefined();
+      expect(handlers.i18n).toBeDefined();
     });
 
     it('should validate handler instances have required methods', () => {
       const handlers = ipcRegistry.getHandlers();
       
-      // Check that each handler has register/unregister methods
       Object.values(handlers).forEach(handler => {
         expect(handler).toBeDefined();
         expect(typeof handler.registerHandlers).toBe('function');
@@ -153,17 +153,14 @@ describe('IpcRegistry Unit Tests', () => {
 
     it('should validate registerIpcHandlers method exists and is callable', () => {
       expect(typeof ipcRegistry.registerIpcHandlers).toBe('function');
-      // We don't call it to avoid ipcMain dependency issues
     });
 
     it('should validate unregisterIpcHandlers method exists and is callable', () => {
       expect(typeof ipcRegistry.unregisterIpcHandlers).toBe('function');
-      // We don't call it to avoid ipcMain dependency issues
     });
 
     it('should validate reregisterIpcHandlers method exists and is callable', () => {
       expect(typeof ipcRegistry.reregisterIpcHandlers).toBe('function');
-      // We don't call it to avoid ipcMain dependency issues
     });
   });
 
@@ -176,7 +173,6 @@ describe('IpcRegistry Unit Tests', () => {
     });
 
     it('should validate error handling structure exists', () => {
-      // Test that error handling methods exist
       expect(typeof ipcRegistry.registerIpcHandlers).toBe('function');
       expect(typeof ipcRegistry.unregisterIpcHandlers).toBe('function');
       expect(mockLogger.error).toBeDefined();
@@ -186,7 +182,6 @@ describe('IpcRegistry Unit Tests', () => {
     it('should handle invalid dependencies gracefully', async () => {
       const { IpcRegistry } = await import('../../src/ipc/index.js');
       
-      // Test with missing logger - should throw when trying to use it
       expect(() => {
         const registry = new IpcRegistry({ logger: undefined });
         registry.logger.info('test');

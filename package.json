@@ -79,6 +79,7 @@
     "has-proto": "^1.0.3",
     "has-symbols": "^1.0.3",
     "isomorphic-git": "^1.34.0",
+    "js-yaml": "^4.1.1",
     "keytar": "^7.9.0",
     "rimraf": "^6.1.0",
     "sqlite3": "^5.1.7",

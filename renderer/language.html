@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Documental - Choose Language</title>
+    <link href="./assets/css/fonts.css" rel="stylesheet"/>
+    <link href="./assets/css/compiled.css" rel="stylesheet"/>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* Subtle animated gradient background */
+        .bg-scene {
+            background:
+                radial-gradient(ellipse 80% 60% at 50% 45%, rgba(34, 197, 94, 0.06) 0%, transparent 70%),
+                radial-gradient(ellipse 50% 40% at 20% 80%, rgba(34, 197, 94, 0.03) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 20%, rgba(34, 197, 94, 0.03) 0%, transparent 60%),
+                #111827;
+        }
+
+        /* Entrance animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+            50%      { box-shadow: 0 0 20px 2px rgba(34, 197, 94, 0.12); }
+        }
+
+        .anim-logo {
+            animation: fadeIn 0.6s ease-out both;
+        }
+
+        .anim-heading {
+            animation: fadeInUp 0.5s ease-out 0.15s both;
+        }
+
+        .anim-subtitle {
+            animation: fadeInUp 0.5s ease-out 0.3s both;
+        }
+
+        .anim-card-1 {
+            animation: fadeInUp 0.5s ease-out 0.45s both;
+        }
+
+        .anim-card-2 {
+            animation: fadeInUp 0.5s ease-out 0.55s both;
+        }
+
+        .anim-card-3 {
+            animation: fadeInUp 0.5s ease-out 0.65s both;
+        }
+
+        .anim-footer {
+            animation: fadeIn 0.5s ease-out 0.8s both;
+        }
+
+        /* Language card */
+        .lang-card {
+            position: relative;
+            width: 210px;
+            padding: 2rem 1.5rem;
+            border-radius: 16px;
+            background: #1f2937;
+            border: 1.5px solid #374151;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            text-align: center;
+        }
+
+        .lang-card:hover {
+            transform: translateY(-6px) scale(1.04);
+            border-color: #22c55e;
+            box-shadow:
+                0 0 0 1px rgba(34, 197, 94, 0.25),
+                0 8px 32px -4px rgba(34, 197, 94, 0.18),
+                0 4px 16px -2px rgba(0, 0, 0, 0.4);
+        }
+
+        .lang-card:active {
+            transform: translateY(-2px) scale(1.01);
+            transition-duration: 0.08s;
+        }
+
+        .lang-card:focus-visible {
+            outline: 2px solid #22c55e;
+            outline-offset: 3px;
+        }
+
+        /* Flag container */
+        .flag-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.25rem;
+            border-radius: 50%;
+            font-size: 44px;
+            line-height: 1;
+            transition: transform 0.25s ease;
+        }
+
+        .lang-card:hover .flag-icon {
+            transform: scale(1.1);
+        }
+
+        /* Flag background circles — subtle tinted */
+        .flag-bg-en {
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, transparent 70%);
+        }
+
+        .flag-bg-pt {
+            background: radial-gradient(circle, rgba(34, 197, 94, 0.12) 0%, transparent 70%);
+        }
+
+        .flag-bg-es {
+            background: radial-gradient(circle, rgba(234, 179, 8, 0.12) 0%, transparent 70%);
+        }
+
+        /* Decorative dot grid */
+        .dot-grid {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+            opacity: 0.35;
+        }
+
+        .dot-grid::before {
+            content: '';
+            position: absolute;
+            top: -60%;
+            right: -30%;
+            width: 400px;
+            height: 400px;
+            background-image: radial-gradient(circle, #374151 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .dot-grid::after {
+            content: '';
+            position: absolute;
+            bottom: -40%;
+            left: -20%;
+            width: 300px;
+            height: 300px;
+            background-image: radial-gradient(circle, #374151 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* Logo icon */
+        .logo-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            box-shadow: 0 4px 16px rgba(34, 197, 94, 0.25);
+        }
+
+        .logo-icon svg {
+            width: 28px;
+            height: 28px;
+            color: white;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#22c55e",
+                        "background-light": "#f3f4f6",
+                        "background-dark": "#111827",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1f2937",
+                        "text-light": "#111827",
+                        "text-dark": "#f9fafb",
+                        "muted-light": "#6b7280",
+                        "muted-dark": "#9ca3af",
+                    },
+                },
+            },
+        };
+    </script>
+</head>
+<body class="bg-background-dark text-text-dark antialiased">
+    <div class="bg-scene min-h-screen flex flex-col items-center justify-center relative">
+        <!-- Decorative dot grid -->
+        <div class="dot-grid"></div>
+
+        <!-- Content -->
+        <div class="relative z-10 flex flex-col items-center px-6">
+            <!-- Logo -->
+            <div class="anim-logo mb-6">
+                <div class="logo-icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- App title -->
+            <h1 class="anim-heading text-3xl font-black tracking-tight text-text-dark mb-2">
+                Documental
+            </h1>
+
+            <!-- Heading -->
+            <p class="anim-heading text-lg text-text-dark font-semibold mb-1">
+                Choose your language
+            </p>
+            <p class="anim-subtitle text-sm text-muted-dark mb-10">
+                Escolha seu idioma &nbsp;&middot;&nbsp; Elige tu idioma
+            </p>
+
+            <!-- Language Cards -->
+            <div class="flex flex-row items-center gap-6">
+
+                <!-- English -->
+                <div class="lang-card anim-card-1"
+                     tabindex="0"
+                     role="button"
+                     aria-label="Select English"
+                     onclick="selectLanguage('en')"
+                     onkeydown="if(event.key==='Enter')selectLanguage('en')">
+                    <div class="flag-icon flag-bg-en">
+                        <span aria-hidden="true">&#x1F1FA;&#x1F1F8;</span>
+                    </div>
+                    <div class="text-lg font-bold text-text-dark mb-1">English</div>
+                    <div class="text-sm text-muted-dark">Welcome</div>
+                </div>
+
+                <!-- Português -->
+                <div class="lang-card anim-card-2"
+                     tabindex="0"
+                     role="button"
+                     aria-label="Selecionar Português"
+                     onclick="selectLanguage('pt-BR')"
+                     onkeydown="if(event.key==='Enter')selectLanguage('pt-BR')">
+                    <div class="flag-icon flag-bg-pt">
+                        <span aria-hidden="true">&#x1F1E7;&#x1F1F7;</span>
+                    </div>
+                    <div class="text-lg font-bold text-text-dark mb-1">Portugu&ecirc;s</div>
+                    <div class="text-sm text-muted-dark">Bem-vindo</div>
+                </div>
+
+                <!-- Español -->
+                <div class="lang-card anim-card-3"
+                     tabindex="0"
+                     role="button"
+                     aria-label="Seleccionar Español"
+                     onclick="selectLanguage('es')"
+                     onkeydown="if(event.key==='Enter')selectLanguage('es')">
+                    <div class="flag-icon flag-bg-es">
+                        <span aria-hidden="true">&#x1F1EA;&#x1F1F8;</span>
+                    </div>
+                    <div class="text-lg font-bold text-text-dark mb-1">Espa&ntilde;ol</div>
+                    <div class="text-sm text-muted-dark">Bienvenido</div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Footer -->
+       
+    </div>
+
+    <script>
+        function selectLanguage(locale) {
+            console.log('Language selected:', locale);
+            
+            // Save to localStorage FIRST (synchronous, guaranteed)
+            try {
+                localStorage.setItem('appLocale', locale);
+            } catch (e) {
+                console.warn('localStorage error:', e);
+            }
+
+            // Also save via IPC for persistence across app restarts
+            if (window.electronAPI && window.electronAPI.setAppLocale) {
+                window.electronAPI.setAppLocale(locale);
+            }
+
+            // Navigate immediately — no need to wait for IPC
+            navigateToWelcome();
+        }
+
+        function navigateToWelcome() {
+            if (window.electronAPI && window.electronAPI.navigateTo) {
+                try {
+                    window.electronAPI.navigateTo('welcome.html');
+                } catch (e) {
+                    console.warn('navigateTo error:', e);
+                    window.location.href = 'welcome.html';
+                }
+            } else {
+                window.location.href = 'welcome.html';
+            }
+        }
+    </script>
+</body>
+</html>

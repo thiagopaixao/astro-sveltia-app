@@ -194,7 +194,7 @@ async function createInitialWindow() {
     // Store detection result for the welcome window to use
     global.nodeDetectionResult = detection;
     
-    return await windowManager.createWindow('welcome.html', {
+    return await windowManager.createWindow('language.html', {
       width: 900,
       height: 700,
       resizable: true,
@@ -205,7 +205,7 @@ async function createInitialWindow() {
     
     // FOURTH: Otherwise, show welcome window with Node.js setup step
     logger.info('⚙️ Node.js setup required, showing welcome window');
-    return await windowManager.createWindow('welcome.html', {
+    return await windowManager.createWindow('language.html', {
       width: 900,
       height: 700,
       resizable: true,

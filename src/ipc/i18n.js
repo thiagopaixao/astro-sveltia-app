@@ -1,0 +1,129 @@
+/**
+ * @fileoverview IPC handlers for i18n (internationalization) operations
+ * @author Documental Team
+ * @since 1.0.0
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const yaml = require('js-yaml');
+
+const AVAILABLE_LOCALES = ['en', 'pt-BR', 'es'];
+const DEFAULT_LOCALE = 'en';
+let _cachedLocale = DEFAULT_LOCALE;
+
+function getLocalesPath(isPackaged, appPath) {
+  if (isPackaged) {
+    return path.join(path.dirname(appPath), 'src', 'locales');
+  }
+  return path.join(process.cwd(), 'src', 'locales');
+}
+
+function readYamlTranslations(locale, localesPath) {
+  const filePath = path.join(localesPath, `${locale}.yaml`);
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  const content = fs.readFileSync(filePath, 'utf8');
+  return yaml.load(content);
+}
+
+async function getLocale(db) {
+  const row = await db.get(
+    'SELECT value FROM settings WHERE key = ?',
+    ['locale']
+  );
+  return row ? row.value : DEFAULT_LOCALE;
+}
+
+async function setLocale(db, locale) {
+  await db.run(
+    'INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
+    ['locale', locale]
+  );
+}
+
+function getTranslations(locale, localesPath) {
+  const translations = readYamlTranslations(locale, localesPath);
+  if (translations) {
+    return translations;
+  }
+  return readYamlTranslations(DEFAULT_LOCALE, localesPath);
+}
+
+function getAvailableLocales() {
+  return [...AVAILABLE_LOCALES];
+}
+
+class I18nHandlers {
+  constructor({ logger, db, ipcMain }) {
+    this.logger = logger;
+    this.db = db;
+    // Cache initial locale for sync access
+    getLocale(db).then(locale => { _cachedLocale = locale; });
+    this.ipcMain = ipcMain || require('electron').ipcMain;
+    this.localesPath = getLocalesPath(false, '');
+  }
+
+  registerHandlers() {
+    this.logger.info('🌐 Registering i18n IPC handlers');
+
+    this.ipcMain.handle('i18n:get-translations', async (_event, locale) => {
+      const resolvedLocale = locale || await getLocale(this.db);
+      return getTranslations(resolvedLocale, this.localesPath);
+    });
+
+    this.ipcMain.on('i18n:get-translations-sync', (event, locale) => {
+      try {
+        const translations = readYamlTranslations(locale, this.localesPath);
+        event.returnValue = translations;
+      } catch (error) {
+        this.logger.error('Error loading translations sync:', error);
+        event.returnValue = null;
+      }
+    });
+
+    this.ipcMain.handle('i18n:get-locale', async () => {
+      return getLocale(this.db);
+    });
+
+    // Sync version for initial page load (reads from memory cache)
+    this.ipcMain.on('i18n:get-locale-sync', (event) => {
+      event.returnValue = _cachedLocale;
+    });
+
+    this.ipcMain.handle('i18n:set-locale', async (_event, locale) => {
+      await setLocale(this.db, locale);
+      _cachedLocale = locale;  // Update cache immediately for sync reads
+      return { success: true };
+    });
+
+    this.ipcMain.handle('i18n:get-available-locales', async () => {
+      return getAvailableLocales();
+    });
+
+    this.logger.info('✅ i18n IPC handlers registered');
+  }
+
+  unregisterHandlers() {
+    this.ipcMain.removeHandler('i18n:get-translations');
+    this.ipcMain.removeAllListeners('i18n:get-translations-sync');
+    this.ipcMain.removeHandler('i18n:get-locale');
+    this.ipcMain.removeAllListeners('i18n:get-locale-sync');
+    this.ipcMain.removeHandler('i18n:set-locale');
+    this.ipcMain.removeHandler('i18n:get-available-locales');
+    this.logger.info('🔌 i18n IPC handlers unregistered');
+  }
+}
+
+module.exports = {
+  I18nHandlers,
+  readYamlTranslations,
+  getLocale,
+  setLocale,
+  getTranslations,
+  getAvailableLocales,
+  getLocalesPath
+};

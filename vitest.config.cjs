@@ -1,6 +1,8 @@
 /// <reference types="vitest" />
 const { defineConfig } = require('vitest/config');
 
+process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || '') + ' --experimental-require-module';
+
 module.exports = defineConfig({
   test: {
     globals: true,
