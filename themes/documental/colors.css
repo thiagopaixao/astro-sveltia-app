@@ -1,0 +1,85 @@
+/* ==========================================================================
+   Documental Theme — Semantic Token Overrides
+   Dual-mode theme (dark + light) for document management interfaces.
+   Inherits from base, overrides all semantic tokens with Documental palette.
+   ========================================================================== */
+
+[data-theme="documental"][data-mode="dark"] {
+  /* Primary — Blue accent */
+  --color-primary: #2297db;
+  --color-primary-hover: #3ba8e5;
+
+  /* Backgrounds */
+  --color-background-light: #f0f4f8;
+  --color-background-dark: #111827;
+
+  /* Surfaces */
+  --color-surface-light: #e2e8f0;
+  --color-surface-dark: #1e2a37;
+  --color-surface-card: #163f5d;
+  --color-surface-card-alt: #1a3650;
+  --color-surface-secondary: #374151;
+
+  /* Text */
+  --color-text-light: #111827;
+  --color-text-dark: #e2e8f0;
+
+  /* Muted */
+  --color-muted-light: #6b7280;
+  --color-muted-dark: #8899aa;
+
+  /* Accent */
+  --color-accent: #eb592d;
+  --color-accent-hover: #f06a42;
+
+  /* Status */
+  --color-success: #22c55e;
+  --color-success-dark: #16a34a;
+  --color-danger: #eb592d;
+  --color-danger-dark: #c44a22;
+  --color-warning: #f59e0b;
+  --color-info: #2297db;
+  --color-info-dark: #1a7bb5;
+
+  /* Borders */
+  --color-border-subtle: #2a3a4a;
+  --color-border-default: #3a4f5f;
+
+  /* Gray intermediate */
+  --color-gray-550: #3a4f5f;
+}
+
+[data-theme="documental"][data-mode="light"] {
+  /* Primary — Blue accent */
+  --color-primary: #1a7ab8;
+  --color-primary-hover: #156a9e;
+
+  /* Backgrounds */
+  --color-background-dark: #f0f4f8;
+
+  /* Surfaces */
+  --color-surface-dark: #e2e8f0;
+  --color-surface-card: #dbeafe;
+  --color-surface-card-alt: #e0f0fe;
+  --color-surface-secondary: #d1d5db;
+
+  /* Text */
+  --color-text-dark: #111827;
+
+  /* Muted */
+  --color-muted-dark: #6b7280;
+
+  /* Accent */
+  --color-accent: #d44a1e;
+  --color-accent-hover: #b83d15;
+
+  /* Status */
+  --color-danger: #d44a1e;
+  --color-danger-dark: #b83d15;
+  --color-info: #1a7ab8;
+  --color-info-dark: #156a9e;
+
+  /* Borders */
+  --color-border-subtle: #d1d9e6;
+  --color-border-default: #b8c4d0;
+}

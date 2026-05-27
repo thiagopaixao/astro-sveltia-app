@@ -1,0 +1,7 @@
+{
+  "name": "Documental",
+  "version": "1.0.0",
+  "mode": ["dark", "light"],
+  "inherit": "base",
+  "description": "Documental color scheme — professional dark and light theme for document management"
+}

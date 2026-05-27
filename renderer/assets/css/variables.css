@@ -26,6 +26,9 @@
   --orange-500: #ff5722;
   --white: #ffffff;
   --black: #000000;
+  --doc-card: #163f5d;
+  --doc-card-alt: #1a3650;
+  --doc-secondary: #374151;
 }
 
 /* ==========================================================================
@@ -55,4 +58,7 @@
   --color-border-subtle: var(--gray-700);
   --color-border-default: var(--gray-600);
   --color-gray-550: var(--gray-550);
+  --color-surface-card: var(--doc-card);
+  --color-surface-card-alt: var(--doc-card-alt);
+  --color-surface-secondary: var(--doc-secondary);
 }
