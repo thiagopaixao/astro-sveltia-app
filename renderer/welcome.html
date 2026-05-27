@@ -6,6 +6,7 @@
     <title>Documental - Welcome</title>
 <link href="./assets/css/fonts.css" rel="stylesheet"/>
 <link href="./assets/css/compiled.css" rel="stylesheet"/>
+<link href="./assets/css/theme-override.css" rel="stylesheet"/>
     <style>
         html, body {
             height: 100%;
@@ -25,8 +26,8 @@
             left: 0 !important;
             right: 0 !important;
             z-index: 9999 !important;
-            background-color: #1f2937 !important;
-            border-top: 2px solid #374151 !important;
+            background-color: var(--color-surface-dark) !important;
+            border-top: 2px solid var(--color-border-subtle) !important;
             padding: 1rem 2rem !important;
             margin: 0 !important;
             width: 100vw !important;
@@ -56,26 +57,6 @@
             }
         }
     </style>
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#22c55e",
-                        "background-light": "#f3f4f6",
-                        "background-dark": "#111827",
-                        "surface-light": "#ffffff",
-                        "surface-dark": "#1f2937",
-                        "text-light": "#111827",
-                        "text-dark": "#f9fafb",
-                        "muted-light": "#6b7280",
-                        "muted-dark": "#9ca3af",
-                    },
-                },
-            },
-        };
-    </script>
 
 </head>
 <body class="bg-background-dark text-text-dark antialiased">
@@ -123,7 +104,7 @@
                     <div class="mt-10 flex justify-center gap-4">
                         <button onclick="if(window.electronAPI&amp;&amp;window.electronAPI.navigateTo){window.electronAPI.navigateTo('language.html')}else{window.location.href='language.html'}"
                                 class="bg-gray-700 hover:bg-gray-600 text-gray-300 font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105"
-                                style="border:1px solid #4b5563;">
+                                style="border:1px solid var(--color-border-default);">
                             <span class="material-symbols-outlined">arrow_back</span>
                             <span x-text="$store.i18n.t('common.back') || 'Voltar'"></span>
                         </button>

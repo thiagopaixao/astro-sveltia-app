@@ -5,6 +5,7 @@
 <title x-text="$store.i18n.t('config.page_title')">Documental - Configurações</title>
 <link href="./assets/css/fonts.css" rel="stylesheet"/>
 <link href="./assets/css/compiled.css" rel="stylesheet"/>
+<link href="./assets/css/theme-override.css" rel="stylesheet"/>
 <script src="./i18n.js"></script>
 <script defer src="./assets/js/alpine.min.js"></script>
 <script src="script.js" defer></script>
@@ -19,14 +20,14 @@
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: #1f2937;
+            background: var(--color-surface-dark);
         }
         ::-webkit-scrollbar-thumb {
-            background: #4b5563;
+            background: var(--color-border-default);
             border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
+            background: var(--color-muted-dark);
         }
         .toggle-switch {
             position: relative;
@@ -46,7 +47,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: #4b5563;
+            background-color: var(--color-border-default);
             -webkit-transition: .4s;
             transition: .4s;
             border-radius: 28px;
@@ -64,7 +65,7 @@
             border-radius: 50%;
         }
         input:checked + .slider {
-            background-color: #22c55e;
+            background-color: var(--color-primary);
         }
         input:checked + .slider:before {
             -webkit-transform: translateX(22px);
@@ -72,27 +73,7 @@
             transform: translateX(22px);
         }
     </style>
-<script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#22c55e",
-                        "background-light": "#f3f4f6",
-                        "background-dark": "#111827",
-                        "surface-light": "#ffffff",
-                        "surface-dark": "#1f2937",
-                        "text-light": "#111827",
-                        "text-dark": "#f9fafb",
-                        "muted-light": "#6b7280",
-                        "muted-dark": "#9ca3af",
-                        "accent-orange": "#ff5722",
-                    },
-                },
-            },
-        };
-    </script>
+
 </head>
 <body class="bg-background-dark text-text-dark antialiased" x-data="{
         settings: {

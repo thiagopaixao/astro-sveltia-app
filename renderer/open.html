@@ -5,6 +5,7 @@
 <title x-text="__t('open.page_title')">Documental - Reopening Workspace</title>
 <link href="./assets/css/fonts.css" rel="stylesheet"/>
 <link href="./assets/css/compiled.css" rel="stylesheet"/>
+<link href="./assets/css/theme-override.css" rel="stylesheet"/>
 <style>
         .creative-loader {
             width: 50px;
@@ -17,11 +18,11 @@
             inset: 0;
             border-radius: 50%;
             border: 6px solid transparent;
-            border-top-color: #22c55e;
+            border-top-color: var(--color-primary);
             animation: spin-creative 1.5s ease-in-out infinite;
         }
         .creative-loader::after {
-            border-top-color: #3b82f6;
+            border-top-color: var(--color-info);
             animation-delay: 0.3s;
             animation-direction: reverse;
         }
@@ -49,26 +50,6 @@
             backdrop-filter: blur(4px);
         }
     </style>
-<script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#22c55e",
-                        "background-light": "#f3f4f6",
-                        "background-dark": "#111827",
-                        "surface-light": "#ffffff",
-                        "surface-dark": "#1f2937",
-                        "text-light": "#111827",
-                        "text-dark": "#f9fafb",
-                        "muted-light": "#6b7280",
-                        "muted-dark": "#9ca3af",
-                    },
-                },
-            },
-        };
-    </script>
 <script src="./i18n.js"></script>
 <script defer src="./assets/js/alpine.min.js"></script>
 <script src="script.js" defer></script>
