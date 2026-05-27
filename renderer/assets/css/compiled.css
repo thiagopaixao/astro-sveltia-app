@@ -26,6 +26,9 @@
   --orange-500: #ff5722;
   --white: #ffffff;
   --black: #000000;
+  --doc-card: #163f5d;
+  --doc-card-alt: #1a3650;
+  --doc-secondary: #374151;
 }
 
 /* ==========================================================================
@@ -56,6 +59,9 @@
   --color-border-subtle: var(--gray-700);
   --color-border-default: var(--gray-600);
   --color-gray-550: var(--gray-550);
+  --color-surface-card: var(--doc-card);
+  --color-surface-card-alt: var(--doc-card-alt);
+  --color-surface-secondary: var(--doc-secondary);
 }
 
 /* ! tailwindcss v3.4.0 | MIT License | https://tailwindcss.com */
@@ -1586,23 +1592,12 @@ select {
   border-color: rgb(96 165 250 / var(--tw-border-opacity));
 }
 
+.border-border-default {
+  border-color: var(--color-border-default, #4b5563);
+}
+
 .border-border-subtle {
   border-color: var(--color-border-subtle, #374151);
-}
-
-.border-gray-600 {
-  --tw-border-opacity: 1;
-  border-color: rgb(75 85 99 / var(--tw-border-opacity));
-}
-
-.border-gray-700 {
-  --tw-border-opacity: 1;
-  border-color: rgb(55 65 81 / var(--tw-border-opacity));
-}
-
-.border-gray-800 {
-  --tw-border-opacity: 1;
-  border-color: rgb(31 41 55 / var(--tw-border-opacity));
 }
 
 .border-green-500 {
@@ -1665,28 +1660,16 @@ select {
   background-color: rgb(37 99 235 / var(--tw-bg-opacity));
 }
 
-.bg-gray-600 {
-  --tw-bg-opacity: 1;
-  background-color: rgb(75 85 99 / var(--tw-bg-opacity));
-}
-
-.bg-gray-700 {
-  --tw-bg-opacity: 1;
-  background-color: rgb(55 65 81 / var(--tw-bg-opacity));
-}
-
-.bg-gray-800 {
-  --tw-bg-opacity: 1;
-  background-color: rgb(31 41 55 / var(--tw-bg-opacity));
-}
-
-.bg-gray-900 {
-  --tw-bg-opacity: 1;
-  background-color: rgb(17 24 39 / var(--tw-bg-opacity));
+.bg-danger {
+  background-color: var(--color-danger, #ef4444);
 }
 
 .bg-gray-900\/50 {
   background-color: rgb(17 24 39 / 0.5);
+}
+
+.bg-muted-dark {
+  background-color: var(--color-muted-dark, #9ca3af);
 }
 
 .bg-orange-600 {
@@ -1715,8 +1698,16 @@ select {
   background-color: rgb(127 29 29 / 0.5);
 }
 
+.bg-surface-card {
+  background-color: var(--color-surface-card, #163f5d);
+}
+
 .bg-surface-dark {
   background-color: var(--color-surface-dark, #1f2937);
+}
+
+.bg-surface-secondary {
+  background-color: var(--color-surface-secondary, #374151);
 }
 
 .bg-transparent {
@@ -2023,26 +2014,6 @@ select {
   color: rgb(96 165 250 / var(--tw-text-opacity));
 }
 
-.text-gray-200 {
-  --tw-text-opacity: 1;
-  color: rgb(229 231 235 / var(--tw-text-opacity));
-}
-
-.text-gray-300 {
-  --tw-text-opacity: 1;
-  color: rgb(209 213 219 / var(--tw-text-opacity));
-}
-
-.text-gray-400 {
-  --tw-text-opacity: 1;
-  color: rgb(156 163 175 / var(--tw-text-opacity));
-}
-
-.text-gray-500 {
-  --tw-text-opacity: 1;
-  color: rgb(107 114 128 / var(--tw-text-opacity));
-}
-
 .text-green-200 {
   --tw-text-opacity: 1;
   color: rgb(187 247 208 / var(--tw-text-opacity));
@@ -2261,14 +2232,8 @@ select {
   background-color: rgb(59 130 246 / var(--tw-bg-opacity));
 }
 
-.hover\:bg-gray-500:hover {
-  --tw-bg-opacity: 1;
-  background-color: rgb(107 114 128 / var(--tw-bg-opacity));
-}
-
-.hover\:bg-gray-600:hover {
-  --tw-bg-opacity: 1;
-  background-color: rgb(75 85 99 / var(--tw-bg-opacity));
+.hover\:bg-danger-dark:hover {
+  background-color: var(--color-danger-dark, #dc2626);
 }
 
 .hover\:bg-gray-700:hover {
@@ -2279,6 +2244,10 @@ select {
 .hover\:bg-gray-800:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(31 41 55 / var(--tw-bg-opacity));
+}
+
+.hover\:bg-muted-dark:hover {
+  background-color: var(--color-muted-dark, #9ca3af);
 }
 
 .hover\:bg-orange-500:hover {
@@ -2303,6 +2272,14 @@ select {
 .hover\:bg-red-700:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(185 28 28 / var(--tw-bg-opacity));
+}
+
+.hover\:bg-surface-dark:hover {
+  background-color: var(--color-surface-dark, #1f2937);
+}
+
+.hover\:bg-surface-secondary:hover {
+  background-color: var(--color-surface-secondary, #374151);
 }
 
 .hover\:text-text-dark:hover {
@@ -2375,9 +2352,8 @@ select {
   cursor: not-allowed;
 }
 
-.disabled\:bg-gray-600:disabled {
-  --tw-bg-opacity: 1;
-  background-color: rgb(75 85 99 / var(--tw-bg-opacity));
+.disabled\:bg-surface-secondary:disabled {
+  background-color: var(--color-surface-secondary, #374151);
 }
 
 .disabled\:opacity-50:disabled {
