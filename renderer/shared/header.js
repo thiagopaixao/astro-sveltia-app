@@ -7,7 +7,7 @@
  *
  * Generates the app header bar with consistent styling.
  * Pattern extracted from config.html:
- *   h-16 bg-surface-dark border-b border-gray-700 px-4 flex items-center justify-between
+ *   h-16 bg-surface-dark border-b border-border-subtle px-4 flex items-center justify-between
  */
 
 /**
@@ -38,7 +38,7 @@ function renderHeader({ title, leftContent = '', rightContent = '', subtitle = '
     : '';
 
   return [
-    '<div class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-gray-700 shrink-0">',
+    '<div class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-border-subtle shrink-0">',
     leftSide,
     rightSide,
     '</div>',

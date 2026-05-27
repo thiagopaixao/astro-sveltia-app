@@ -7,7 +7,7 @@
  *
  * Generates the app footer bar with optional action buttons.
  * Pattern extracted from new.html, open.html, create.html:
- *   p-4 border-t border-gray-700 bg-surface-dark mt-auto
+ *   p-4 border-t border-border-subtle bg-surface-dark mt-auto
  */
 
 /**
@@ -38,7 +38,7 @@ function renderFooter({ content = '', buttons = [], maxWidth = '' } = {}) {
   const innerContent = [content, buttonsHtml].filter(Boolean).join('\n');
 
   return [
-    '<div class="p-4 border-t border-gray-700 bg-surface-dark mt-auto">',
+    '<div class="p-4 border-t border-border-subtle bg-surface-dark mt-auto">',
     `    <div class="${alignClass}${maxWClass}">`,
     innerContent,
     '    </div>',

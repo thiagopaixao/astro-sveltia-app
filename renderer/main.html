@@ -1733,7 +1733,7 @@ clearingCache: false,
         }
     }
 }">
-<header class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-gray-700 shrink-0">
+<header class="flex items-center justify-between h-16 px-4 bg-surface-dark border-b border-border-subtle shrink-0">
 <div class="flex items-center space-x-2">
 <svg class="h-6 w-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
@@ -1741,27 +1741,27 @@ clearingCache: false,
 <h1 class="text-xl font-bold text-text-dark">Documental</h1>
 </div>
 <div class="flex items-center space-x-2 ml-4">
-<button :class="{ 'bg-gray-700 ring-2 ring-primary': activeTab === 'editor', 'hover:bg-gray-700': activeTab !== 'editor' }" @click="activeTab = 'editor'" class="p-2 rounded-full focus:outline-none">
+<button :class="{ 'bg-surface-secondary ring-2 ring-primary': activeTab === 'editor', 'hover:bg-surface-secondary': activeTab !== 'editor' }" @click="activeTab = 'editor'" class="p-2 rounded-full focus:outline-none">
 <span :class="{'text-primary': activeTab === 'editor', 'text-muted-dark': activeTab !== 'editor'}" class="material-icons">edit</span>
 </button>
-<button :class="{ 'bg-gray-700 ring-2 ring-primary': activeTab === 'view', 'hover:bg-gray-700': activeTab !== 'view' }" @click="activeTab = 'view'" class="p-2 rounded-full focus:outline-none">
+<button :class="{ 'bg-surface-secondary ring-2 ring-primary': activeTab === 'view', 'hover:bg-surface-secondary': activeTab !== 'view' }" @click="activeTab = 'view'" class="p-2 rounded-full focus:outline-none">
 <span :class="{'text-primary': activeTab === 'view', 'text-muted-dark': activeTab !== 'view'}" class="material-icons">visibility</span>
 </button>
-<button :class="{ 'bg-gray-700 ring-2 ring-primary': activeTab === 'split', 'hover:bg-gray-700': activeTab !== 'split' }" @click="activeTab = 'split'" class="p-2 rounded-full focus:outline-none">
+<button :class="{ 'bg-surface-secondary ring-2 ring-primary': activeTab === 'split', 'hover:bg-surface-secondary': activeTab !== 'split' }" @click="activeTab = 'split'" class="p-2 rounded-full focus:outline-none">
 <span :class="{'text-primary': activeTab === 'split', 'text-muted-dark': activeTab !== 'split'}" class="material-icons">vertical_split</span>
 </button>
 </div>
 <div class="flex-1 mx-4">
 <div class="relative flex items-center">
-<div class="flex w-full items-center bg-background-dark border border-gray-600 rounded-md transition-colors">
+<div class="flex w-full items-center bg-background-dark border border-border-default rounded-md transition-colors">
 <div class="flex items-center pl-2 pr-1 space-x-1">
-<button @click.prevent="browserGoBack()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20" :aria-label="__t('common.back')">
+<button @click.prevent="browserGoBack()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-secondary focus:outline-none focus:ring-2 focus:ring-primary/20" :aria-label="__t('common.back')">
 <span class="material-icons text-muted-dark text-sm">arrow_back</span>
 </button>
-<button @click.prevent="browserReload()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20" :aria-label="__t('main.nav_reload')">
+<button @click.prevent="browserReload()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-secondary focus:outline-none focus:ring-2 focus:ring-primary/20" :aria-label="__t('main.nav_reload')">
 <span class="material-icons text-muted-dark text-sm">refresh</span>
 </button>
-<button @click.prevent="browserGoHome()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20" :aria-label="__t('main.nav_home')">
+<button @click.prevent="browserGoHome()" class="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-secondary focus:outline-none focus:ring-2 focus:ring-primary/20" :aria-label="__t('main.nav_home')">
 <span class="material-icons text-muted-dark text-sm">home</span>
 </button>
 </div>
@@ -1780,7 +1780,7 @@ clearingCache: false,
 <button @click="openPullModal()" class="px-4 py-2 text-sm font-semibold text-white bg-accent-orange rounded-md hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-accent-orange" x-text="$store.i18n.t('main.nav_update')"></button>
 <button @click="openPushModal()" class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-md hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background-dark focus:ring-primary" x-text="$store.i18n.t('main.nav_publish')"></button>
 <div class="relative">
-<button @click="menuOpen = !menuOpen" class="p-2 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary">
+<button @click="menuOpen = !menuOpen" class="p-2 rounded-full hover:bg-surface-secondary focus:outline-none focus:ring-2 focus:ring-primary">
 <span class="material-icons text-muted-dark">menu</span>
 </button>
 </div>
@@ -1818,7 +1818,7 @@ clearingCache: false,
          x-transition:leave-end="opacity-0"
          class="absolute inset-0 z-20 flex flex-col items-center justify-center space-y-4 bg-background-dark">
         <div class="content-loader">
-            <div class="w-16 h-16 border-4 border-gray-600 border-t-primary rounded-full animate-spin"></div>
+            <div class="w-16 h-16 border-4 border-border-default border-t-primary rounded-full animate-spin"></div>
         </div>
         <p class="text-xs uppercase tracking-[0.3em] text-muted-dark" x-text="$store.i18n.t('main.preparing_content')"></p>
     </div>
@@ -1879,10 +1879,10 @@ clearingCache: false,
 <template x-if="consoleOpen">
 <div :style="{ height: `calc(100% - ${mainHeight}%)` }" class="flex flex-col flex-1 bg-surface-dark overflow-hidden shrink-0" x-ref="consoleContainer">
 <div @mousedown.prevent="startVerticalResize($event)" class="resize-handle-horizontal w-full" x-ref="resizeHandleHorizontal"></div>
-<div class="flex items-center justify-between p-2 border-b border-gray-700">
+<div class="flex items-center justify-between p-2 border-b border-border-subtle">
 <div class="flex items-center space-x-1 overflow-x-auto">
 <template :key="tab.id" x-for="tab in consoleTabs">
-<button :class="{'bg-gray-700 text-primary': activeConsoleTab === tab.id, 'hover:bg-gray-800': activeConsoleTab !== tab.id}" @click="activeConsoleTab = tab.id" class="px-3 py-1 text-sm rounded-md flex items-center space-x-2 shrink-0">
+<button :class="{'bg-surface-secondary text-primary': activeConsoleTab === tab.id, 'hover:bg-surface-dark': activeConsoleTab !== tab.id}" @click="activeConsoleTab = tab.id" class="px-3 py-1 text-sm rounded-md flex items-center space-x-2 shrink-0">
 <span x-text="tab.name"></span>
 <span @click="closeConsoleTab(tab.id, $event)" class="material-icons text-muted-dark text-xs hover:text-text-dark" x-show="tab.type === 'terminal'">close</span>
 </button>
@@ -1890,10 +1890,10 @@ clearingCache: false,
 </div>
 <div class="flex items-center space-x-2">
 
- <button @click="addTerminalTab()" class="p-1 rounded-full hover:bg-gray-700" :title="__t('main.add_terminal')" style="display:none;">
+ <button @click="addTerminalTab()" class="p-1 rounded-full hover:bg-surface-secondary" :title="__t('main.add_terminal')" style="display:none;">
  <span class="material-icons text-muted-dark text-base">add</span>
  </button>
-<button @click="consoleOpen = false" class="p-1 rounded-full hover:bg-gray-700" :title="__t('main.close_console')">
+<button @click="consoleOpen = false" class="p-1 rounded-full hover:bg-surface-secondary" :title="__t('main.close_console')">
 <span class="material-icons text-muted-dark text-base">close</span>
 </button>
 </div>
@@ -1911,7 +1911,7 @@ clearingCache: false,
 <pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" contenteditable="true" x-text="commandOutput || __t('main.no_commands')"></pre>
 </div>
 <div x-show="tab.type === 'terminal'">
-<p class="text-green-400">user@documental:~$ <span class="text-gray-400" x-text="__t('main.terminal_interactive')"></span></p>
+<p class="text-green-400">user@documental:~$ <span class="text-muted-dark" x-text="__t('main.terminal_interactive')"></span></p>
 </div>
 </div>
 </template>
@@ -1919,7 +1919,7 @@ clearingCache: false,
 </div>
 </template>
 </div>
-<footer class="flex items-center justify-between h-8 px-4 bg-surface-dark border-t border-gray-700 text-xs text-muted-dark shrink-0">
+<footer class="flex items-center justify-between h-8 px-4 bg-surface-dark border-t border-border-subtle text-xs text-muted-dark shrink-0">
 <div class="flex items-center space-x-6">
 <button
   @click="branchModalOpen = true"
@@ -1965,80 +1965,80 @@ clearingCache: false,
 </div>
 </footer>
 <div @click.outside="menuOpen = false" class="absolute top-16 right-4 z-10" style="display: none;" x-show="menuOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-end="opacity-100 transform scale-100" x-transition:enter-start="opacity-0 transform scale-95" x-transition:leave="transition ease-in duration-75" x-transition:leave-end="opacity-0 transform scale-95" x-transition:leave-start="opacity-100 transform scale-100">
-<div class="w-56 bg-surface-dark rounded-md shadow-lg border border-gray-700">
+<div class="w-56 bg-surface-dark rounded-md shadow-lg border border-border-subtle">
 <nav class="p-2">
 <ul class="space-y-1">
   <li>
-    <a @click.prevent="consoleOpen = !consoleOpen; if(consoleOpen) mainHeight = 70; menuOpen = false" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="consoleOpen = !consoleOpen; if(consoleOpen) mainHeight = 70; menuOpen = false" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-secondary rounded-md" href="#">
       <span class="material-icons mr-3">terminal</span>
       <span x-text="__t('main.menu_console')"></span>
     </a>
   </li>
   <li>
-    <a @click.prevent="clearCacheModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="clearCacheModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-secondary rounded-md" href="#">
       <span class="material-icons mr-3">delete_sweep</span>
       <span x-text="__t('main.menu_clear_cache')"></span>
     </a>
   </li>
   <li>
-    <a @click.prevent="openNewWindow()" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="openNewWindow()" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-secondary rounded-md" href="#">
       <span class="material-icons mr-3">open_in_new</span>
       <span x-text="__t('main.menu_new_window')"></span>
     </a>
   </li>
 
   <li>
-    <a @click.prevent="closeProject()" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="closeProject()" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-secondary rounded-md" href="#">
       <span class="material-icons mr-3">folder_off</span>
       <span x-text="__t('main.menu_close_project')"></span>
     </a>
   </li>
 
-  <li class="border-t border-gray-700 my-2"></li>
+  <li class="border-t border-border-subtle my-2"></li>
   <li style="display: none;">
-    <a class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#" data-navigate="config.html">
+    <a class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-secondary rounded-md" href="#" data-navigate="config.html">
       <span class="material-icons mr-3">settings</span>
       <span x-text="__t('main.menu_settings')"></span>
     </a>
   </li>
   <li>
-    <a @click.prevent="helpModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="helpModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-secondary rounded-md" href="#">
       <span class="material-icons mr-3">help_outline</span>
       <span x-text="__t('main.menu_help')"></span>
     </a>
   </li>
   <li>
-    <a @click.prevent="aboutModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="aboutModalOpen = true" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-secondary rounded-md" href="#">
       <span class="material-icons mr-3">info_outline</span>
       <span x-text="__t('main.menu_about')"></span>
     </a>
   </li>
-  <li class="border-t border-gray-700 my-2"></li>
+  <li class="border-t border-border-subtle my-2"></li>
   <li>
-    <a @click.prevent="exitApp()" class="flex items-center px-4 py-2 text-text-dark hover:bg-gray-700 rounded-md" href="#">
+    <a @click.prevent="exitApp()" class="flex items-center px-4 py-2 text-text-dark hover:bg-surface-secondary rounded-md" href="#">
       <span class="material-icons mr-3">exit_to_app</span>
       <span x-text="__t('main.menu_exit')"></span>
 </nav>
 </div>
 </div>
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="pullModalState !== 'closed'">
-  <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
+  <div class="bg-surface-dark rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
     <div x-show="pullModalState === 'confirm'">
       <h3 class="text-lg font-semibold text-white mb-2" x-text="__t('main.pull_title')"></h3>
-      <p class="text-gray-300 text-sm mb-4" x-text="__t('main.pull_desc')"></p>
-      <p class="text-sm text-gray-400 mb-4" x-show="pullCurrentBranch"><span x-text="__t('main.pull_branch')"></span><span class="text-green-400 font-mono" x-text="pullCurrentBranch"></span></p>
+      <p class="text-text-dark text-sm mb-4" x-text="__t('main.pull_desc')"></p>
+      <p class="text-sm text-muted-dark mb-4" x-show="pullCurrentBranch"><span x-text="__t('main.pull_branch')"></span><span class="text-green-400 font-mono" x-text="pullCurrentBranch"></span></p>
       <div x-show="pullIsDirty" class="mb-4 p-3 bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded">
         <p class="text-yellow-400 text-sm font-medium mb-1" x-text="__t('main.pull_unsaved')"></p>
-        <p class="text-gray-400 text-xs mb-2" x-text="__t('main.pull_files_modified', {count: pullDirtyFiles.length})"></p>
-        <label class="block text-sm text-gray-300 mb-1"><span x-text="__t('main.pull_commit_message')"></span> <span class="text-red-400">*</span></label>
+        <p class="text-muted-dark text-xs mb-2" x-text="__t('main.pull_files_modified', {count: pullDirtyFiles.length})"></p>
+        <label class="block text-sm text-text-dark mb-1"><span x-text="__t('main.pull_commit_message')"></span> <span class="text-red-400">*</span></label>
         <textarea x-model="pullCommitMessage"
-          class="w-full bg-gray-900 text-gray-200 text-sm rounded border border-gray-600 focus:border-green-500 focus:outline-none p-2 resize-none"
+          class="w-full bg-background-dark text-text-dark text-sm rounded border border-border-default focus:border-green-500 focus:outline-none p-2 resize-none"
           rows="2"
           :placeholder="__t('main.pull_commit_placeholder')"></textarea>
       </div>
       <div class="flex space-x-3">
         <button @click="confirmPull()" :disabled="pullIsDirty && !pullCommitMessage.trim()" class="px-4 py-2 bg-primary text-white rounded hover:bg-primary-hover text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed" x-text="__t('common.confirm')"></button>
-        <button @click="closePullModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium" x-text="__t('common.cancel')"></button>
+        <button @click="closePullModal()" class="px-4 py-2 bg-muted-dark text-white rounded hover:bg-muted text-sm font-medium" x-text="__t('common.cancel')"></button>
       </div>
     </div>
     <div x-show="pullModalState === 'progress'" class="space-y-4">
@@ -2047,17 +2047,17 @@ clearingCache: false,
       <!-- Spinner (quando percentage === 0) -->
       <div x-show="progress.percentage === 0" class="flex items-center justify-center py-4">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-        <span class="ml-3 text-gray-300 text-sm" x-text="__t('common.starting')"></span>
+        <span class="ml-3 text-text-dark text-sm" x-text="__t('common.starting')"></span>
       </div>
 
       <!-- Barra de Progresso (quando percentage > 0) -->
       <div x-show="progress.percentage > 0" class="space-y-2">
         <div class="flex justify-between items-center text-sm">
-          <span x-text="progress.stage" class="text-gray-300"></span>
+          <span x-text="progress.stage" class="text-text-dark"></span>
           <span x-text="progress.percentage + '%'" class="text-blue-400 font-mono font-bold"></span>
         </div>
 
-        <div class="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
+        <div class="w-full bg-surface-secondary rounded-full h-2.5 overflow-hidden">
           <div class="bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300 relative overflow-hidden"
                :style="`width: ${progress.percentage}%`">
             <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
@@ -2065,7 +2065,7 @@ clearingCache: false,
         </div>
       </div>
 
-      <div x-ref="pullLogArea" class="bg-gray-900 rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
+      <div x-ref="pullLogArea" class="bg-background-dark rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-text-dark space-y-1">
         <template x-for="(log, i) in pullLogs" :key="i">
           <div x-text="log" class="break-words whitespace-pre-wrap py-0.5"></div>
         </template>
@@ -2086,42 +2086,42 @@ clearingCache: false,
         <span class="text-2xl mr-2">❌</span>
         <span class="text-sm" x-text="pullResult ? (pullResult.error || __t('main.pull_error_unknown')) : __t('main.pull_error_unknown')"></span>
       </div>
-      <button @click="closePullModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium" x-text="__t('common.close')"></button>
+      <button @click="closePullModal()" class="px-4 py-2 bg-muted-dark text-white rounded hover:bg-muted text-sm font-medium" x-text="__t('common.close')"></button>
     </div>
   </div>
 </div>
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="pushModalState !== 'closed'">
-  <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
+  <div class="bg-surface-dark rounded-lg p-6 max-w-lg w-full mx-4 shadow-xl">
     <div x-show="pushModalState === 'select'">
       <h3 class="text-lg font-semibold text-white mb-2" x-text="__t('main.push_title')"></h3>
-      <p class="text-gray-300 text-sm mb-4" x-text="__t('main.push_desc')"></p>
+      <p class="text-text-dark text-sm mb-4" x-text="__t('main.push_desc')"></p>
       <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-300 mb-1" x-text="__t('main.push_branch_label')"></label>
+        <label class="block text-sm font-medium text-text-dark mb-1" x-text="__t('main.push_branch_label')"></label>
         <div class="relative">
-          <select x-model="pushSelectedBranch" :disabled="pushBranchesLoading || pushBranches.length === 0" class="block w-full pl-3 pr-10 py-2 text-sm border border-gray-600 bg-gray-900 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50">
+          <select x-model="pushSelectedBranch" :disabled="pushBranchesLoading || pushBranches.length === 0" class="block w-full pl-3 pr-10 py-2 text-sm border border-border-default bg-background-dark text-white rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50">
             <option value="" disabled x-show="!pushSelectedBranch" x-text="__t('main.push_select_branch')"></option>
             <template x-for="branch in pushBranches" :key="branch">
               <option :value="branch" x-text="branch"></option>
             </template>
           </select>
-          <div x-show="pushBranchesLoading" class="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75 rounded-md">
-            <div class="w-4 h-4 border-2 border-gray-600 border-t-green-400 rounded-full animate-spin"></div>
+          <div x-show="pushBranchesLoading" class="absolute inset-0 flex items-center justify-center bg-background-dark bg-opacity-75 rounded-md">
+            <div class="w-4 h-4 border-2 border-border-default border-t-green-400 rounded-full animate-spin"></div>
           </div>
         </div>
         <p x-show="!pushBranchesLoading && pushBranches.length === 0" class="mt-1 text-xs text-red-400" x-text="__t('main.push_branches_error')"></p>
       </div>
       <div x-show="pushIsDirty" class="mb-4 p-3 bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded">
         <p class="text-yellow-400 text-sm font-medium mb-1" x-text="__t('main.push_unsaved')"></p>
-        <p class="text-gray-400 text-xs mb-2" x-text="__t('main.push_files_modified', {count: pushDirtyFiles.length})"></p>
-        <label class="block text-sm text-gray-300 mb-1"><span x-text="__t('main.push_commit_message')"></span> <span class="text-red-400">*</span></label>
+        <p class="text-muted-dark text-xs mb-2" x-text="__t('main.push_files_modified', {count: pushDirtyFiles.length})"></p>
+        <label class="block text-sm text-text-dark mb-1"><span x-text="__t('main.push_commit_message')"></span> <span class="text-red-400">*</span></label>
         <textarea x-model="pushCommitMessage"
-          class="w-full bg-gray-900 text-gray-200 text-sm rounded border border-gray-600 focus:border-green-500 focus:outline-none p-2 resize-none"
+          class="w-full bg-background-dark text-text-dark text-sm rounded border border-border-default focus:border-green-500 focus:outline-none p-2 resize-none"
           rows="2"
           :placeholder="__t('main.push_commit_placeholder')"></textarea>
       </div>
       <div class="flex space-x-3">
         <button @click="confirmPush()" :disabled="!pushSelectedBranch || pushBranchesLoading || (pushIsDirty && !pushCommitMessage.trim())" class="px-4 py-2 bg-primary text-white rounded hover:bg-primary-hover text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed" x-text="__t('main.nav_publish')"></button>
-        <button @click="closePushModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium" x-text="__t('common.cancel')"></button>
+        <button @click="closePushModal()" class="px-4 py-2 bg-muted-dark text-white rounded hover:bg-muted text-sm font-medium" x-text="__t('common.cancel')"></button>
       </div>
     </div>
     <div x-show="pushModalState === 'progress'" class="space-y-4">
@@ -2130,17 +2130,17 @@ clearingCache: false,
       <!-- Spinner (quando percentage === 0) -->
       <div x-show="progress.percentage === 0" class="flex items-center justify-center py-4">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-        <span class="ml-3 text-gray-300 text-sm" x-text="__t('common.starting')"></span>
+        <span class="ml-3 text-text-dark text-sm" x-text="__t('common.starting')"></span>
       </div>
 
       <!-- Barra de Progresso (quando percentage > 0) -->
       <div x-show="progress.percentage > 0" class="space-y-2">
         <div class="flex justify-between items-center text-sm">
-          <span x-text="progress.stage" class="text-gray-300"></span>
+          <span x-text="progress.stage" class="text-text-dark"></span>
           <span x-text="progress.percentage + '%'" class="text-blue-400 font-mono font-bold"></span>
         </div>
 
-        <div class="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
+        <div class="w-full bg-surface-secondary rounded-full h-2.5 overflow-hidden">
           <div class="bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 h-full rounded-full transition-all duration-300 relative overflow-hidden"
                :style="`width: ${progress.percentage}%`">
             <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-20 animate-shimmer"></div>
@@ -2149,7 +2149,7 @@ clearingCache: false,
       </div>
 
       <!-- Logs -->
-      <div x-ref="pushLogArea" class="bg-gray-900 rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-gray-300 space-y-1">
+      <div x-ref="pushLogArea" class="bg-background-dark rounded p-3 max-h-40 overflow-y-auto font-mono text-xs text-text-dark space-y-1">
         <template x-for="(log, i) in pushLogs" :key="i">
           <div x-text="log" class="break-words whitespace-pre-wrap py-0.5"></div>
         </template>
@@ -2170,7 +2170,7 @@ clearingCache: false,
         <span class="text-2xl mr-2">❌</span>
         <span class="text-sm" x-text="pushResult ? (pushResult.error || __t('main.push_error_unknown')) : __t('main.push_error_unknown')"></span>
       </div>
-      <button @click="closePushModal()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 text-sm font-medium" x-text="__t('common.close')"></button>
+      <button @click="closePushModal()" class="px-4 py-2 bg-muted-dark text-white rounded hover:bg-muted text-sm font-medium" x-text="__t('common.close')"></button>
     </div>
   </div>
 </div>
@@ -2185,7 +2185,7 @@ clearingCache: false,
 </div>
 <div>
 <label class="text-sm font-medium text-text-dark" x-text="__t('main.action_label')"></label>
-<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="branchAction">
+<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-border-default bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="branchAction">
 <option value="change" x-text="__t('main.action_change')"></option>
 <option value="create" x-text="__t('main.action_create')"></option>
 </select>
@@ -2193,7 +2193,7 @@ clearingCache: false,
 <div x-show="branchAction === 'change'">
 <label class="text-sm font-medium text-text-dark" x-text="__t('main.change_branch_label')"></label>
 <div class="mt-1 relative">
-<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-600 bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch" :disabled="branchLoading">
+<select class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-border-default bg-background-dark focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md text-text-dark" x-model="selectedBranch" :disabled="branchLoading">
 <template x-for="branch in branches" :key="branch.name">
 <option :value="branch.name" x-text="branch.name"></option>
 </template>
@@ -2209,20 +2209,20 @@ clearingCache: false,
 ✅ DEBUG: Found <span x-text="branches.length"></span> branches
 </div>
 <div x-show="branchLoading" class="absolute inset-0 flex items-center justify-center bg-background-dark bg-opacity-75">
-<div class="w-4 h-4 border-2 border-gray-600 border-t-primary rounded-full animate-spin"></div>
+<div class="w-4 h-4 border-2 border-border-default border-t-primary rounded-full animate-spin"></div>
 </div>
 </div>
 </div>
 <div x-show="branchAction === 'create'">
 <label class="block text-sm font-medium text-text-dark" for="new-branch-name" x-text="__t('main.new_branch_name')"></label>
 <div class="mt-1 flex rounded-md shadow-sm">
-<span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-600 bg-gray-700 text-muted-dark text-sm" x-text="getWorkingBranchName()"></span>
-<input class="flex-1 block w-full rounded-none rounded-r-md bg-background-dark border-gray-600 focus:ring-primary focus:border-primary sm:text-sm text-text-dark" id="new-branch-name" placeholder="adicione-um-sufixo-aqui" type="text" x-model="newBranchName"/>
+<span class="inline-flex items-center px-3 rounded-l-md border border-r-0 border-border-default bg-surface-secondary text-muted-dark text-sm" x-text="getWorkingBranchName()"></span>
+<input class="flex-1 block w-full rounded-none rounded-r-md bg-background-dark border-border-default focus:ring-primary focus:border-primary sm:text-sm text-text-dark" id="new-branch-name" placeholder="adicione-um-sufixo-aqui" type="text" x-model="newBranchName"/>
 </div>
 </div>
 </div>
 <div class="mt-6 flex justify-end space-x-2">
-<button @click="branchModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" x-text="__t('common.cancel')"></button>
+<button @click="branchModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-surface-secondary rounded-md hover:bg-muted-dark" x-text="__t('common.cancel')"></button>
 <button @click="changeBranch(); branchModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-hover" x-show="branchAction === 'change'" :disabled="branchLoading || selectedBranch === currentBranch" x-text="__t('main.change_branch_btn')"></button>
 <button @click="createBranch(); branchModalOpen = false;" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-hover" x-show="branchAction === 'create'" :disabled="branchLoading || !newBranchName.trim()" x-text="__t('main.create_branch_btn')"></button>
 </div>
@@ -2233,7 +2233,7 @@ clearingCache: false,
 <h3 class="text-lg font-medium text-text-dark" x-text="__t('main.clear_cache_title')"></h3>
 <p class="mt-2 text-sm text-muted-dark" x-text="__t('main.clear_cache_desc')"></p>
 <div class="mt-4 flex justify-end space-x-2">
-<button @click="clearCacheModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" x-text="__t('common.cancel')"></button>
+<button @click="clearCacheModalOpen = false" class="px-4 py-2 text-sm font-medium text-muted-dark bg-surface-secondary rounded-md hover:bg-muted-dark" x-text="__t('common.cancel')"></button>
 <button @click="confirmClearCache()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500" x-text="__t('main.clear_btn')"></button>
 </div>
 </div>
@@ -2276,7 +2276,7 @@ clearingCache: false,
 <h3 class="text-lg font-medium text-text-dark" x-text="__t('main.exit_title')"></h3>
 <p class="mt-2 text-sm text-muted-dark" x-text="__t('main.exit_desc')"></p>
 <div class="mt-4 flex justify-end space-x-2">
-    <button @click="cancelExit()" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" x-text="__t('common.cancel')"></button>
+    <button @click="cancelExit()" class="px-4 py-2 text-sm font-medium text-muted-dark bg-surface-secondary rounded-md hover:bg-muted-dark" x-text="__t('common.cancel')"></button>
     <button @click="confirmExit()" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500" x-text="__t('main.exit_confirm')"></button>
 </div>
 </div>
@@ -2287,7 +2287,7 @@ clearingCache: false,
     <h3 class="text-lg font-medium text-text-dark" x-text="__t('main.close_project_title')"></h3>
     <p class="mt-2 text-sm text-muted-dark" x-text="__t('main.close_project_desc')"></p>
     <div class="mt-4 flex justify-end space-x-2">
-      <button @click="cancelCloseProject()" class="px-4 py-2 text-sm font-medium text-muted-dark bg-gray-700 rounded-md hover:bg-gray-600" x-text="__t('common.cancel')"></button>
+      <button @click="cancelCloseProject()" class="px-4 py-2 text-sm font-medium text-muted-dark bg-surface-secondary rounded-md hover:bg-muted-dark" x-text="__t('common.cancel')"></button>
       <button @click="confirmCloseProject()" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-500" x-text="__t('main.close_project_confirm')"></button>
     </div>
   </div>
@@ -2315,13 +2315,13 @@ clearingCache: false,
     </div>
     
     <!-- Steps list -->
-    <div class="bg-gray-900/50 rounded-lg p-4 space-y-2 max-h-80 overflow-y-auto">
+    <div class="bg-background-dark/50 rounded-lg p-4 space-y-2 max-h-80 overflow-y-auto">
       <template x-for="step in gitOperationSteps" :key="step.id">
         <div class="bg-surface-dark rounded-lg border text-sm" :class="{
           'border-primary': step.status === 'active',
           'border-green-500': step.status === 'success',
           'border-red-500': step.status === 'failure',
-          'border-gray-700': step.status === 'pending'
+          'border-border-subtle': step.status === 'pending'
         }">
           <div class="flex items-center justify-between p-3" :class="{ 'cursor-pointer': step.status !== 'active' && step.log }" @click="step.log ? (step.expanded = !step.expanded) : null">
             <div class="flex items-center gap-3">
@@ -2336,7 +2336,7 @@ clearingCache: false,
                   <span class="material-symbols-outlined text-red-500 text-xl">error</span>
                 </template>
                 <template x-if="step.status === 'pending'">
-                  <div class="w-4 h-4 border-2 border-gray-600 rounded-full"></div>
+                  <div class="w-4 h-4 border-2 border-border-default rounded-full"></div>
                 </template>
               </div>
               <span class="font-medium" :class="{ 
@@ -2351,7 +2351,7 @@ clearingCache: false,
           <!-- Expandable log -->
           <div x-cloak x-show="step.expanded" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-2">
             <div class="px-3 pb-3">
-              <div class="bg-gray-900 rounded-md p-3 max-h-40 overflow-y-auto border border-gray-700">
+              <div class="bg-background-dark rounded-md p-3 max-h-40 overflow-y-auto border border-border-subtle">
                 <pre class="text-xs text-muted-dark whitespace-pre-wrap font-mono" x-text="step.log"></pre>
               </div>
             </div>

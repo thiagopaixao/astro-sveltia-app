@@ -7,6 +7,9 @@
 'use strict';
 
 const { ipcMain, app, dialog, shell, BrowserWindow } = require('electron');
+
+/** @type {string} Background color for BrowserWindow (shown before CSS loads) */
+const WINDOW_BG_COLOR = '#111827';
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -70,7 +73,7 @@ class SystemHandlers {
         width: bounds.width,
         height: bounds.height,
         show: false,
-        backgroundColor: '#111827',
+        backgroundColor: WINDOW_BG_COLOR,
         webPreferences: {
           preload: path.resolve(__dirname, '..', '..', 'preload.js'),
           contextIsolation: true,
@@ -801,7 +804,7 @@ async verifyNodeInstallation() {
           x,
           y,
           show: false,
-          backgroundColor: '#111827',
+          backgroundColor: WINDOW_BG_COLOR,
           webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,

@@ -7,6 +7,9 @@
 'use strict';
 
 const { BrowserWindow, Menu } = require('electron');
+
+/** @type {string} Background color for BrowserWindow (shown before CSS loads) */
+const WINDOW_BG_COLOR = '#111827';
 const path = require('path');
 const fs = require('fs');
 const { getLogger } = require('../logging/logger.js');
@@ -70,7 +73,7 @@ class WindowManager {
       width: windowConfig.width || this.config.windowConfig.width,
       height: windowConfig.height || this.config.windowConfig.height,
       show: false,
-      backgroundColor: '#111827',
+      backgroundColor: WINDOW_BG_COLOR,
       resizable: windowConfig.resizable !== false,
       maximizable: windowConfig.maximizable !== false,
       minimizable: windowConfig.minimizable !== false,
@@ -113,7 +116,7 @@ class WindowManager {
       width: this.config.windowConfig.width,
       height: this.config.windowConfig.height,
       show: false,
-      backgroundColor: '#111827',
+      backgroundColor: WINDOW_BG_COLOR,
       webPreferences: this.config.windowConfig.webPreferences
     });
 
