@@ -6,6 +6,7 @@
     <title>Documental - Choose Language</title>
     <link href="./assets/css/fonts.css" rel="stylesheet"/>
     <link href="./assets/css/compiled.css" rel="stylesheet"/>
+    <link href="./assets/css/theme-override.css" rel="stylesheet"/>
     <style>
         html, body {
             height: 100%;
@@ -17,10 +18,10 @@
         /* Subtle animated gradient background */
         .bg-scene {
             background:
-                radial-gradient(ellipse 80% 60% at 50% 45%, rgba(34, 197, 94, 0.06) 0%, transparent 70%),
-                radial-gradient(ellipse 50% 40% at 20% 80%, rgba(34, 197, 94, 0.03) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 20%, rgba(34, 197, 94, 0.03) 0%, transparent 60%),
-                #111827;
+                radial-gradient(ellipse 80% 60% at 50% 45%, rgba(from var(--color-primary) r g b / 0.06) 0%, transparent 70%),
+                radial-gradient(ellipse 50% 40% at 20% 80%, rgba(from var(--color-primary) r g b / 0.03) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 20%, rgba(from var(--color-primary) r g b / 0.03) 0%, transparent 60%),
+                var(--color-background-dark);
         }
 
         /* Entrance animations */
@@ -35,8 +36,8 @@
         }
 
         @keyframes pulseGlow {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-            50%      { box-shadow: 0 0 20px 2px rgba(34, 197, 94, 0.12); }
+            0%, 100% { box-shadow: 0 0 0 0 rgba(from var(--color-primary) r g b / 0); }
+            50%      { box-shadow: 0 0 20px 2px rgba(from var(--color-primary) r g b / 0.12); }
         }
 
         .anim-logo {
@@ -73,8 +74,8 @@
             width: 210px;
             padding: 2rem 1.5rem;
             border-radius: 16px;
-            background: #1f2937;
-            border: 1.5px solid #374151;
+            background: var(--color-surface-dark);
+            border: 1.5px solid var(--color-border-subtle);
             cursor: pointer;
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             user-select: none;
@@ -83,10 +84,10 @@
 
         .lang-card:hover {
             transform: translateY(-6px) scale(1.04);
-            border-color: #22c55e;
+            border-color: var(--color-primary);
             box-shadow:
-                0 0 0 1px rgba(34, 197, 94, 0.25),
-                0 8px 32px -4px rgba(34, 197, 94, 0.18),
+                0 0 0 1px rgba(from var(--color-primary) r g b / 0.25),
+                0 8px 32px -4px rgba(from var(--color-primary) r g b / 0.18),
                 0 4px 16px -2px rgba(0, 0, 0, 0.4);
         }
 
@@ -96,7 +97,7 @@
         }
 
         .lang-card:focus-visible {
-            outline: 2px solid #22c55e;
+            outline: 2px solid var(--color-primary);
             outline-offset: 3px;
         }
 
@@ -147,7 +148,7 @@
             right: -30%;
             width: 400px;
             height: 400px;
-            background-image: radial-gradient(circle, #374151 1px, transparent 1px);
+            background-image: radial-gradient(circle, var(--color-border-subtle) 1px, transparent 1px);
             background-size: 20px 20px;
         }
 
@@ -158,7 +159,7 @@
             left: -20%;
             width: 300px;
             height: 300px;
-            background-image: radial-gradient(circle, #374151 1px, transparent 1px);
+            background-image: radial-gradient(circle, var(--color-border-subtle) 1px, transparent 1px);
             background-size: 20px 20px;
         }
 
@@ -170,8 +171,8 @@
             width: 56px;
             height: 56px;
             border-radius: 14px;
-            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-            box-shadow: 0 4px 16px rgba(34, 197, 94, 0.25);
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary) 100%);
+            box-shadow: 0 4px 16px rgba(from var(--color-primary) r g b / 0.25);
         }
 
         .logo-icon svg {
@@ -180,26 +181,6 @@
             color: white;
         }
     </style>
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#22c55e",
-                        "background-light": "#f3f4f6",
-                        "background-dark": "#111827",
-                        "surface-light": "#ffffff",
-                        "surface-dark": "#1f2937",
-                        "text-light": "#111827",
-                        "text-dark": "#f9fafb",
-                        "muted-light": "#6b7280",
-                        "muted-dark": "#9ca3af",
-                    },
-                },
-            },
-        };
-    </script>
 </head>
 <body class="bg-background-dark text-text-dark antialiased">
     <div class="bg-scene min-h-screen flex flex-col items-center justify-center relative">

@@ -421,7 +421,7 @@
                     Cancel
                 </button>
 <template x-if="!anyStepFailed">
-<button :class="{'!bg-primary !hover:bg-green-500': allStepsSuccess}" :disabled="!allStepsSuccess" @click="allStepsSuccess ? (sessionStorage.setItem('currentProjectId', projectId), window.electronAPI.navigateTo('main.html')) : $event.target.innerText = __t('create.finished');" class="bg-gray-600 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm">
+<button :class="{'!bg-primary !hover:bg-primary-hover': allStepsSuccess}" :disabled="!allStepsSuccess" @click="allStepsSuccess ? (sessionStorage.setItem('currentProjectId', projectId), window.electronAPI.navigateTo('main.html')) : $event.target.innerText = __t('create.finished');" class="bg-gray-600 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm">
 <span x-text="allStepsSuccess ? 'Finish' : 'Continue'"></span>
 </button>
 </template>

@@ -109,7 +109,7 @@
                             <span x-text="$store.i18n.t('common.back') || 'Voltar'"></span>
                         </button>
                         <button @click="nextStep()"
-                                class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-10 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                class="bg-primary hover:bg-primary-hover text-white font-semibold py-3 px-10 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
                             <span x-text="$store.i18n.t('welcome.start_setup')"></span>
                             <span class="material-symbols-outlined">arrow_forward</span>
                         </button>
@@ -195,7 +195,7 @@
                     </div>
 
                     <div x-show="isAuthenticated" class="space-y-6">
-                        <div class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-md mx-auto">
+                        <div class="bg-surface-dark border border-border-subtle rounded-lg p-6 max-w-md mx-auto">
                             <div class="flex items-center gap-3 mb-4">
                                 <span class="material-symbols-outlined text-green-500">check_circle</span>
                                 <p class="text-sm text-green-400" x-text="$store.i18n.t('welcome.auth_success')"></p>
@@ -264,7 +264,7 @@
                     </div>
 
                     <template x-if="nodeDetectionResult && nodeDetectionResult.runtime && nodeDetectionResult.runtime.installed && nodeDetectionResult.runtime.isValid">
-                        <div class="bg-green-900/20 border border-green-700 rounded-lg p-6 max-w-xl mx-auto mb-4 text-left">
+                        <div class="bg-surface-dark border border-border-subtle rounded-lg p-6 max-w-xl mx-auto mb-4 text-left">
                             <div class="flex items-center gap-3 mb-3">
                                 <span class="material-symbols-outlined text-green-500 text-xl">check_circle</span>
                                 <p class="font-medium text-green-400" x-text="$store.i18n.t('welcome.node_installed')"></p>
@@ -328,7 +328,7 @@
                         <p class="text-sm text-red-200" x-text="nodeInstallError"></p>
                     </div>
 
-                    <div x-show="nodeInstallSuccess" class="bg-green-900/20 border border-green-700 rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
+                    <div x-show="nodeInstallSuccess" class="bg-surface-dark border border-border-subtle rounded-lg p-4 max-w-xl mx-auto mb-4 text-left">
                         <div class="flex items-center gap-2">
                             <span class="material-symbols-outlined text-green-400">task_alt</span>
                             <p class="text-green-200 text-sm" x-text="$store.i18n.t('welcome.node_download_success')"></p>
@@ -347,7 +347,7 @@
                             </button>
                             
                             <button @click="nextStep()" 
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                    class="bg-primary hover:bg-primary-hover text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
                                 <span x-text="$store.i18n.t('common.understand')"></span>
                                 <span class="material-symbols-outlined">arrow_forward</span>
                             </button>
@@ -361,7 +361,7 @@
                             </button>
                             
                             <button @click="nextStep()" x-show="isAuthenticated" 
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
+                                    class="bg-primary hover:bg-primary-hover text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-all duration-300 transform hover:scale-105">
                                 <span x-text="$store.i18n.t('common.next')"></span>
                                 <span class="material-symbols-outlined">arrow_forward</span>
                             </button>
@@ -377,7 +377,7 @@
                             <button @click="installManagedNode()" 
                                     x-show="shouldInstallRuntime()"
                                     :disabled="installingNode || isDetectingNode"
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
+                                    class="bg-primary hover:bg-primary-hover text-white font-semibold py-2 px-6 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
                                 <span class="material-symbols-outlined align-middle mr-2">download</span>
                                 <span x-text="installingNode ? $store.i18n.t('welcome.installing') : $store.i18n.t('welcome.download_install_nodejs')"></span>
                             </button>
@@ -390,7 +390,7 @@
 
                             <button @click="completeSetup()" 
                                     x-show="runtimePronto()"
-                                    class="bg-primary hover:bg-green-500 text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
+                                    class="bg-primary hover:bg-primary-hover text-white font-semibold py-2 px-6 rounded-lg transition-colors duration-200">
                                 <span x-text="$store.i18n.t('welcome.finish_setup')"></span>
                             </button>
                         </div>
@@ -609,7 +609,7 @@
                                 
                                 // Show success message briefly
                                 const successDiv = document.createElement('div');
-                                successDiv.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+                                successDiv.className = 'fixed top-4 right-4 bg-primary text-white px-6 py-3 rounded-lg shadow-lg z-50';
                                 successDiv.innerHTML = `
                                     <div class="flex items-center gap-2">
                                         <span class="material-symbols-outlined">check_circle</span>
