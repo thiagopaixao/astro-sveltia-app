@@ -117,7 +117,7 @@
     </style>
 
 </head>
-<body :class="{'resizing': isResizing || isResizingVertical}" @mousemove.window="onResize($event)" @mouseup.window="stopResize()" class="bg-background-dark text-text-dark antialiased">
+<body :class="{'resizing': isResizing || isResizingVertical}" @mousemove.window="onResize($event)" @mouseup.window="stopResize()" class="bg-background-dark text-text-dark antialiased overflow-hidden h-screen">
 <div class="flex flex-col h-screen" x-data="{ 
     menuOpen: false, 
     activeTab: 'view', 
@@ -151,6 +151,7 @@ clearingCache: false,
     closeProjectModalOpen: false,
     isNavigating: false,
     isExitingProgrammatically: false,
+    exitConfirmationPending: false,
     selectedBranch: 'stage',
     newBranchName: '',
     currentBranch: 'stage',
@@ -473,6 +474,7 @@ clearingCache: false,
     },
     confirmExit() {
         console.log('confirmExit() called - setting programmatic exit flag and sending confirmation to main process');
+        this.exitConfirmationPending = false;
         this.exitModalOpen = false;
         this.isExitingProgrammatically = true; // Set flag to prevent beforeunload from showing dialog again
         
@@ -485,6 +487,8 @@ clearingCache: false,
     },
     cancelExit() {
         console.log('cancelExit() called - resetting programmatic exit flag and sending cancellation to main process');
+        this.exitConfirmationPending = true;
+        setTimeout(() => { this.exitConfirmationPending = false; }, 2000);
         this.exitModalOpen = false;
         this.isExitingProgrammatically = false; // Reset flag since user cancelled
         
@@ -1339,6 +1343,7 @@ clearingCache: false,
         if (window.electronAPI && window.electronAPI.onShowExitConfirmation) {
             window.electronAPI.onShowExitConfirmation(() => {
                 console.log('Received show exit confirmation event');
+                if (this.exitConfirmationPending) { return; }
                 this.exitModalOpen = true;
             });
         }
@@ -1356,7 +1361,7 @@ clearingCache: false,
         if (!this.isSecondaryWindow) {
             window.addEventListener('beforeunload', (e) => {
             console.log('beforeunload event triggered, isExitingProgrammatically:', this.isExitingProgrammatically);
-                if (this.isExitingProgrammatically || this.isNavigating) {
+                if (this.isExitingProgrammatically || this.isNavigating || window.isNavigating) {
                     console.log('Programmatic exit or navigation detected - allowing window to close/navigate');
                     return true;
                 }
@@ -1629,12 +1634,17 @@ clearingCache: false,
     },
     updateBrowserViewBounds() {
         const headerHeight = 64; // matches h-16 header
-        const footerHeight = 32; // matches h-8 footer
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
 
         let mainContentTop = headerHeight;
-        let mainContentBottom = windowHeight - footerHeight;
+        let mainContentBottom = windowHeight - 32; // fallback footer height
+
+        // Use actual footer position from DOM when available
+        if (this.$refs.footer) {
+            const footerRect = this.$refs.footer.getBoundingClientRect();
+            mainContentBottom = Math.round(footerRect.top);
+        }
 
         if (this.consoleOpen && this.$refs.consoleContainer) {
             const consoleRect = this.$refs.consoleContainer.getBoundingClientRect();
@@ -1718,11 +1728,11 @@ clearingCache: false,
         const currentSeq = ++this.overlaySequence;
 
         if (isOpen) {
-            await this.prepareOverlaySnapshots();
+            await window.electronAPI.setAllBrowserViewVisibility(false);
             if (this.overlaySequence !== currentSeq) {
                 return;
             }
-            await window.electronAPI.setAllBrowserViewVisibility(false);
+            await this.prepareOverlaySnapshots();
         } else {
             await window.electronAPI.setAllBrowserViewVisibility(true);
             if (this.overlaySequence !== currentSeq) {
@@ -1919,7 +1929,7 @@ clearingCache: false,
 </div>
 </template>
 </div>
-<footer class="flex items-center justify-between h-8 px-4 bg-surface-dark border-t border-border-subtle text-xs text-muted-dark shrink-0">
+<footer x-ref="footer" class="flex items-center justify-between h-8 px-4 bg-surface-dark border-t border-border-subtle text-xs text-muted-dark shrink-0">
 <div class="flex items-center space-x-6">
 <button
   @click="branchModalOpen = true"
@@ -2293,8 +2303,6 @@ clearingCache: false,
   </div>
 </div>
 
-</div>
-
 <!-- Git Operation Progress Modal -->
 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;" x-show="gitOperationModalOpen">
   <div @click.outside="!gitOperationInProgress ? (gitOperationModalOpen = false) : null" class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-lg">
@@ -2377,6 +2385,8 @@ clearingCache: false,
       </button>
     </div>
   </div>
+</div>
+
 </div>
 
 </body></html>

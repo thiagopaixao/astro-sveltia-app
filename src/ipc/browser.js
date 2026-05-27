@@ -18,6 +18,11 @@ const path = require('path');
  */
 
 /**
+ * Footer height constant (h-8 = 32px) used for BrowserView bounds clamping
+ */
+const FOOTER_HEIGHT = 32;
+
+/**
  * BrowserView Management IPC Handlers
  */
 class BrowserHandlers {
@@ -169,11 +174,19 @@ class BrowserHandlers {
   setBrowserViewBounds(event, viewName, bounds) {
     const { editorView, viewerView } = this.getBrowserViewsForEvent(event);
     const view = viewName === 'editor' ? editorView : viewerView;
-    const window = BrowserWindow.fromWebContents(event.sender);
+    const win = BrowserWindow.fromWebContents(event.sender);
     
-    if (view && window) {
+    if (view && win) {
+      const [, contentHeight] = win.getContentSize();
+      const maxBottom = contentHeight - FOOTER_HEIGHT;
+      const proposedBottom = bounds.y + bounds.height;
+
+      if (proposedBottom > maxBottom) {
+        bounds.height = Math.max(0, maxBottom - bounds.y);
+        console.warn(`[browser] Clamped ${viewName} BrowserView height to ${bounds.height}px to avoid footer`);
+      }
+
       view.setBounds(bounds);
-      this.logger.debug(`Set ${viewName} BrowserView bounds:`, bounds);
     }
   }
 

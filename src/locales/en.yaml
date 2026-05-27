@@ -19,6 +19,11 @@ common:
   starting: "Starting..."
   ok: "OK"
   date_locale: "en-US"
+  step_branch_preview: "Verifying and ensuring preview branch..."
+  step_build: "Building the project..."
+  step_dependencies: "Installing dependencies..."
+  step_dev_server: "Running dev mode server..."
+  process_cancelled: "Process cancelled by user."
 
 welcome:
   page_title: "Documental - Welcome"

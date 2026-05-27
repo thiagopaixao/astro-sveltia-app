@@ -1,6 +1,12 @@
 document.addEventListener('DOMContentLoaded', async () => {
   if (window.__i18nReady) await window.__i18nReady;
   const navigateButtons = document.querySelectorAll('[data-navigate]');
+  function navigateToPage(page) {
+    window.isNavigating = true;
+    if (window.electronAPI && window.electronAPI.navigateTo) {
+      window.electronAPI.navigateTo(page);
+    }
+  }
   const projectPathInput = document.getElementById('project-path');
   const selectFolderButton = document.getElementById('select-folder-button');
   const createProjectButton = document.getElementById('create-project-button');
@@ -56,7 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     button.addEventListener('click', () => {
       const page = button.dataset.navigate;
       if (window.electronAPI && window.electronAPI.navigateTo) {
-        window.electronAPI.navigateTo(page);
+        navigateToPage(page);
       } else {
         console.error('Electron API not available or navigateTo function missing.');
       }
@@ -137,7 +143,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         sessionStorage.setItem('isExistingGitRepo', isExistingGitRepo.toString());
         sessionStorage.setItem('isEmptyFolder', isEmptyFolder.toString());
         sessionStorage.removeItem('folderInfo'); // Clean up
-        window.electronAPI.navigateTo('create.html'); // Navigate to create page after creation
+        navigateToPage('create.html'); // Navigate to create page after creation
       } catch (error) {
         alert(__t('new.error_create_project', {error}));
         console.error('Error saving project:', error);
@@ -225,7 +231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function openRecentProject(projectId) {
     try {
       sessionStorage.setItem('currentProjectId', projectId);
-      window.electronAPI.navigateTo('open.html');
+      navigateToPage('open.html');
     } catch (error) {
       console.error('Error opening recent project:', error);
       alert(__t('all_projects.error_open_project', {error}));
@@ -374,7 +380,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (projectExists.exists) {
           // Project exists, open it
           sessionStorage.setItem('currentProjectId', projectExists.projectId);
-          window.electronAPI.navigateTo('open.html');
+          navigateToPage('open.html');
         } else {
           // Project doesn't exist, show modal
           showFolderModal(normalizedPath, projectExists.folderInfo);
@@ -426,7 +432,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (selectedPath) {
         sessionStorage.setItem('selectedProjectPath', selectedPath);
         sessionStorage.setItem('createFromFolder', 'true');
-        window.electronAPI.navigateTo('new.html');
+        navigateToPage('new.html');
       }
       folderModal.style.display = 'none';
     });

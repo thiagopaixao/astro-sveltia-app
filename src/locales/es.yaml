@@ -19,6 +19,11 @@ common:
   starting: "Iniciando..."
   ok: "OK"
   date_locale: "es-ES"
+  step_branch_preview: "Verificando y asegurando branch de preview..."
+  step_build: "Construyendo el proyecto..."
+  step_dependencies: "Instalando dependencias..."
+  step_dev_server: "Ejecutando servidor de desarrollo..."
+  process_cancelled: "Proceso cancelado por el usuario."
 
 welcome:
   page_title: "Documental - Bienvenido"

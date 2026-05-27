@@ -37,6 +37,8 @@ const { PlatformService } = require('../main/services/platform/PlatformService.j
 /**
  * System Operations IPC Handlers
  */
+let lastExitCancelTime = 0;
+
 class SystemHandlers {
   /**
    * Create an instance of SystemHandlers
@@ -898,6 +900,12 @@ async verifyNodeInstallation() {
    */
   async confirmExitApp(event) {
     const window = BrowserWindow.fromWebContents(event.sender);
+
+    if (Date.now() - lastExitCancelTime < 2000) {
+      this.logger.info('🚪 Exit confirmation blocked: re-entry within 2s guard');
+      return false;
+    }
+
     this.logger.info('🚪 Exit confirmation requested from window:', window?.id);
     
     return new Promise((resolve) => {
@@ -912,6 +920,7 @@ async verifyNodeInstallation() {
           this.logger.info('🚪 Exit confirmation response received:', confirmed);
           
           if (confirmed) {
+            lastExitCancelTime = 0;
             const windowCount = BrowserWindow.getAllWindows().length;
             this.logger.info(`🚪 User confirmed exit. Total windows: ${windowCount}`);
             
@@ -924,6 +933,8 @@ async verifyNodeInstallation() {
               this.logger.info('🚪 Last window closing - quitting app');
               app.quit();
             }
+          } else {
+            lastExitCancelTime = Date.now();
           }
           
           resolve(confirmed);
