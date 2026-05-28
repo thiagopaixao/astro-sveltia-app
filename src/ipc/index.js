@@ -57,7 +57,7 @@ class IpcRegistry {
     
     this.i18nHandlers = new I18nHandlers({
       logger: this.logger,
-      db: dependencies.db
+      databaseManager: dependencies.databaseManager
     });
     
     this.isRegistered = false;
