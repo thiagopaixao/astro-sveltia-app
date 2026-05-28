@@ -163,8 +163,8 @@ describe('I18n IPC Handlers', () => {
   describe('I18nHandlers class', () => {
     it('should create instance and expose handler methods', async () => {
       const { I18nHandlers } = await import('../../src/ipc/i18n.js');
-      const db = createMockDb();
-      const handlers = new I18nHandlers({ logger: mockLogger, db });
+      const databaseManager = { getDatabase: vi.fn().mockResolvedValue(createMockDb()) };
+      const handlers = new I18nHandlers({ logger: mockLogger, databaseManager });
 
       expect(handlers).toBeDefined();
       expect(typeof handlers.registerHandlers).toBe('function');
@@ -174,8 +174,8 @@ describe('I18n IPC Handlers', () => {
     it('should register IPC handlers via injectable ipcMain', async () => {
       const { I18nHandlers } = await import('../../src/ipc/i18n.js');
       const ipcMain = { handle: vi.fn(), removeHandler: vi.fn(), on: vi.fn(), removeAllListeners: vi.fn() };
-      const db = createMockDb();
-      const handlers = new I18nHandlers({ logger: mockLogger, db, ipcMain });
+      const databaseManager = { getDatabase: vi.fn().mockResolvedValue(createMockDb()) };
+      const handlers = new I18nHandlers({ logger: mockLogger, databaseManager, ipcMain });
 
       handlers.registerHandlers();
 

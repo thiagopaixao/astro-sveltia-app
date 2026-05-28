@@ -9,6 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
+const { app, ipcMain: electronIpcMain } = require('electron');
 
 const AVAILABLE_LOCALES = ['en', 'pt-BR', 'es'];
 const DEFAULT_LOCALE = 'en';
@@ -16,7 +17,7 @@ let _cachedLocale = DEFAULT_LOCALE;
 
 function getLocalesPath(isPackaged, appPath) {
   if (isPackaged) {
-    return path.join(path.dirname(appPath), 'src', 'locales');
+    return path.join(appPath, 'src', 'locales');
   }
   return path.join(process.cwd(), 'src', 'locales');
 }
@@ -58,20 +59,33 @@ function getAvailableLocales() {
 }
 
 class I18nHandlers {
-  constructor({ logger, db, ipcMain }) {
+  constructor({ logger, databaseManager, ipcMain }) {
     this.logger = logger;
-    this.db = db;
-    // Cache initial locale for sync access
-    getLocale(db).then(locale => { _cachedLocale = locale; });
-    this.ipcMain = ipcMain || require('electron').ipcMain;
-    this.localesPath = getLocalesPath(false, '');
+    this.databaseManager = databaseManager;
+
+    // Cache initial locale for sync access — with error handling for first-run (DB not initialized)
+    (async () => {
+      try {
+        const db = await this.databaseManager.getDatabase();
+        const locale = await getLocale(db);
+        _cachedLocale = locale;
+      } catch (error) {
+        this.logger.warn('Could not load locale from database, using default:', error.message);
+      }
+    })();
+
+    this.ipcMain = ipcMain || electronIpcMain;
+    this.localesPath = getLocalesPath(
+      app ? app.isPackaged : false,
+      app ? app.getAppPath() : process.cwd()
+    );
   }
 
   registerHandlers() {
     this.logger.info('🌐 Registering i18n IPC handlers');
 
     this.ipcMain.handle('i18n:get-translations', async (_event, locale) => {
-      const resolvedLocale = locale || await getLocale(this.db);
+      const resolvedLocale = locale || await getLocale(await this.databaseManager.getDatabase());
       return getTranslations(resolvedLocale, this.localesPath);
     });
 
@@ -86,7 +100,7 @@ class I18nHandlers {
     });
 
     this.ipcMain.handle('i18n:get-locale', async () => {
-      return getLocale(this.db);
+      return getLocale(await this.databaseManager.getDatabase());
     });
 
     // Sync version for initial page load (reads from memory cache)
@@ -95,7 +109,8 @@ class I18nHandlers {
     });
 
     this.ipcMain.handle('i18n:set-locale', async (_event, locale) => {
-      await setLocale(this.db, locale);
+      const db = await this.databaseManager.getDatabase();
+      await setLocale(db, locale);
       _cachedLocale = locale;  // Update cache immediately for sync reads
       return { success: true };
     });

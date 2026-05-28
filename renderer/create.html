@@ -65,11 +65,11 @@
         processFailed: false,
         processPaused: false,
         steps: [
-            { id: 1, title: 'Setting up git and cloning repository...', status: 'pending', log: '', expanded: false },
-            { id: 2, title: 'Verifying and ensuring preview branch...', status: 'pending', log: '', expanded: false },
-            { id: 3, title: 'Installing dependencies...', status: 'pending', log: '', expanded: false },
-            { id: 4, title: 'Building the project...', status: 'pending', log: '', expanded: false },
-            { id: 5, title: 'Running dev mode server...', status: 'pending', log: '', expanded: false }
+            { id: 1, title: __t('create.step_git_clone'), status: 'pending', log: '', expanded: false },
+            { id: 2, title: __t('create.step_branch_preview'), status: 'pending', log: '', expanded: false },
+            { id: 3, title: __t('create.step_dependencies'), status: 'pending', log: '', expanded: false },
+            { id: 4, title: __t('create.step_build'), status: 'pending', log: '', expanded: false },
+            { id: 5, title: __t('create.step_dev_server'), status: 'pending', log: '', expanded: false }
         ],
         get allStepsSuccess() {
             return this.steps.every(s => s.status === 'success');
@@ -418,16 +418,16 @@
 <div class="p-4 border-t border-border-subtle bg-surface-dark mt-auto">
 <div class="flex justify-end gap-4 max-w-2xl mx-auto">
  <button @click="cancelProcess()" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-5 rounded-md transition-colors duration-300 text-sm">
-                    Cancel
+                    <span x-text="__t('common.cancel')">Cancel</span>
                 </button>
 <template x-if="!anyStepFailed">
 <button :class="{'!bg-primary !hover:bg-primary-hover': allStepsSuccess}" :disabled="!allStepsSuccess" @click="allStepsSuccess ? (sessionStorage.setItem('currentProjectId', projectId), window.electronAPI.navigateTo('main.html')) : $event.target.innerText = __t('create.finished');" class="bg-surface-secondary text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:bg-surface-secondary disabled:cursor-not-allowed text-sm">
-<span x-text="allStepsSuccess ? 'Finish' : 'Continue'"></span>
+<span x-text="allStepsSuccess ? __t('common.finish') : __t('common.advance')"></span>
 </button>
 </template>
 <template x-if="anyStepFailed">
 <button :disabled="!processFinished" @click="retryProcess()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-                        Try Again
+                        <span x-text="__t('common.try_again')">Try Again</span>
                     </button>
 </template>
 </div>

@@ -351,7 +351,7 @@
 </template>
 </div>
 <h1 class="text-3xl font-bold text-text-dark" x-text="__t('open.title')"></h1>
-<p class="text-muted-dark text-base mt-1">Aguarde enquanto preparamos seu projeto novamente.</p>
+<p class="text-muted-dark text-base mt-1" x-text="__t('open.subtitle')">Aguarde enquanto preparamos seu projeto novamente.</p>
 </div>
 <div class="bg-surface-dark rounded-lg p-4 space-y-2">
 <template :key="step.id" x-for="(step, index) in steps">
@@ -400,16 +400,16 @@
 <div class="p-4 border-t border-border-subtle bg-surface-dark mt-auto">
 <div class="flex justify-end gap-4 max-w-2xl mx-auto">
  <button @click="cancelProcess()" class="bg-red-600 hover:bg-red-500 text-white font-semibold py-2 px-5 rounded-md transition-colors duration-300 text-sm">
-                    Cancelar
+<span x-text="__t('common.cancel')"></span>
                 </button>
 <template x-if="!anyStepFailed">
-<button :class="{'!bg-primary !hover:bg-primary-hover': allStepsSuccess}" :disabled="!allStepsSuccess" @click="allStepsSuccess ? (sessionStorage.setItem('currentProjectId', projectId), window.electronAPI.navigateTo('main.html')) : $event.target.innerText = 'Finalizado!';" class="bg-surface-secondary text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:bg-surface-secondary disabled:cursor-not-allowed text-sm">
+<button :class="{'!bg-primary !hover:bg-primary-hover': allStepsSuccess}" :disabled="!allStepsSuccess" @click="allStepsSuccess ? (sessionStorage.setItem('currentProjectId', projectId), window.electronAPI.navigateTo('main.html')) : null" class="bg-surface-secondary text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:bg-surface-secondary disabled:cursor-not-allowed text-sm">
 <span x-text="allStepsSuccess ? __t('common.finish') : __t('common.advance')"></span>
 </button>
 </template>
 <template x-if="anyStepFailed">
 <button :disabled="!processFinished" @click="retryProcess()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-5 rounded-md flex items-center gap-2 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-                        Tentar novamente
+                        <span x-text="__t('common.try_again')"></span>
                     </button>
 </template>
 </div>
@@ -421,7 +421,7 @@
     <div class="bg-surface-dark rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
         <div class="flex items-center gap-3 mb-4">
             <span class="material-symbols-outlined text-yellow-500 text-2xl">warning</span>
-            <h3 class="text-lg font-medium text-text-dark">Cancela Reabertura do Projeto</h3>
+            <h3 class="text-lg font-medium text-text-dark" x-text="__t('open.cancel_reopen_title')"></h3>
         </div>
         <p class="text-sm text-muted-dark mb-6" x-text="__t('open.cancel_reopen_desc')"></p>
         
