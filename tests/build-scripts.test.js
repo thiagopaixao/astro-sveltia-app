@@ -1,0 +1,121 @@
+/**
+ * @fileoverview Regression tests for build scripts and config unification (Bugs 3 & 4)
+ * @author Documental Team
+ * @since 1.0.0
+ */
+
+import { describe, it, expect, vi } from 'vitest';
+
+const fs = await vi.importActual('fs');
+const path = await vi.importActual('path');
+
+const pkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'));
+const ymlContent = fs.readFileSync(path.resolve(process.cwd(), 'electron-builder.yml'), 'utf8');
+
+describe('Build Scripts', () => {
+  const scripts = pkg.scripts;
+
+  it('build:win should include build:theme and build:css', () => {
+    expect(scripts['build:win']).toContain('build:theme');
+    expect(scripts['build:win']).toContain('build:css');
+  });
+
+  it('build:win:portable should include build:theme and build:css', () => {
+    expect(scripts['build:win:portable']).toContain('build:theme');
+    expect(scripts['build:win:portable']).toContain('build:css');
+  });
+
+  it('build:linux should include build:theme and build:css', () => {
+    expect(scripts['build:linux']).toContain('build:theme');
+    expect(scripts['build:linux']).toContain('build:css');
+  });
+
+  it('build:linux:deb should include build:theme and build:css', () => {
+    expect(scripts['build:linux:deb']).toContain('build:theme');
+    expect(scripts['build:linux:deb']).toContain('build:css');
+  });
+
+  it('build:linux:dir should include build:theme and build:css', () => {
+    expect(scripts['build:linux:dir']).toContain('build:theme');
+    expect(scripts['build:linux:dir']).toContain('build:css');
+  });
+
+  it('build:linux:snap should include build:theme and build:css', () => {
+    expect(scripts['build:linux:snap']).toContain('build:theme');
+    expect(scripts['build:linux:snap']).toContain('build:css');
+  });
+
+  it('build:linux:appimage should include build:theme and build:css', () => {
+    expect(scripts['build:linux:appimage']).toContain('build:theme');
+    expect(scripts['build:linux:appimage']).toContain('build:css');
+  });
+
+  it('build:macos should include build:theme and build:css', () => {
+    expect(scripts['build:macos']).toContain('build:theme');
+    expect(scripts['build:macos']).toContain('build:css');
+  });
+
+  it('build:all should include build:theme and build:css', () => {
+    expect(scripts['build:all']).toContain('build:theme');
+    expect(scripts['build:all']).toContain('build:css');
+  });
+
+  it('build:theme should run BEFORE build:css in all scripts', () => {
+    const scriptsToCheck = [
+      'build:win', 'build:win:portable', 'build:linux', 'build:linux:deb',
+      'build:linux:dir', 'build:linux:snap', 'build:linux:appimage',
+      'build:macos', 'build:all'
+    ];
+    for (const scriptName of scriptsToCheck) {
+      const script = scripts[scriptName];
+      const themeIdx = script.indexOf('build:theme');
+      const cssIdx = script.indexOf('build:css');
+      if (themeIdx !== -1 && cssIdx !== -1) {
+        expect(themeIdx).toBeLessThan(cssIdx);
+      }
+    }
+  });
+});
+
+describe('Config Unification', () => {
+  it('package.json should NOT have "files" in build key', () => {
+    expect(pkg.build).toBeDefined();
+    expect(pkg.build.files).toBeUndefined();
+  });
+
+  it('package.json should NOT have "asarUnpack" in build key', () => {
+    expect(pkg.build.asarUnpack).toBeUndefined();
+  });
+
+  it('package.json should NOT have "win" in build key', () => {
+    expect(pkg.build.win).toBeUndefined();
+  });
+
+  it('package.json should NOT have "linux" in build key', () => {
+    expect(pkg.build.linux).toBeUndefined();
+  });
+
+  it('package.json should have "extraMetadata" in build key', () => {
+    expect(pkg.build.extraMetadata).toBeDefined();
+  });
+
+  it('electron-builder.yml should exist and be parseable', () => {
+    expect(ymlContent).toBeTruthy();
+  });
+
+  it('electron-builder.yml should have asarUnpack', () => {
+    expect(ymlContent).toContain('asarUnpack');
+  });
+
+  it('electron-builder.yml should have extraResources', () => {
+    expect(ymlContent).toContain('extraResources');
+  });
+
+  it('electron-builder.yml should include themes in files', () => {
+    expect(ymlContent).toContain('themes');
+  });
+
+  it('electron-builder.yml should have portable in win targets', () => {
+    expect(ymlContent).toContain('portable');
+  });
+});
