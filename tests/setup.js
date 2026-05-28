@@ -48,8 +48,6 @@ global.mockElectron = {
   }
 };
 
-// Mock Node.js modules
-vi.mock('electron', () => global.mockElectron);
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
