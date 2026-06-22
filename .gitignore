@@ -32,6 +32,7 @@ documental-processes.json
 .sisyphus
 .serena
 .omo
+.opencode
 
 # Theme build artifact
 renderer/assets/css/theme-override.css

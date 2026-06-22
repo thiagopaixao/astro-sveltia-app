@@ -69,6 +69,29 @@ class BrowserHandlers {
       });
 
       this.windowBrowserViews.set(window, { editorView, viewerView });
+
+      // before-input-event contorna o menu null (que desabilita F12/Ctrl+Shift+I)
+      // e abre o DevTools da BrowserView correta mesmo com a página travada.
+      window.webContents.on('before-input-event', (event, input) => {
+        const isToggle =
+          input.type === 'keyDown' &&
+          (input.key === 'F12' ||
+            (input.key === 'I' && input.control && input.shift));
+
+        if (!isToggle) return;
+
+        const currentViews = this.windowBrowserViews.get(window);
+        const editorWc = currentViews?.editorView?.webContents;
+        if (!editorWc || editorWc.isDestroyed()) return;
+
+        if (editorWc.isDevToolsOpened()) {
+          editorWc.closeDevTools();
+        } else {
+          editorWc.openDevTools({ mode: 'detach' });
+        }
+        event.preventDefault();
+      });
+      this.logger.info(`🎯 DevTools toggle registered for window ${window.id}`);
       this.logger.info(`Created BrowserViews for window ${window.id}`);
     }
 
